@@ -4,6 +4,7 @@ import { readLocalLock } from './local-lock.ts';
 import { runAdd } from './add.ts';
 import { runSync, parseSyncOptions } from './sync.ts';
 import { getUniversalAgents } from './agents.ts';
+import { NPX_CMD } from './branding.ts';
 
 /**
  * Install all skills from the local skills-lock.json.
@@ -22,7 +23,7 @@ export async function runInstallFromLock(args: string[]): Promise<void> {
   if (skillEntries.length === 0) {
     p.log.warn('No project skills found in skills-lock.json');
     p.log.info(
-      `Add project-level skills with ${pc.cyan('npx skills add <package>')} (without ${pc.cyan('-g')})`
+      `Add project-level skills with ${pc.cyan(NPX_CMD + ' add <package>')} (without ${pc.cyan('-g')})`
     );
     return;
   }

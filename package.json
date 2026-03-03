@@ -1,11 +1,10 @@
 {
-  "name": "skills",
+  "name": "bmc-skills",
   "version": "1.4.3",
   "description": "The open agent skills ecosystem",
   "type": "module",
   "bin": {
-    "skills": "./bin/cli.mjs",
-    "add-skill": "./bin/cli.mjs"
+    "bmc-skills": "./bin/cli.mjs"
   },
   "files": [
     "dist",
@@ -78,15 +77,7 @@
     "adal",
     "universal"
   ],
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/vercel-labs/skills.git"
-  },
-  "homepage": "https://github.com/vercel-labs/skills#readme",
-  "bugs": {
-    "url": "https://github.com/vercel-labs/skills/issues"
-  },
-  "author": "",
+  "author": "yang.li12",
   "license": "MIT",
   "devDependencies": {
     "@clack/prompts": "^0.11.0",

@@ -4,6 +4,7 @@ import { join } from 'path';
 import { tmpdir, homedir } from 'os';
 import { runCli } from './test-utils.ts';
 import { parseListOptions } from './list.ts';
+import { NPX_CMD } from './branding.ts';
 
 describe('list command', () => {
   let testDir: string;
@@ -283,7 +284,7 @@ description: A test skill
   describe('banner', () => {
     it('should include list command in banner', () => {
       const result = runCli([]);
-      expect(result.stdout).toContain('npx skills list');
+      expect(result.stdout).toContain(`${NPX_CMD} list`);
       expect(result.stdout).toContain('List installed skills');
     });
   });

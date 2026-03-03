@@ -2,6 +2,7 @@ import * as readline from 'readline';
 import { runAdd, parseAddOptions } from './add.ts';
 import { track } from './telemetry.ts';
 import { isRepoPrivate } from './source-parser.ts';
+import { NPX_CMD } from './branding.ts';
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -268,8 +269,8 @@ export async function runFind(args: string[]): Promise<void> {
   const query = args.join(' ');
   const isNonInteractive = !process.stdin.isTTY;
   const agentTip = `${DIM}Tip: if running in a coding agent, follow these steps:${RESET}
-${DIM}  1) npx skills find [query]${RESET}
-${DIM}  2) npx skills add <owner/repo@skill>${RESET}`;
+${DIM}  1) ${NPX_CMD} find [query]${RESET}
+${DIM}  2) ${NPX_CMD} add <owner/repo@skill>${RESET}`;
 
   // Non-interactive mode: just print results and exit
   if (query) {
@@ -287,7 +288,7 @@ ${DIM}  2) npx skills add <owner/repo@skill>${RESET}`;
       return;
     }
 
-    console.log(`${DIM}Install with${RESET} npx skills add <owner/repo@skill>`);
+    console.log(`${DIM}Install with${RESET} ${NPX_CMD} add <owner/repo@skill>`);
     console.log();
 
     for (const skill of results.slice(0, 6)) {

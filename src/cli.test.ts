@@ -2,12 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { runCliOutput, stripLogo, hasLogo } from './test-utils.ts';
+import { NPX_CMD, BIN_NAME, USAGE_CMD } from './branding.ts';
 
 describe('skills CLI', () => {
   describe('--help', () => {
     it('should display help message', () => {
       const output = runCliOutput(['--help']);
-      expect(output).toContain('Usage: skills <command> [options]');
+      expect(output).toContain(`Usage: ${USAGE_CMD}`);
       expect(output).toContain('Manage Skills:');
       expect(output).toContain('init [name]');
       expect(output).toContain('add <package>');
@@ -48,10 +49,10 @@ describe('skills CLI', () => {
     it('should display banner', () => {
       const output = stripLogo(runCliOutput([]));
       expect(output).toContain('The open agent skills ecosystem');
-      expect(output).toContain('npx skills add');
-      expect(output).toContain('npx skills check');
-      expect(output).toContain('npx skills update');
-      expect(output).toContain('npx skills init');
+      expect(output).toContain(`${NPX_CMD} add`);
+      expect(output).toContain(`${NPX_CMD} check`);
+      expect(output).toContain(`${NPX_CMD} update`);
+      expect(output).toContain(`${NPX_CMD} init`);
       expect(output).toContain('skills.sh');
     });
   });
@@ -59,11 +60,8 @@ describe('skills CLI', () => {
   describe('unknown command', () => {
     it('should show error for unknown command', () => {
       const output = runCliOutput(['unknown-command']);
-      expect(output).toMatchInlineSnapshot(`
-        "Unknown command: unknown-command
-        Run skills --help for usage.
-        "
-      `);
+      expect(output).toContain('Unknown command: unknown-command');
+      expect(output).toContain(`${BIN_NAME} --help`);
     });
   });
 
