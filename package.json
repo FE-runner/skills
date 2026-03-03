@@ -23,6 +23,10 @@
     "prepare": "husky",
     "test": "vitest",
     "type-check": "tsc --noEmit",
+    "release": "bash scripts/release.sh",
+    "release:patch": "bash scripts/release.sh patch",
+    "release:minor": "bash scripts/release.sh minor",
+    "release:major": "bash scripts/release.sh major",
     "publish:snapshot": "npm version prerelease --preid=snapshot --no-git-tag-version && npm publish --tag snapshot"
   },
   "lint-staged": {

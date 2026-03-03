@@ -1,5 +1,7 @@
 # bmc-skills
 
+> 本项目 fork 自 [vercel-labs/skills](https://github.com/vercel-labs/skills)，为公司内部定制版本，仅供内部使用。
+
 开放式 AI Agent 技能生态系统的 CLI 工具。
 
 <!-- agent-list:start -->

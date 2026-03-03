@@ -55,3 +55,4 @@ bin/cli.d.mts
 /.clinerules
 /openspec
 /.github/prompts
+/skills-lock.json
