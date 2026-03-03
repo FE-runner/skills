@@ -2,21 +2,8 @@ name: Publish
 
 on:
   push:
-    branches: [master]
     tags:
       - 'v*'
-    paths-ignore:
-      - '**/*.md'
-  workflow_dispatch:
-    inputs:
-      bump:
-        description: 'Version bump type (bmc suffix)'
-        required: true
-        type: choice
-        options:
-          - bmc-patch
-          - bmc-minor
-          - bmc-major
 
 jobs:
   publish:
@@ -48,108 +35,8 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Determine version bump type
-        id: version
-        run: |
-          # If tag push, skip version bump (already versioned)
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            echo "bump=skip" >> $GITHUB_OUTPUT
-            echo "Tag push - skipping version bump, will publish directly"
-            exit 0
-          fi
-
-          # If manually triggered, use the input value
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "bump=${{ inputs.bump }}" >> $GITHUB_OUTPUT
-            echo "Manual trigger - will bump ${{ inputs.bump }} version"
-            exit 0
-          fi
-
-          # Get the latest version tag
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-
-          if [ -z "$LATEST_TAG" ]; then
-            COMMITS=$(git log --format=%s)
-          else
-            COMMITS=$(git log ${LATEST_TAG}..HEAD --format=%s)
-          fi
-
-          echo "Commits since last tag:"
-          echo "$COMMITS"
-
-          # Check for explicit version bump markers
-          if echo "$COMMITS" | grep -q "\[bmc-major\]"; then
-            echo "bump=bmc-major" >> $GITHUB_OUTPUT
-            echo "Found [bmc-major] - will bump bmc major version"
-          elif echo "$COMMITS" | grep -q "\[bmc-minor\]"; then
-            echo "bump=bmc-minor" >> $GITHUB_OUTPUT
-            echo "Found [bmc-minor] - will bump bmc minor version"
-          elif echo "$COMMITS" | grep -q "\[bmc-patch\]"; then
-            echo "bump=bmc-patch" >> $GITHUB_OUTPUT
-            echo "Found [bmc-patch] - will bump bmc patch version"
-          else
-            echo "bump=none" >> $GITHUB_OUTPUT
-            echo "No version marker found - skipping release"
-          fi
-
-      - name: Configure git
-        if: steps.version.outputs.bump != 'none' && steps.version.outputs.bump != 'skip'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Reset generated files
-        if: steps.version.outputs.bump != 'none' && steps.version.outputs.bump != 'skip'
-        run: |
-          # Reset any changes to generated files (e.g., ThirdPartyNoticeText.txt)
-          # that may differ between local and CI builds
-          git checkout -- ThirdPartyNoticeText.txt || true
-
-      - name: Bump version
-        if: steps.version.outputs.bump != 'none' && steps.version.outputs.bump != 'skip'
-        run: |
-          CURRENT=$(node -p "require('./package.json').version")
-          echo "Current version: $CURRENT"
-
-          # Extract bmc suffix: e.g. 1.4.3-bmc0.0.1 -> 0.0.1
-          BMC_VER=$(echo "$CURRENT" | sed -n 's/.*-bmc//p')
-          # Extract base version: e.g. 1.4.3-bmc0.0.1 -> 1.4.3
-          BASE_VER=$(echo "$CURRENT" | sed 's/-bmc.*//')
-
-          BMC_MAJOR=$(echo "$BMC_VER" | cut -d. -f1)
-          BMC_MINOR=$(echo "$BMC_VER" | cut -d. -f2)
-          BMC_PATCH=$(echo "$BMC_VER" | cut -d. -f3)
-
-          BUMP_TYPE="${{ steps.version.outputs.bump }}"
-          case "$BUMP_TYPE" in
-            bmc-major)
-              BMC_MAJOR=$((BMC_MAJOR + 1))
-              BMC_MINOR=0
-              BMC_PATCH=0
-              ;;
-            bmc-minor)
-              BMC_MINOR=$((BMC_MINOR + 1))
-              BMC_PATCH=0
-              ;;
-            bmc-patch)
-              BMC_PATCH=$((BMC_PATCH + 1))
-              ;;
-          esac
-
-          NEW_VER="${BASE_VER}-bmc${BMC_MAJOR}.${BMC_MINOR}.${BMC_PATCH}"
-          echo "New version: $NEW_VER"
-
-          npm version "$NEW_VER" -m "v%s"
-
-      - name: Push changes
-        if: steps.version.outputs.bump != 'none' && steps.version.outputs.bump != 'skip'
-        run: |
-          git push
-          git push --tags
-
       - name: Publish to npm
         id: publish
-        if: steps.version.outputs.bump != 'none'
         run: npm publish --provenance --access public --tag latest
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -159,25 +46,16 @@ jobs:
         run: |
           VERSION=$(node -p "require('./package.json').version")
 
-          # Get changelog from merged PRs since last tag
-          LATEST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          if [ -z "$LATEST_TAG" ]; then
-            SINCE=""
+          # Get changelog from commits since last tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -z "$PREV_TAG" ]; then
+            CHANGELOG=$(git log --format="- %s" --no-merges)
           else
-            SINCE=$(git log -1 --format=%cI ${LATEST_TAG})
+            CHANGELOG=$(git log ${PREV_TAG}..HEAD^ --format="- %s" --no-merges)
           fi
 
-          # Fetch merged PRs and format as changelog
-          if [ -z "$SINCE" ]; then
-            PRS=$(gh pr list --state merged --json number,title,author --limit 100)
-          else
-            PRS=$(gh pr list --state merged --search "merged:>=${SINCE}" --json number,title,author --limit 100)
-          fi
+          CONTRIBUTORS=$(git log ${PREV_TAG:+${PREV_TAG}..HEAD} --format="%an" | sort -u | sed 's/^/@/' | paste -sd ', ' -)
 
-          CHANGELOG=$(echo "$PRS" | jq -r '.[] | "- \(.title) (#\(.number))"')
-          CONTRIBUTORS=$(echo "$PRS" | jq -r '.[].author.login' | sort -u | sed 's/^/@/' | paste -sd ', ' -)
-
-          # Generate release notes from template
           export VERSION CHANGELOG CONTRIBUTORS
           envsubst < .github/RELEASE_TEMPLATE.md > release-notes.md
 
