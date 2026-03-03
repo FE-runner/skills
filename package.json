@@ -78,6 +78,10 @@
     "universal"
   ],
   "author": "yang.li12",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FE-runner/skills.git"
+  },
   "license": "MIT",
   "devDependencies": {
     "@clack/prompts": "^0.11.0",
