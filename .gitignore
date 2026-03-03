@@ -53,5 +53,5 @@ bin/cli-wrapper.mjs
 bin/cli.d.mts
 /.cline
 /.clinerules
-/.github
 /openspec
+/.github/prompts

@@ -2,7 +2,7 @@ name: Publish
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     tags:
       - 'v*'
     paths-ignore:
@@ -10,12 +10,13 @@ on:
   workflow_dispatch:
     inputs:
       bump:
-        description: 'Version bump type'
+        description: 'Version bump type (bmc suffix)'
         required: true
         type: choice
         options:
-          - patch
-          - minor
+          - bmc-patch
+          - bmc-minor
+          - bmc-major
 
 jobs:
   publish:
@@ -68,10 +69,8 @@ jobs:
           LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
 
           if [ -z "$LATEST_TAG" ]; then
-            # No tags found, use all commits
             COMMITS=$(git log --format=%s)
           else
-            # Get commits since the latest tag
             COMMITS=$(git log ${LATEST_TAG}..HEAD --format=%s)
           fi
 
@@ -79,12 +78,15 @@ jobs:
           echo "$COMMITS"
 
           # Check for explicit version bump markers
-          if echo "$COMMITS" | grep -q "\[minor\]"; then
-            echo "bump=minor" >> $GITHUB_OUTPUT
-            echo "Found [minor] - will bump minor version"
-          elif echo "$COMMITS" | grep -q "\[patch\]"; then
-            echo "bump=patch" >> $GITHUB_OUTPUT
-            echo "Found [patch] - will bump patch version"
+          if echo "$COMMITS" | grep -q "\[bmc-major\]"; then
+            echo "bump=bmc-major" >> $GITHUB_OUTPUT
+            echo "Found [bmc-major] - will bump bmc major version"
+          elif echo "$COMMITS" | grep -q "\[bmc-minor\]"; then
+            echo "bump=bmc-minor" >> $GITHUB_OUTPUT
+            echo "Found [bmc-minor] - will bump bmc minor version"
+          elif echo "$COMMITS" | grep -q "\[bmc-patch\]"; then
+            echo "bump=bmc-patch" >> $GITHUB_OUTPUT
+            echo "Found [bmc-patch] - will bump bmc patch version"
           else
             echo "bump=none" >> $GITHUB_OUTPUT
             echo "No version marker found - skipping release"
@@ -106,7 +108,38 @@ jobs:
       - name: Bump version
         if: steps.version.outputs.bump != 'none' && steps.version.outputs.bump != 'skip'
         run: |
-          npm version ${{ steps.version.outputs.bump }} -m "v%s"
+          CURRENT=$(node -p "require('./package.json').version")
+          echo "Current version: $CURRENT"
+
+          # Extract bmc suffix: e.g. 1.4.3-bmc0.0.1 -> 0.0.1
+          BMC_VER=$(echo "$CURRENT" | sed -n 's/.*-bmc//p')
+          # Extract base version: e.g. 1.4.3-bmc0.0.1 -> 1.4.3
+          BASE_VER=$(echo "$CURRENT" | sed 's/-bmc.*//')
+
+          BMC_MAJOR=$(echo "$BMC_VER" | cut -d. -f1)
+          BMC_MINOR=$(echo "$BMC_VER" | cut -d. -f2)
+          BMC_PATCH=$(echo "$BMC_VER" | cut -d. -f3)
+
+          BUMP_TYPE="${{ steps.version.outputs.bump }}"
+          case "$BUMP_TYPE" in
+            bmc-major)
+              BMC_MAJOR=$((BMC_MAJOR + 1))
+              BMC_MINOR=0
+              BMC_PATCH=0
+              ;;
+            bmc-minor)
+              BMC_MINOR=$((BMC_MINOR + 1))
+              BMC_PATCH=0
+              ;;
+            bmc-patch)
+              BMC_PATCH=$((BMC_PATCH + 1))
+              ;;
+          esac
+
+          NEW_VER="${BASE_VER}-bmc${BMC_MAJOR}.${BMC_MINOR}.${BMC_PATCH}"
+          echo "New version: $NEW_VER"
+
+          npm version "$NEW_VER" -m "v%s"
 
       - name: Push changes
         if: steps.version.outputs.bump != 'none' && steps.version.outputs.bump != 'skip'
