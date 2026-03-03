@@ -76,7 +76,9 @@ function isCI(): boolean {
 }
 
 function isEnabled(): boolean {
-  return !process.env.DISABLE_TELEMETRY && !process.env.DO_NOT_TRACK;
+  // Telemetry disabled - uncomment below to re-enable (update URLs in branding.ts first)
+  // return !process.env.DISABLE_TELEMETRY && !process.env.DO_NOT_TRACK;
+  return false;
 }
 
 export function setVersion(version: string): void {
