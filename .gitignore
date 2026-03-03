@@ -51,3 +51,7 @@ package-lock.json
 bin/_chunks/
 bin/cli-wrapper.mjs
 bin/cli.d.mts
+/.cline
+/.clinerules
+/.github
+/openspec
