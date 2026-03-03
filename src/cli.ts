@@ -14,7 +14,16 @@ import { removeCommand, parseRemoveOptions } from './remove.ts';
 import { runSync, parseSyncOptions } from './sync.ts';
 import { track } from './telemetry.ts';
 import { fetchSkillFolderHash, getGitHubToken } from './skill-lock.ts';
-import { NPX_CMD, BIN_NAME, USAGE_CMD, PACKAGE_NAME, SPAWN_ADD_ARGS } from './branding.ts';
+import {
+  NPX_CMD,
+  BIN_NAME,
+  USAGE_CMD,
+  PACKAGE_NAME,
+  SPAWN_ADD_ARGS,
+  EXAMPLE_REPO,
+  EXAMPLE_REPO_URL,
+  SKILLS_SITE,
+} from './branding.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -98,9 +107,9 @@ function showBanner(): void {
     `  ${DIM}$${RESET} ${TEXT}${NPX_CMD} experimental_sync${RESET}    ${DIM}Sync skills from node_modules${RESET}`
   );
   console.log();
-  console.log(`${DIM}try:${RESET} ${NPX_CMD} add vercel-labs/agent-skills`);
+  console.log(`${DIM}try:${RESET} ${NPX_CMD} add ${EXAMPLE_REPO}`);
   console.log();
-  console.log(`Discover more skills at ${TEXT}https://skills.sh/${RESET}`);
+  console.log(`Discover more skills at ${TEXT}${SKILLS_SITE}/${RESET}`);
   console.log();
 }
 
@@ -110,8 +119,8 @@ ${BOLD}Usage:${RESET} ${USAGE_CMD}
 
 ${BOLD}Manage Skills:${RESET}
   add <package>        Add a skill package (alias: a)
-                       e.g. vercel-labs/agent-skills
-                            https://github.com/vercel-labs/agent-skills
+                       e.g. ${EXAMPLE_REPO}
+                            ${EXAMPLE_REPO_URL}
   remove [skills]      Remove installed skills
   list, ls             List installed skills
   find [query]         Search for skills interactively
@@ -155,10 +164,10 @@ ${BOLD}Options:${RESET}
   --version, -v     Show version number
 
 ${BOLD}Examples:${RESET}
-  ${DIM}$${RESET} ${BIN_NAME} add vercel-labs/agent-skills
-  ${DIM}$${RESET} ${BIN_NAME} add vercel-labs/agent-skills -g
-  ${DIM}$${RESET} ${BIN_NAME} add vercel-labs/agent-skills --agent claude-code cursor
-  ${DIM}$${RESET} ${BIN_NAME} add vercel-labs/agent-skills --skill pr-review commit
+  ${DIM}$${RESET} ${BIN_NAME} add ${EXAMPLE_REPO}
+  ${DIM}$${RESET} ${BIN_NAME} add ${EXAMPLE_REPO} -g
+  ${DIM}$${RESET} ${BIN_NAME} add ${EXAMPLE_REPO} --agent claude-code cursor
+  ${DIM}$${RESET} ${BIN_NAME} add ${EXAMPLE_REPO} --skill pr-review commit
   ${DIM}$${RESET} ${BIN_NAME} remove                        ${DIM}# interactive remove${RESET}
   ${DIM}$${RESET} ${BIN_NAME} remove web-design             ${DIM}# remove by name${RESET}
   ${DIM}$${RESET} ${BIN_NAME} rm --global frontend-design
@@ -174,7 +183,7 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ${BIN_NAME} experimental_sync              ${DIM}# sync from node_modules${RESET}
   ${DIM}$${RESET} ${BIN_NAME} experimental_sync -y           ${DIM}# sync without prompts${RESET}
 
-Discover more skills at ${TEXT}https://skills.sh/${RESET}
+Discover more skills at ${TEXT}${SKILLS_SITE}/${RESET}
 `);
 }
 
@@ -205,7 +214,7 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ${BIN_NAME} remove --all                      ${DIM}# remove all skills${RESET}
   ${DIM}$${RESET} ${BIN_NAME} remove --skill '*' -a cursor      ${DIM}# remove all skills from cursor${RESET}
 
-Discover more skills at ${TEXT}https://skills.sh/${RESET}
+Discover more skills at ${TEXT}${SKILLS_SITE}/${RESET}
 `);
 }
 
@@ -268,7 +277,7 @@ Describe when this skill should be used.
     `  ${DIM}URL:${RESET}     Host the file, then ${TEXT}${NPX_CMD} add https://example.com/${displayPath}${RESET}`
   );
   console.log();
-  console.log(`Browse existing skills for inspiration at ${TEXT}https://skills.sh/${RESET}`);
+  console.log(`Browse existing skills for inspiration at ${TEXT}${SKILLS_SITE}/${RESET}`);
   console.log();
 }
 

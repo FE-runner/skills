@@ -57,7 +57,7 @@ import {
 } from './skill-lock.ts';
 import { addSkillToLocalLock, computeSkillFolderHash } from './local-lock.ts';
 import type { Skill, AgentType } from './types.ts';
-import { NPX_CMD } from './branding.ts';
+import { NPX_CMD, EXAMPLE_REPO, FIND_SKILLS_REPO, SKILLS_SITE } from './branding.ts';
 import packageJson from '../package.json' with { type: 'json' };
 export function initTelemetry(version: string): void {
   setVersion(version);
@@ -143,7 +143,7 @@ function buildSecurityLines(
 
   // Footer link
   lines.push('');
-  lines.push(`${pc.dim('Details:')} ${pc.dim(`https://skills.sh/${source}`)}`);
+  lines.push(`${pc.dim('Details:')} ${pc.dim(`${SKILLS_SITE}/${source}`)}`);
 
   return lines;
 }
@@ -898,7 +898,7 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
     console.log(`    ${pc.cyan(NPX_CMD + ' add')} ${pc.yellow('<source>')} ${pc.dim('[options]')}`);
     console.log();
     console.log(pc.dim('  Example:'));
-    console.log(`    ${pc.cyan(NPX_CMD + ' add')} ${pc.yellow('vercel-labs/agent-skills')}`);
+    console.log(`    ${pc.cyan(NPX_CMD + ' add')} ${pc.yellow(EXAMPLE_REPO)}`);
     console.log();
     process.exit(1);
   }
@@ -1718,7 +1718,7 @@ async function promptForFindSkills(
 
       try {
         // Call runAdd directly
-        await runAdd(['vercel-labs/skills'], {
+        await runAdd([FIND_SKILLS_REPO], {
           skill: ['find-skills'],
           global: true,
           yes: true,
@@ -1726,13 +1726,13 @@ async function promptForFindSkills(
         });
       } catch {
         p.log.warn('Failed to install find-skills. You can try again with:');
-        p.log.message(pc.dim(`  ${NPX_CMD} add vercel-labs/skills@find-skills -g -y --all`));
+        p.log.message(pc.dim(`  ${NPX_CMD} add ${FIND_SKILLS_REPO}@find-skills -g -y --all`));
       }
     } else {
       // User declined - dismiss the prompt
       await dismissPrompt('findSkillsPrompt');
       p.log.message(
-        pc.dim(`You can install it later with: ${NPX_CMD} add vercel-labs/skills@find-skills`)
+        pc.dim(`You can install it later with: ${NPX_CMD} add ${FIND_SKILLS_REPO}@find-skills`)
       );
     }
   } catch {

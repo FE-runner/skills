@@ -2,7 +2,7 @@ import * as readline from 'readline';
 import { runAdd, parseAddOptions } from './add.ts';
 import { track } from './telemetry.ts';
 import { isRepoPrivate } from './source-parser.ts';
-import { NPX_CMD } from './branding.ts';
+import { NPX_CMD, SEARCH_API_BASE, SKILLS_SITE } from './branding.ts';
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -11,9 +11,6 @@ const TEXT = '\x1b[38;5;145m';
 const CYAN = '\x1b[36m';
 const MAGENTA = '\x1b[35m';
 const YELLOW = '\x1b[33m';
-
-// API endpoint for skills search
-const SEARCH_API_BASE = process.env.SKILLS_API_URL || 'https://skills.sh';
 
 function formatInstalls(count: number): string {
   if (!count || count <= 0) return '';
@@ -297,7 +294,7 @@ ${DIM}  2) ${NPX_CMD} add <owner/repo@skill>${RESET}`;
       console.log(
         `${TEXT}${pkg}@${skill.name}${RESET}${installs ? ` ${CYAN}${installs}${RESET}` : ''}`
       );
-      console.log(`${DIM}└ https://skills.sh/${skill.slug}${RESET}`);
+      console.log(`${DIM}└ ${SKILLS_SITE}/${skill.slug}${RESET}`);
       console.log();
     }
     return;
@@ -340,11 +337,9 @@ ${DIM}  2) ${NPX_CMD} add <owner/repo@skill>${RESET}`;
 
   const info = getOwnerRepoFromString(pkg);
   if (info && (await isRepoPublic(info.owner, info.repo))) {
-    console.log(
-      `${DIM}View the skill at${RESET} ${TEXT}https://skills.sh/${selected.slug}${RESET}`
-    );
+    console.log(`${DIM}View the skill at${RESET} ${TEXT}${SKILLS_SITE}/${selected.slug}${RESET}`);
   } else {
-    console.log(`${DIM}Discover more skills at${RESET} ${TEXT}https://skills.sh${RESET}`);
+    console.log(`${DIM}Discover more skills at${RESET} ${TEXT}${SKILLS_SITE}${RESET}`);
   }
 
   console.log();

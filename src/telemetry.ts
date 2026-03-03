@@ -1,5 +1,4 @@
-const TELEMETRY_URL = 'https://add-skill.vercel.sh/t';
-const AUDIT_URL = 'https://add-skill.vercel.sh/audit';
+import { TELEMETRY_URL, AUDIT_URL } from './branding.ts';
 
 interface InstallTelemetryData {
   event: 'install';
