@@ -160,3 +160,39 @@ npm publish
 1. Add the agent definition to `src/agents.ts`
 2. Run `pnpm run -C scripts validate-agents.ts` to validate
 3. Run `pnpm run -C scripts sync-agents.ts` to update README.md
+
+## 关联项目
+
+本项目与 `../skills-market`（全栈 Web 平台）是上下游关系。
+
+### 项目概述
+- **路径**: `../skills-market`
+- **用途**: agent skills 生态的全栈 Web 平台，提供技能发布、审核、管理和发现功能
+- **技术栈**: Next.js 16 (App Router), React 19, Prisma 7 (MySQL), TypeScript, Tailwind CSS 4
+
+### 交互方式
+- CLI 的 `find` 命令通过 `GET /api/search?q=<query>&limit=10` 搜索 market 上的技能
+- CLI 的 `add` 命令安装技能到本地 agent 目录
+- CLI 的 `check`/`update` 命令通过 GitHub API 检查更新
+
+### 关键对照
+
+| 概念 | skills-market | skills-cli |
+|------|--------------|------------|
+| 技能数据结构 | `prisma/schema.prisma` Skill 模型 | `src/types.ts` Skill/RemoteSkill 接口 |
+| 技能内容 | COS 存储 + fileTree JSON | SKILL.md 文件 + 附属文件 |
+| Agent 类型 | 无（平台无关） | `src/types.ts` AgentType（40+ agent） |
+| 搜索 API | `/api/search` 或 `/api/skills` | `src/find.ts` 调用 SEARCH_API_BASE |
+| 品牌/URL | 部署在 skills.sh | `src/branding.ts` 中 SKILLS_SITE |
+
+### 开发注意事项
+1. **修改 find 命令**: 如果变更搜索请求格式，需确认 market 的 `/api/search` 是否兼容
+2. **修改 Skill/RemoteSkill 类型**: 需检查 market 的 Prisma 模型和 `lib/types.ts` 是否需同步
+3. **修改 branding.ts 中的 URL**: 确保 market 端的对应路由存在
+
+### Market 关键文件（需要了解时可读取）
+- `../skills-market/AGENTS.md` — Market 完整架构文档
+- `../skills-market/prisma/schema.prisma` — 数据库模型定义
+- `../skills-market/lib/types.ts` — 前端共享类型
+- `../skills-market/app/api/skills/route.ts` — 技能列表 API
+- `../skills-market/lib/cos.ts` — COS 文件存储逻辑
