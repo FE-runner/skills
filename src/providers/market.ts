@@ -1,6 +1,6 @@
 import matter from 'gray-matter';
 import type { HostProvider, ProviderMatch, RemoteSkill } from './types.ts';
-import { SEARCH_API_BASE } from '../branding.ts';
+import { SKILLS_SITE } from '../branding.ts';
 
 /**
  * Unwrap the API envelope: { code, message, data } → data
@@ -55,7 +55,6 @@ interface ResolveResponse {
  */
 interface CheckResponse {
   currentVersion: string;
-  skillFolderHash: string;
 }
 
 /**
@@ -79,7 +78,7 @@ export class MarketProvider implements HostProvider {
   readonly displayName = 'Skills Market';
 
   private get apiBase(): string {
-    return SEARCH_API_BASE;
+    return SKILLS_SITE;
   }
 
   /**
@@ -179,11 +178,15 @@ export class MarketProvider implements HostProvider {
   }
 
   /**
-   * Check if a skill has updates by comparing folder hash.
+   * Check if a skill has updates by comparing version.
    */
-  async check(skillId: string): Promise<CheckResponse | null> {
+  async check(skillId: string, author?: string): Promise<CheckResponse | null> {
     try {
-      const res = await fetch(`${this.apiBase}/api/skills/${skillId}/check`);
+      const params = new URLSearchParams();
+      if (author) params.set('author', author);
+      const qs = params.toString();
+      const url = `${this.apiBase}/api/skills/${skillId}/check${qs ? `?${qs}` : ''}`;
+      const res = await fetch(url);
       if (!res.ok) return null;
       return unwrapEnvelope<CheckResponse>(await res.json());
     } catch {

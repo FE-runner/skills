@@ -295,7 +295,7 @@ function isWellKnownUrl(input: string): boolean {
 
 /**
  * Check if a URL is a market install token URL.
- * Format: https://skills.sh/install/<token> (or any SEARCH_API_BASE host)
+ * Format: https://skills.sh/install/<token> (or any SKILLS_SITE host)
  */
 function isMarketInstallUrl(input: string): boolean {
   if (!input.startsWith('http://') && !input.startsWith('https://')) {
@@ -308,11 +308,7 @@ function isMarketInstallUrl(input: string): boolean {
 
     // Match the configured skills site hostname
     if (parsed.hostname !== siteUrl.hostname) {
-      // Also check SEARCH_API_BASE if different
-      const apiUrl = new URL(SKILLS_SITE);
-      if (parsed.hostname !== apiUrl.hostname) {
-        return false;
-      }
+      return false;
     }
 
     // Must be /install/<token> path

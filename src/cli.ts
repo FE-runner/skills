@@ -13,6 +13,7 @@ import { runList } from './list.ts';
 import { removeCommand, parseRemoveOptions } from './remove.ts';
 import { runSync, parseSyncOptions } from './sync.ts';
 import { track } from './telemetry.ts';
+import { readLocalLock } from './local-lock.ts';
 import { fetchSkillFolderHash, getGitHubToken } from './skill-lock.ts';
 import { marketProvider } from './providers/market.ts';
 import {
@@ -20,7 +21,6 @@ import {
   BIN_NAME,
   USAGE_CMD,
   PACKAGE_NAME,
-  SPAWN_ADD_ARGS,
   EXAMPLE_REPO,
   EXAMPLE_REPO_URL,
   SKILLS_SITE,
@@ -363,98 +363,108 @@ function writeSkillLock(lock: SkillLockFile): void {
 }
 
 async function runCheck(args: string[] = []): Promise<void> {
+  const isGlobal = args.includes('-g') || args.includes('--global');
+
   console.log(`${TEXT}Checking for skill updates...${RESET}`);
   console.log();
 
-  const lock = readSkillLock();
-  const skillNames = Object.keys(lock.skills);
+  const updates: Array<{ name: string; source: string }> = [];
+  const errors: Array<{ name: string; source: string; error: string }> = [];
+  let totalSkills = 0;
 
-  if (skillNames.length === 0) {
+  if (isGlobal) {
+    // Global mode: check global lock (GitHub + market skills)
+    const lock = readSkillLock();
+    const token = getGitHubToken();
+
+    const githubSkills = new Map<string, Array<{ name: string; entry: SkillLockEntry }>>();
+    const marketSkills: Array<{ name: string; entry: SkillLockEntry }> = [];
+
+    for (const [skillName, entry] of Object.entries(lock.skills)) {
+      if (!entry) continue;
+      if (entry.sourceType === 'market' && entry.skillPath) {
+        marketSkills.push({ name: skillName, entry });
+      } else if (entry.sourceType === 'github' && entry.skillFolderHash && entry.skillPath) {
+        const existing = githubSkills.get(entry.source) || [];
+        existing.push({ name: skillName, entry });
+        githubSkills.set(entry.source, existing);
+      }
+    }
+
+    totalSkills =
+      marketSkills.length + [...githubSkills.values()].reduce((sum, arr) => sum + arr.length, 0);
+
+    for (const [source, skills] of githubSkills) {
+      for (const { name, entry } of skills) {
+        try {
+          const latestHash = await fetchSkillFolderHash(source, entry.skillPath!, token);
+          if (!latestHash) {
+            errors.push({ name, source, error: 'Could not fetch from GitHub' });
+          } else if (latestHash !== entry.skillFolderHash) {
+            updates.push({ name, source });
+          }
+        } catch (err) {
+          errors.push({
+            name,
+            source,
+            error: err instanceof Error ? err.message : 'Unknown error',
+          });
+        }
+      }
+    }
+
+    for (const { name, entry } of marketSkills) {
+      try {
+        const checkResult = await marketProvider.check(entry.skillPath!);
+        if (!checkResult) {
+          errors.push({ name, source: entry.source, error: 'Could not fetch from Skills Market' });
+        } else if (checkResult.currentVersion !== entry.version) {
+          updates.push({ name, source: entry.source });
+        }
+      } catch (err) {
+        errors.push({
+          name,
+          source: entry.source,
+          error: err instanceof Error ? err.message : 'Unknown error',
+        });
+      }
+    }
+  } else {
+    // Local mode: check local lock (market skills only)
+    const localLock = await readLocalLock();
+
+    for (const [name, entry] of Object.entries(localLock.skills)) {
+      if (entry.sourceType === 'market' && entry.skillId) {
+        totalSkills++;
+        try {
+          const checkResult = await marketProvider.check(entry.skillId);
+          if (!checkResult) {
+            errors.push({
+              name,
+              source: `market/${name}`,
+              error: 'Could not fetch from Skills Market',
+            });
+          } else if (checkResult.currentVersion !== entry.version) {
+            updates.push({ name, source: `market/${name}` });
+          }
+        } catch (err) {
+          errors.push({
+            name,
+            source: `market/${name}`,
+            error: err instanceof Error ? err.message : 'Unknown error',
+          });
+        }
+      }
+    }
+  }
+
+  if (totalSkills === 0) {
     console.log(`${DIM}No skills tracked in lock file.${RESET}`);
     console.log(`${DIM}Install skills with${RESET} ${TEXT}${NPX_CMD} add <package>${RESET}`);
     return;
   }
 
-  // Get GitHub token from user's environment for higher rate limits
-  const token = getGitHubToken();
-
-  // Group skills by source type
-  const githubSkills = new Map<string, Array<{ name: string; entry: SkillLockEntry }>>();
-  const marketSkills: Array<{ name: string; entry: SkillLockEntry }> = [];
-  let skippedCount = 0;
-
-  for (const skillName of skillNames) {
-    const entry = lock.skills[skillName];
-    if (!entry) continue;
-
-    if (entry.sourceType === 'market' && entry.skillFolderHash && entry.skillPath) {
-      marketSkills.push({ name: skillName, entry });
-    } else if (entry.sourceType === 'github' && entry.skillFolderHash && entry.skillPath) {
-      const existing = githubSkills.get(entry.source) || [];
-      existing.push({ name: skillName, entry });
-      githubSkills.set(entry.source, existing);
-    } else {
-      skippedCount++;
-    }
-  }
-
-  const totalSkills = skillNames.length - skippedCount;
-  if (totalSkills === 0) {
-    console.log(`${DIM}No checkable skills found.${RESET}`);
-    return;
-  }
-
   console.log(`${DIM}Checking ${totalSkills} skill(s) for updates...${RESET}`);
-
-  const updates: Array<{ name: string; source: string }> = [];
-  const errors: Array<{ name: string; source: string; error: string }> = [];
-
-  // Check GitHub-sourced skills
-  for (const [source, skills] of githubSkills) {
-    for (const { name, entry } of skills) {
-      try {
-        const latestHash = await fetchSkillFolderHash(source, entry.skillPath!, token);
-
-        if (!latestHash) {
-          errors.push({ name, source, error: 'Could not fetch from GitHub' });
-          continue;
-        }
-
-        if (latestHash !== entry.skillFolderHash) {
-          updates.push({ name, source });
-        }
-      } catch (err) {
-        errors.push({
-          name,
-          source,
-          error: err instanceof Error ? err.message : 'Unknown error',
-        });
-      }
-    }
-  }
-
-  // Check market-sourced skills
-  for (const { name, entry } of marketSkills) {
-    try {
-      const checkResult = await marketProvider.check(entry.skillPath!);
-
-      if (!checkResult) {
-        errors.push({ name, source: entry.source, error: 'Could not fetch from Skills Market' });
-        continue;
-      }
-
-      if (checkResult.skillFolderHash !== entry.skillFolderHash) {
-        updates.push({ name, source: entry.source });
-      }
-    } catch (err) {
-      errors.push({
-        name,
-        source: entry.source,
-        error: err instanceof Error ? err.message : 'Unknown error',
-      });
-    }
-  }
-
   console.log();
 
   if (updates.length === 0) {
@@ -468,7 +478,7 @@ async function runCheck(args: string[] = []): Promise<void> {
     }
     console.log();
     console.log(
-      `${DIM}Run${RESET} ${TEXT}${NPX_CMD} update${RESET} ${DIM}to update all skills${RESET}`
+      `${DIM}Run${RESET} ${TEXT}${NPX_CMD} update${isGlobal ? ' -g' : ''}${RESET} ${DIM}to update all skills${RESET}`
     );
   }
 
@@ -487,55 +497,73 @@ async function runCheck(args: string[] = []): Promise<void> {
   console.log();
 }
 
-async function runUpdate(): Promise<void> {
+async function runUpdate(args: string[] = []): Promise<void> {
+  const isGlobal = args.includes('-g') || args.includes('--global');
+
   console.log(`${TEXT}Checking for skill updates...${RESET}`);
   console.log();
 
-  const lock = readSkillLock();
-  const skillNames = Object.keys(lock.skills);
-
-  if (skillNames.length === 0) {
-    console.log(`${DIM}No skills tracked in lock file.${RESET}`);
-    console.log(`${DIM}Install skills with${RESET} ${TEXT}${NPX_CMD} add <package>${RESET}`);
-    return;
-  }
-
-  // Get GitHub token from user's environment for higher rate limits
-  const token = getGitHubToken();
-
-  // Find skills that need updates
-  const updates: Array<{ name: string; source: string; entry: SkillLockEntry }> = [];
+  const updates: Array<{ name: string; installUrl: string }> = [];
   let checkedCount = 0;
 
-  for (const skillName of skillNames) {
-    const entry = lock.skills[skillName];
-    if (!entry) continue;
+  if (isGlobal) {
+    // Global mode: check global lock
+    const lock = readSkillLock();
+    const token = getGitHubToken();
 
-    if (entry.sourceType === 'market' && entry.skillFolderHash && entry.skillPath) {
-      checkedCount++;
-      try {
-        const checkResult = await marketProvider.check(entry.skillPath);
-        if (checkResult && checkResult.skillFolderHash !== entry.skillFolderHash) {
-          updates.push({ name: skillName, source: entry.source, entry });
+    for (const [skillName, entry] of Object.entries(lock.skills)) {
+      if (!entry) continue;
+
+      if (entry.sourceType === 'market' && entry.skillPath) {
+        checkedCount++;
+        try {
+          const checkResult = await marketProvider.check(entry.skillPath);
+          if (checkResult && checkResult.currentVersion !== entry.version) {
+            updates.push({ name: skillName, installUrl: skillName });
+          }
+        } catch {
+          // Skip skills that fail to check
         }
-      } catch {
-        // Skip skills that fail to check
+      } else if (entry.sourceType === 'github' && entry.skillFolderHash && entry.skillPath) {
+        checkedCount++;
+        try {
+          const latestHash = await fetchSkillFolderHash(entry.source, entry.skillPath, token);
+          if (latestHash && latestHash !== entry.skillFolderHash) {
+            let installUrl = entry.sourceUrl.replace(/\.git$/, '').replace(/\/$/, '');
+            let skillFolder = entry.skillPath;
+            if (skillFolder.endsWith('/SKILL.md')) skillFolder = skillFolder.slice(0, -9);
+            else if (skillFolder.endsWith('SKILL.md')) skillFolder = skillFolder.slice(0, -8);
+            if (skillFolder.endsWith('/')) skillFolder = skillFolder.slice(0, -1);
+            if (skillFolder) installUrl = `${installUrl}/tree/main/${skillFolder}`;
+            updates.push({ name: skillName, installUrl });
+          }
+        } catch {
+          // Skip skills that fail to check
+        }
       }
-    } else if (entry.sourceType === 'github' && entry.skillFolderHash && entry.skillPath) {
-      checkedCount++;
-      try {
-        const latestHash = await fetchSkillFolderHash(entry.source, entry.skillPath, token);
-        if (latestHash && latestHash !== entry.skillFolderHash) {
-          updates.push({ name: skillName, source: entry.source, entry });
+    }
+  } else {
+    // Local mode: check local lock (market skills only)
+    const localLock = await readLocalLock();
+
+    for (const [skillName, entry] of Object.entries(localLock.skills)) {
+      if (entry.sourceType === 'market' && entry.skillId) {
+        checkedCount++;
+        try {
+          const checkResult = await marketProvider.check(entry.skillId);
+          if (checkResult && checkResult.currentVersion !== entry.version) {
+            updates.push({ name: skillName, installUrl: skillName });
+          }
+        } catch {
+          // Skip skills that fail to check
         }
-      } catch {
-        // Skip skills that fail to check
       }
     }
   }
 
   if (checkedCount === 0) {
-    console.log(`${DIM}No skills to check.${RESET}`);
+    console.log(`${DIM}No skills tracked in lock file.${RESET}`);
+    console.log(`${DIM}Install skills with${RESET} ${TEXT}${NPX_CMD} add <package>${RESET}`);
     return;
   }
 
@@ -555,36 +583,9 @@ async function runUpdate(): Promise<void> {
   for (const update of updates) {
     console.log(`${TEXT}Updating ${update.name}...${RESET}`);
 
-    let installUrl: string;
-
-    if (update.entry.sourceType === 'market') {
-      // Market skills: reinstall by name (bare skill name triggers market resolve)
-      installUrl = update.name;
-    } else {
-      // GitHub skills: build the URL with subpath to target the specific skill directory
-      // e.g., https://github.com/owner/repo/tree/main/skills/my-skill
-      installUrl = update.entry.sourceUrl;
-      if (update.entry.skillPath) {
-        // Extract the skill folder path (remove /SKILL.md suffix)
-        let skillFolder = update.entry.skillPath;
-        if (skillFolder.endsWith('/SKILL.md')) {
-          skillFolder = skillFolder.slice(0, -9);
-        } else if (skillFolder.endsWith('SKILL.md')) {
-          skillFolder = skillFolder.slice(0, -8);
-        }
-        if (skillFolder.endsWith('/')) {
-          skillFolder = skillFolder.slice(0, -1);
-        }
-
-        // Convert git URL to tree URL with path
-        // https://github.com/owner/repo.git -> https://github.com/owner/repo/tree/main/path
-        installUrl = update.entry.sourceUrl.replace(/\.git$/, '').replace(/\/$/, '');
-        installUrl = `${installUrl}/tree/main/${skillFolder}`;
-      }
-    }
-
-    // Use CLI to reinstall with -g -y flags
-    const result = spawnSync('npx', ['-y', ...SPAWN_ADD_ARGS, installUrl, '-g', '-y'], {
+    const flags = isGlobal ? ['-g', '-y'] : ['-y'];
+    const selfArgs = [process.argv[1]!, 'add', update.installUrl, ...flags];
+    const result = spawnSync(process.execPath, selfArgs, {
       stdio: ['inherit', 'pipe', 'pipe'],
     });
 
@@ -685,7 +686,7 @@ async function main(): Promise<void> {
       break;
     case 'update':
     case 'upgrade':
-      runUpdate();
+      runUpdate(restArgs);
       break;
     case '--help':
     case '-h':

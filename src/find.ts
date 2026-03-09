@@ -2,7 +2,7 @@ import * as readline from 'readline';
 import { runAdd, parseAddOptions } from './add.ts';
 import { track } from './telemetry.ts';
 import { isRepoPrivate } from './source-parser.ts';
-import { NPX_CMD, SEARCH_API_BASE, SKILLS_SITE } from './branding.ts';
+import { NPX_CMD, SKILLS_SITE } from './branding.ts';
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -29,7 +29,7 @@ export interface SearchSkill {
 // Search via API
 export async function searchSkillsAPI(query: string): Promise<SearchSkill[]> {
   try {
-    const url = `${SEARCH_API_BASE}/api/search?q=${encodeURIComponent(query)}&limit=10`;
+    const url = `${SKILLS_SITE}/api/search?q=${encodeURIComponent(query)}&limit=10`;
     const res = await fetch(url);
 
     if (!res.ok) return [];

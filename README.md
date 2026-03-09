@@ -36,6 +36,15 @@ npx bmc-skills add git@github.com:vercel-labs/agent-skills.git
 
 # 本地路径
 npx bmc-skills add ./my-local-skills
+
+# Skills Market — 按名称安装
+npx bmc-skills add a2ui-components
+
+# Skills Market — 指定版本
+npx bmc-skills add a2ui-components@1.0.0
+
+# Skills Market — 安装私有技能（需 author 前缀）
+npx bmc-skills add 李阳_242613/create-adaptable-composable
 ```
 
 ### 选项
@@ -101,8 +110,8 @@ npx bmc-skills add vercel-labs/agent-skills --agent '*' --skill frontend-design
 | `npx bmc-skills list`            | 列出已安装的技能（别名：`ls`） |
 | `npx bmc-skills find [query]`    | 交互式搜索或按关键词搜索技能   |
 | `npx bmc-skills remove [skills]` | 从 Agent 中移除已安装的技能    |
-| `npx bmc-skills check`           | 检查可用的技能更新             |
-| `npx bmc-skills update`          | 将所有已安装技能更新到最新版本 |
+| `npx bmc-skills check`           | 检查可用的技能更新（默认项目级，`-g` 全局） |
+| `npx bmc-skills update`          | 更新已安装技能到最新版本（默认项目级，`-g` 全局） |
 | `npx bmc-skills init [name]`     | 创建新的 SKILL.md 模板         |
 
 ### `bmc-skills list`
@@ -134,13 +143,23 @@ npx bmc-skills find typescript
 
 ### `bmc-skills check` / `bmc-skills update`
 
+检查和更新已安装的技能。默认检查项目级（local lock），加 `-g` 检查全局。
+
 ```bash
-# 检查已安装技能是否有更新
+# 检查项目级技能是否有更新
 npx bmc-skills check
 
-# 将所有技能更新到最新版本
+# 检查全局技能是否有更新
+npx bmc-skills check -g
+
+# 更新项目级技能到最新版本
 npx bmc-skills update
+
+# 更新全局技能到最新版本
+npx bmc-skills update -g
 ```
+
+Market 技能通过版本号比对检测更新；GitHub 技能通过文件夹 hash 比对检测更新。
 
 ### `bmc-skills init`
 
@@ -405,6 +424,7 @@ CLI 在仓库中的以下位置搜索技能：
 
 | 变量                      | 说明                                                          |
 | ------------------------- | ------------------------------------------------------------- |
+| `SKILLS_API_URL`          | 自定义 Skills Market API 地址（默认 `http://localhost:3000`） |
 | `INSTALL_INTERNAL_SKILLS` | 设为 `1` 或 `true` 以显示和安装标记为 `internal: true` 的技能 |
 | `DISABLE_TELEMETRY`       | 设置此变量以禁用匿名使用遥测                                  |
 | `DO_NOT_TRACK`            | 禁用遥测的替代方式                                            |

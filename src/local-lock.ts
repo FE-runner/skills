@@ -23,6 +23,10 @@ export interface LocalSkillLockEntry {
    * computes the hash from actual file contents on disk.
    */
   computedHash: string;
+  /** Installed version (market skills only) */
+  version?: string;
+  /** Market skill ID for update checking */
+  skillId?: string;
 }
 
 /**
