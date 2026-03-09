@@ -288,15 +288,13 @@ ${DIM}  2) ${NPX_CMD} add <owner/repo@skill>${RESET}`;
       return;
     }
 
-    console.log(`${DIM}Install with${RESET} ${NPX_CMD} add <owner/repo@skill>`);
+    console.log(`${DIM}Install with${RESET} ${NPX_CMD} add <name>`);
     console.log();
 
     for (const skill of results.slice(0, 6)) {
-      const pkg = skill.source || skill.slug;
       const installs = formatInstalls(skill.installs);
-      console.log(
-        `${TEXT}${pkg}@${skill.name}${RESET}${installs ? ` ${CYAN}${installs}${RESET}` : ''}`
-      );
+      const label = skill.source ? `${skill.source}@${skill.name}` : skill.name;
+      console.log(`${TEXT}${label}${RESET}${installs ? ` ${CYAN}${installs}${RESET}` : ''}`);
       console.log(`${DIM}└ ${SKILLS_SITE}/${skill.slug}${RESET}`);
       console.log();
     }
