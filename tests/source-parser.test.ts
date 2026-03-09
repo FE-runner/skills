@@ -323,3 +323,102 @@ describe('Source aliases', () => {
     expect(result.url).toBe('https://github.com/coinbase/agentic-wallet-skills.git');
   });
 });
+
+describe('Market install command tests', () => {
+  describe('bare skill name (ASCII, no slash, no @)', () => {
+    it('simple bare name falls through to market', () => {
+      const result = parseSource('commit-assistant');
+      expect(result.type).toBe('market');
+      expect(result.marketName).toBe('commit-assistant');
+      expect(result.marketAuthor).toBeUndefined();
+      expect(result.marketVersion).toBeUndefined();
+    });
+  });
+
+  describe('non-ASCII skill name', () => {
+    it('Chinese skill name', () => {
+      const result = parseSource('智能文案生成器');
+      expect(result.type).toBe('market');
+      expect(result.marketName).toBe('智能文案生成器');
+      expect(result.marketAuthor).toBeUndefined();
+      expect(result.marketVersion).toBeUndefined();
+    });
+
+    it('Chinese skill name with version', () => {
+      const result = parseSource('智能文案生成器@1.0.0');
+      expect(result.type).toBe('market');
+      expect(result.marketName).toBe('智能文案生成器');
+      expect(result.marketAuthor).toBeUndefined();
+      expect(result.marketVersion).toBe('1.0.0');
+    });
+
+    it('Chinese author and skill name', () => {
+      const result = parseSource('张三_12345/智能文案生成器');
+      expect(result.type).toBe('market');
+      expect(result.marketName).toBe('智能文案生成器');
+      expect(result.marketAuthor).toBe('张三_12345');
+      expect(result.marketVersion).toBeUndefined();
+    });
+
+    it('Chinese author, skill name, and version', () => {
+      const result = parseSource('张三_12345/智能文案生成器@2.1.0');
+      expect(result.type).toBe('market');
+      expect(result.marketName).toBe('智能文案生成器');
+      expect(result.marketAuthor).toBe('张三_12345');
+      expect(result.marketVersion).toBe('2.1.0');
+    });
+  });
+
+  describe('ASCII skill name with @version (prioritized over GitHub shorthand)', () => {
+    it('name@version without author', () => {
+      const result = parseSource('my-skill@1.0.0');
+      expect(result.type).toBe('market');
+      expect(result.marketName).toBe('my-skill');
+      expect(result.marketAuthor).toBeUndefined();
+      expect(result.marketVersion).toBe('1.0.0');
+    });
+
+    it('author/name@version', () => {
+      const result = parseSource('john_EMP001/my-skill@3.2.1');
+      expect(result.type).toBe('market');
+      expect(result.marketName).toBe('my-skill');
+      expect(result.marketAuthor).toBe('john_EMP001');
+      expect(result.marketVersion).toBe('3.2.1');
+    });
+
+    it('version with single number', () => {
+      const result = parseSource('my-skill@2');
+      expect(result.type).toBe('market');
+      expect(result.marketName).toBe('my-skill');
+      expect(result.marketVersion).toBe('2');
+    });
+  });
+
+  describe('does NOT match as market command', () => {
+    it('pure ASCII owner/repo stays as GitHub shorthand', () => {
+      const result = parseSource('owner/repo');
+      expect(result.type).toBe('github');
+    });
+
+    it('owner/repo@skill-name stays as GitHub shorthand (non-version @)', () => {
+      const result = parseSource('owner/repo@my-skill');
+      expect(result.type).toBe('github');
+      expect(result.skillFilter).toBe('my-skill');
+    });
+
+    it('URL is not parsed as market command', () => {
+      const result = parseSource('https://github.com/owner/repo');
+      expect(result.type).toBe('github');
+    });
+
+    it('local path is not parsed as market command', () => {
+      const result = parseSource('./my-skills');
+      expect(result.type).toBe('local');
+    });
+
+    it('.git suffix is not parsed as market command', () => {
+      const result = parseSource('git@github.com:owner/repo.git');
+      expect(result.type).toBe('git');
+    });
+  });
+});
