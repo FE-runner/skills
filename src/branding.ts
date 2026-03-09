@@ -27,11 +27,12 @@ export const EXAMPLE_REPO_URL = `https://github.com/${EXAMPLE_REPO}`;
 /** The skills repo that contains find-skills (owner/repo format) */
 export const FIND_SKILLS_REPO = 'vercel-labs/skills';
 
+export const SKILLS_API_URL = 'http://localhost:3000';
 /** Skills directory website */
-export const SKILLS_SITE = 'https://skills.sh';
+export const SKILLS_SITE = 'http://localhost:3000';
 
 /** Search API base URL */
-export const SEARCH_API_BASE = process.env.SKILLS_API_URL || SKILLS_SITE;
+export const SEARCH_API_BASE = SKILLS_API_URL || SKILLS_SITE;
 
 /** Telemetry endpoint URL */
 export const TELEMETRY_URL = 'https://add-skill.vercel.sh/t';

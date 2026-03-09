@@ -14,6 +14,7 @@ import { removeCommand, parseRemoveOptions } from './remove.ts';
 import { runSync, parseSyncOptions } from './sync.ts';
 import { track } from './telemetry.ts';
 import { fetchSkillFolderHash, getGitHubToken } from './skill-lock.ts';
+import { marketProvider } from './providers/market.ts';
 import {
   NPX_CMD,
   BIN_NAME,
@@ -377,28 +378,29 @@ async function runCheck(args: string[] = []): Promise<void> {
   // Get GitHub token from user's environment for higher rate limits
   const token = getGitHubToken();
 
-  // Group skills by source (owner/repo) to batch GitHub API calls
-  const skillsBySource = new Map<string, Array<{ name: string; entry: SkillLockEntry }>>();
+  // Group skills by source type
+  const githubSkills = new Map<string, Array<{ name: string; entry: SkillLockEntry }>>();
+  const marketSkills: Array<{ name: string; entry: SkillLockEntry }> = [];
   let skippedCount = 0;
 
   for (const skillName of skillNames) {
     const entry = lock.skills[skillName];
     if (!entry) continue;
 
-    // Only check GitHub-sourced skills with folder hash
-    if (entry.sourceType !== 'github' || !entry.skillFolderHash || !entry.skillPath) {
+    if (entry.sourceType === 'market' && entry.skillFolderHash && entry.skillPath) {
+      marketSkills.push({ name: skillName, entry });
+    } else if (entry.sourceType === 'github' && entry.skillFolderHash && entry.skillPath) {
+      const existing = githubSkills.get(entry.source) || [];
+      existing.push({ name: skillName, entry });
+      githubSkills.set(entry.source, existing);
+    } else {
       skippedCount++;
-      continue;
     }
-
-    const existing = skillsBySource.get(entry.source) || [];
-    existing.push({ name: skillName, entry });
-    skillsBySource.set(entry.source, existing);
   }
 
   const totalSkills = skillNames.length - skippedCount;
   if (totalSkills === 0) {
-    console.log(`${DIM}No GitHub skills to check.${RESET}`);
+    console.log(`${DIM}No checkable skills found.${RESET}`);
     return;
   }
 
@@ -407,8 +409,8 @@ async function runCheck(args: string[] = []): Promise<void> {
   const updates: Array<{ name: string; source: string }> = [];
   const errors: Array<{ name: string; source: string; error: string }> = [];
 
-  // Check each source (one API call per repo)
-  for (const [source, skills] of skillsBySource) {
+  // Check GitHub-sourced skills
+  for (const [source, skills] of githubSkills) {
     for (const { name, entry } of skills) {
       try {
         const latestHash = await fetchSkillFolderHash(source, entry.skillPath!, token);
@@ -428,6 +430,28 @@ async function runCheck(args: string[] = []): Promise<void> {
           error: err instanceof Error ? err.message : 'Unknown error',
         });
       }
+    }
+  }
+
+  // Check market-sourced skills
+  for (const { name, entry } of marketSkills) {
+    try {
+      const checkResult = await marketProvider.check(entry.skillPath!);
+
+      if (!checkResult) {
+        errors.push({ name, source: entry.source, error: 'Could not fetch from Skills Market' });
+        continue;
+      }
+
+      if (checkResult.skillFolderHash !== entry.skillFolderHash) {
+        updates.push({ name, source: entry.source });
+      }
+    } catch (err) {
+      errors.push({
+        name,
+        source: entry.source,
+        error: err instanceof Error ? err.message : 'Unknown error',
+      });
     }
   }
 
@@ -479,7 +503,7 @@ async function runUpdate(): Promise<void> {
   // Get GitHub token from user's environment for higher rate limits
   const token = getGitHubToken();
 
-  // Find skills that need updates by checking GitHub directly
+  // Find skills that need updates
   const updates: Array<{ name: string; source: string; entry: SkillLockEntry }> = [];
   let checkedCount = 0;
 
@@ -487,21 +511,26 @@ async function runUpdate(): Promise<void> {
     const entry = lock.skills[skillName];
     if (!entry) continue;
 
-    // Only check GitHub-sourced skills with folder hash
-    if (entry.sourceType !== 'github' || !entry.skillFolderHash || !entry.skillPath) {
-      continue;
-    }
-
-    checkedCount++;
-
-    try {
-      const latestHash = await fetchSkillFolderHash(entry.source, entry.skillPath, token);
-
-      if (latestHash && latestHash !== entry.skillFolderHash) {
-        updates.push({ name: skillName, source: entry.source, entry });
+    if (entry.sourceType === 'market' && entry.skillFolderHash && entry.skillPath) {
+      checkedCount++;
+      try {
+        const checkResult = await marketProvider.check(entry.skillPath);
+        if (checkResult && checkResult.skillFolderHash !== entry.skillFolderHash) {
+          updates.push({ name: skillName, source: entry.source, entry });
+        }
+      } catch {
+        // Skip skills that fail to check
       }
-    } catch {
-      // Skip skills that fail to check
+    } else if (entry.sourceType === 'github' && entry.skillFolderHash && entry.skillPath) {
+      checkedCount++;
+      try {
+        const latestHash = await fetchSkillFolderHash(entry.source, entry.skillPath, token);
+        if (latestHash && latestHash !== entry.skillFolderHash) {
+          updates.push({ name: skillName, source: entry.source, entry });
+        }
+      } catch {
+        // Skip skills that fail to check
+      }
     }
   }
 
@@ -526,25 +555,32 @@ async function runUpdate(): Promise<void> {
   for (const update of updates) {
     console.log(`${TEXT}Updating ${update.name}...${RESET}`);
 
-    // Build the URL with subpath to target the specific skill directory
-    // e.g., https://github.com/owner/repo/tree/main/skills/my-skill
-    let installUrl = update.entry.sourceUrl;
-    if (update.entry.skillPath) {
-      // Extract the skill folder path (remove /SKILL.md suffix)
-      let skillFolder = update.entry.skillPath;
-      if (skillFolder.endsWith('/SKILL.md')) {
-        skillFolder = skillFolder.slice(0, -9);
-      } else if (skillFolder.endsWith('SKILL.md')) {
-        skillFolder = skillFolder.slice(0, -8);
-      }
-      if (skillFolder.endsWith('/')) {
-        skillFolder = skillFolder.slice(0, -1);
-      }
+    let installUrl: string;
 
-      // Convert git URL to tree URL with path
-      // https://github.com/owner/repo.git -> https://github.com/owner/repo/tree/main/path
-      installUrl = update.entry.sourceUrl.replace(/\.git$/, '').replace(/\/$/, '');
-      installUrl = `${installUrl}/tree/main/${skillFolder}`;
+    if (update.entry.sourceType === 'market') {
+      // Market skills: reinstall by name (bare skill name triggers market resolve)
+      installUrl = update.name;
+    } else {
+      // GitHub skills: build the URL with subpath to target the specific skill directory
+      // e.g., https://github.com/owner/repo/tree/main/skills/my-skill
+      installUrl = update.entry.sourceUrl;
+      if (update.entry.skillPath) {
+        // Extract the skill folder path (remove /SKILL.md suffix)
+        let skillFolder = update.entry.skillPath;
+        if (skillFolder.endsWith('/SKILL.md')) {
+          skillFolder = skillFolder.slice(0, -9);
+        } else if (skillFolder.endsWith('SKILL.md')) {
+          skillFolder = skillFolder.slice(0, -8);
+        }
+        if (skillFolder.endsWith('/')) {
+          skillFolder = skillFolder.slice(0, -1);
+        }
+
+        // Convert git URL to tree URL with path
+        // https://github.com/owner/repo.git -> https://github.com/owner/repo/tree/main/path
+        installUrl = update.entry.sourceUrl.replace(/\.git$/, '').replace(/\/$/, '');
+        installUrl = `${installUrl}/tree/main/${skillFolder}`;
+      }
     }
 
     // Use CLI to reinstall with -g -y flags

@@ -1,5 +1,7 @@
 import { isAbsolute, resolve } from 'path';
 import type { ParsedSource } from './types.ts';
+import { isCosUrl } from './providers/cos.ts';
+import { SKILLS_SITE } from './branding.ts';
 
 /**
  * Extract owner/repo (or group/subgroup/repo for GitLab) from a parsed source
@@ -190,6 +192,13 @@ export function parseSource(input: string): ParsedSource {
     }
   }
 
+  // Market install command: [author/]name[@version]
+  // Check BEFORE GitHub shorthand so that market skills take priority.
+  // e.g., `bmc-skills add 智能文案生成器@1.0.0` or `bmc-skills add 张三_EMP001/智能文案生成器@1.0.0`
+  if (isMarketInstallCommand(input)) {
+    return parseMarketInstallCommand(input);
+  }
+
   // GitHub shorthand: owner/repo, owner/repo/path/to/skill, or owner/repo@skill-name
   // Exclude paths that start with . or / to avoid matching local paths
   // First check for @skill syntax: owner/repo@skill-name
@@ -213,6 +222,24 @@ export function parseSource(input: string): ParsedSource {
     };
   }
 
+  // Tencent COS URL: https://<bucket>.cos.<region>.myqcloud.com/...
+  if (isCosUrl(input)) {
+    return {
+      type: 'cos',
+      url: input,
+    };
+  }
+
+  // Market install token URL: https://skills.sh/install/<token>
+  if (isMarketInstallUrl(input)) {
+    const token = extractInstallToken(input);
+    return {
+      type: 'market',
+      url: input,
+      installToken: token ?? undefined,
+    };
+  }
+
   // Well-known skills: arbitrary HTTP(S) URLs that aren't GitHub/GitLab
   // This is the final fallback for URLs - we'll check for /.well-known/skills/index.json
   if (isWellKnownUrl(input)) {
@@ -220,6 +247,13 @@ export function parseSource(input: string): ParsedSource {
       type: 'well-known',
       url: input,
     };
+  }
+
+  // Bare skill name (no slashes, no protocol) — resolve via Skills Market
+  // e.g., `bmc-skills add 智能文案生成器` or `bmc-skills add 智能文案生成器@1.0.0`
+  // e.g., `bmc-skills add 张三_EMP001/智能文案生成器@1.0.0` (private skill with author prefix)
+  if (isBareSkillName(input)) {
+    return parseMarketInstallCommand(input);
   }
 
   // Fallback: treat as direct git URL
@@ -257,4 +291,129 @@ function isWellKnownUrl(input: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Check if a URL is a market install token URL.
+ * Format: https://skills.sh/install/<token> (or any SEARCH_API_BASE host)
+ */
+function isMarketInstallUrl(input: string): boolean {
+  if (!input.startsWith('http://') && !input.startsWith('https://')) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(input);
+    const siteUrl = new URL(SKILLS_SITE);
+
+    // Match the configured skills site hostname
+    if (parsed.hostname !== siteUrl.hostname) {
+      // Also check SEARCH_API_BASE if different
+      const apiUrl = new URL(SKILLS_SITE);
+      if (parsed.hostname !== apiUrl.hostname) {
+        return false;
+      }
+    }
+
+    // Must be /install/<token> path
+    return /^\/install\/[a-f0-9]+$/.test(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Extract the install token from a market install URL.
+ */
+function extractInstallToken(input: string): string | null {
+  try {
+    const parsed = new URL(input);
+    const match = parsed.pathname.match(/^\/install\/([a-f0-9]+)$/);
+    return match ? match[1]! : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check if input looks like a market install command that should take priority
+ * over GitHub shorthand. Matches patterns with:
+ * - @version suffix (e.g., "name@1.0.0", "author/name@1.0.0")
+ * - Non-ASCII characters (e.g., "智能文案生成器", "张三_EMP001/智能文案生成器")
+ * Does NOT match pure ASCII owner/repo without @ (leave that to GitHub shorthand).
+ */
+function isMarketInstallCommand(input: string): boolean {
+  // Must not be a URL or local path
+  if (input.includes(':') || input.startsWith('.') || input.endsWith('.git')) return false;
+  if (input.startsWith('http://') || input.startsWith('https://')) return false;
+  if (input.trim().length === 0) return false;
+
+  // Contains non-ASCII → market skill name
+  if (/[^\x00-\x7F]/.test(input)) return true;
+
+  // Contains @ with version-like suffix → market install command
+  const atIdx = input.lastIndexOf('@');
+  if (atIdx > 0 && /^\d+(\.\d+)*$/.test(input.slice(atIdx + 1))) return true;
+
+  return false;
+}
+
+/**
+ * Check if input is a bare skill name (no slashes, no @version).
+ * Used as fallback after GitHub shorthand matching.
+ * Examples: "my-skill", "commit-assistant"
+ */
+function isBareSkillName(input: string): boolean {
+  if (input.includes('/')) return false;
+  if (input.includes(':')) return false;
+  if (input.startsWith('.')) return false;
+  if (input.startsWith('http://') || input.startsWith('https://')) return false;
+  if (input.endsWith('.git')) return false;
+  if (input.trim().length === 0) return false;
+
+  return true;
+}
+
+/**
+ * Parse a market install command into a ParsedSource.
+ * Input format: [author/]name[@version]
+ */
+function parseMarketInstallCommand(input: string): ParsedSource {
+  // 1. Extract version from @suffix (use lastIndexOf to handle names with potential @ chars)
+  const atIdx = input.lastIndexOf('@');
+  let version: string | undefined;
+  let nameStr: string;
+
+  if (atIdx > 0) {
+    const candidate = input.slice(atIdx + 1);
+    // Validate that the part after @ looks like a version (digits and dots)
+    if (/^\d+(\.\d+)*$/.test(candidate)) {
+      version = candidate;
+      nameStr = input.slice(0, atIdx);
+    } else {
+      nameStr = input;
+    }
+  } else {
+    nameStr = input;
+  }
+
+  // 2. Extract author prefix from slash
+  const slashIdx = nameStr.indexOf('/');
+  let author: string | undefined;
+  let name: string;
+
+  if (slashIdx > 0) {
+    author = nameStr.slice(0, slashIdx);
+    name = nameStr.slice(slashIdx + 1);
+  } else {
+    name = nameStr;
+  }
+
+  return {
+    type: 'market',
+    url: input,
+    marketName: name,
+    marketAuthor: author,
+    marketVersion: version,
+  };
 }

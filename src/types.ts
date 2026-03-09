@@ -64,13 +64,23 @@ export interface AgentConfig {
 }
 
 export interface ParsedSource {
-  type: 'github' | 'gitlab' | 'git' | 'local' | 'well-known';
+  type: 'github' | 'gitlab' | 'git' | 'local' | 'well-known' | 'cos' | 'market';
   url: string;
   subpath?: string;
   localPath?: string;
   ref?: string;
   /** Skill name extracted from @skill syntax (e.g., owner/repo@skill-name) */
   skillFilter?: string;
+  /** Install token extracted from market install URL */
+  installToken?: string;
+  /** Market skill ID resolved from name */
+  marketSkillId?: string;
+  /** Market skill name (without author prefix or version suffix) */
+  marketName?: string;
+  /** Author prefix for private market skills (e.g., "张三_EMP001") */
+  marketAuthor?: string;
+  /** Explicit version from install command (e.g., "1.0.0" from "name@1.0.0") */
+  marketVersion?: string;
 }
 
 /**

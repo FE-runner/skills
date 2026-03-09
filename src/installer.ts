@@ -15,6 +15,12 @@ import { join, basename, normalize, resolve, sep, relative, dirname } from 'path
 import { homedir, platform } from 'os';
 import type { Skill, AgentType, RemoteSkill } from './types.ts';
 import type { WellKnownSkill } from './providers/wellknown.ts';
+
+/** Minimal interface for skills that carry their files in-memory (WellKnownSkill, CosSkill, etc.) */
+export interface FileBasedSkill {
+  installName: string;
+  files: Map<string, string>;
+}
 import { agents, detectInstalledAgents, isUniversalAgent } from './agents.ts';
 import { AGENTS_DIR, SKILLS_SUBDIR } from './constants.ts';
 import { parseSkillMd } from './skills.ts';
@@ -554,7 +560,7 @@ export async function installRemoteSkillForAgent(
  * or copy mode (writes directly to each agent dir).
  */
 export async function installWellKnownSkillForAgent(
-  skill: WellKnownSkill,
+  skill: FileBasedSkill,
   agentType: AgentType,
   options: { global?: boolean; cwd?: string; mode?: InstallMode } = {}
 ): Promise<InstallResult> {

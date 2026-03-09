@@ -12,3 +12,7 @@ export {
   type WellKnownSkillEntry,
   type WellKnownSkill,
 } from './wellknown.ts';
+
+export { CosProvider, cosProvider, type CosSkill, type CosUrlParts } from './cos.ts';
+
+export { MarketProvider, marketProvider, type MarketSkill } from './market.ts';
