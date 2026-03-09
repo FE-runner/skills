@@ -34,7 +34,10 @@ export async function searchSkillsAPI(query: string): Promise<SearchSkill[]> {
 
     if (!res.ok) return [];
 
-    const data = (await res.json()) as {
+    const json = (await res.json()) as Record<string, unknown>;
+
+    // Unwrap API envelope: { code, message, data: { skills } } → { skills }
+    const payload = (json.data && json.code ? json.data : json) as {
       skills: Array<{
         id: string;
         name: string;
@@ -43,7 +46,7 @@ export async function searchSkillsAPI(query: string): Promise<SearchSkill[]> {
       }>;
     };
 
-    return data.skills.map((skill) => ({
+    return (payload.skills || []).map((skill) => ({
       name: skill.name,
       slug: skill.id,
       source: skill.source || '',

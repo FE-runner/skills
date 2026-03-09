@@ -3,6 +3,17 @@ import type { HostProvider, ProviderMatch, RemoteSkill } from './types.ts';
 import { SEARCH_API_BASE } from '../branding.ts';
 
 /**
+ * Unwrap the API envelope: { code, message, data } → data
+ * Falls back to raw JSON if no envelope detected.
+ */
+function unwrapEnvelope<T>(json: unknown): T {
+  if (json && typeof json === 'object' && 'data' in json && 'code' in json) {
+    return (json as { data: T }).data;
+  }
+  return json as T;
+}
+
+/**
  * Represents a skill fetched from the Skills Market.
  */
 export interface MarketSkill extends RemoteSkill {
@@ -124,7 +135,7 @@ export class MarketProvider implements HostProvider {
 
       const res = await fetch(`${this.apiBase}/api/skills/resolve?${params}`);
       if (!res.ok) return null;
-      return (await res.json()) as ResolveResponse;
+      return unwrapEnvelope<ResolveResponse>(await res.json());
     } catch {
       return null;
     }
@@ -142,7 +153,7 @@ export class MarketProvider implements HostProvider {
       const res = await fetch(url, { method: 'POST' });
       if (!res.ok) return null;
 
-      const data = (await res.json()) as InstallResponse;
+      const data = unwrapEnvelope<InstallResponse>(await res.json());
       return this.toMarketSkill(data, skillId);
     } catch {
       return null;
@@ -157,7 +168,7 @@ export class MarketProvider implements HostProvider {
       const res = await fetch(`${this.apiBase}/api/install/${token}`);
       if (!res.ok) return null;
 
-      const data = (await res.json()) as InstallResponse;
+      const data = unwrapEnvelope<InstallResponse>(await res.json());
       return this.toMarketSkill(data, `token:${token}`);
     } catch {
       return null;
@@ -171,7 +182,7 @@ export class MarketProvider implements HostProvider {
     try {
       const res = await fetch(`${this.apiBase}/api/skills/${skillId}/check`);
       if (!res.ok) return null;
-      return (await res.json()) as CheckResponse;
+      return unwrapEnvelope<CheckResponse>(await res.json());
     } catch {
       return null;
     }
