@@ -1358,7 +1358,7 @@ async function handleMarketSkill(
     spinner.stop(`Found: ${pc.cyan(resolved.name)} ${pc.dim(`v${resolved.currentVersion}`)}`);
 
     spinner.start('Downloading skill files...');
-    skill = await marketProvider.fetchById(resolved.id, version);
+    skill = await marketProvider.fetchById(resolved.id, version, author);
   }
 
   if (!skill) {

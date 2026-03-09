@@ -142,13 +142,16 @@ export class MarketProvider implements HostProvider {
   }
 
   /**
-   * Install a public skill by its market ID.
+   * Install a skill by its market ID.
+   * Pass `author` for private skills (format: "用户名_工号").
    */
-  async fetchById(skillId: string, version?: string): Promise<MarketSkill | null> {
+  async fetchById(skillId: string, version?: string, author?: string): Promise<MarketSkill | null> {
     try {
-      const url = version
-        ? `${this.apiBase}/api/skills/${skillId}/install?version=${encodeURIComponent(version)}`
-        : `${this.apiBase}/api/skills/${skillId}/install`;
+      const params = new URLSearchParams();
+      if (version) params.set('version', version);
+      if (author) params.set('author', author);
+      const qs = params.toString();
+      const url = `${this.apiBase}/api/skills/${skillId}/install${qs ? `?${qs}` : ''}`;
 
       const res = await fetch(url, { method: 'POST' });
       if (!res.ok) return null;
