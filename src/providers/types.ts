@@ -73,25 +73,3 @@ export interface HostProvider {
    */
   getSourceIdentifier(url: string): string;
 }
-
-/**
- * Registry for managing host providers.
- */
-export interface ProviderRegistry {
-  /**
-   * Register a new provider.
-   */
-  register(provider: HostProvider): void;
-
-  /**
-   * Find a provider that matches the given URL.
-   * @param url - The URL to match
-   * @returns The matching provider or null
-   */
-  findProvider(url: string): HostProvider | null;
-
-  /**
-   * Get all registered providers.
-   */
-  getProviders(): HostProvider[];
-}

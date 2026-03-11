@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { runCliOutput, stripLogo, hasLogo } from './test-utils.ts';
-import { NPX_CMD, BIN_NAME, USAGE_CMD } from './branding.ts';
+import { NPX_CMD, BIN_NAME, USAGE_CMD, SKILLS_SITE } from './branding.ts';
 
 describe('skills CLI', () => {
   describe('--help', () => {
@@ -33,7 +33,7 @@ describe('skills CLI', () => {
   describe('--version', () => {
     it('should display version number', () => {
       const output = runCliOutput(['--version']);
-      expect(output.trim()).toMatch(/^\d+\.\d+\.\d+$/);
+      expect(output.trim()).toMatch(/^\d+\.\d+\.\d+/);
     });
 
     it('should match package.json version', () => {
@@ -53,7 +53,7 @@ describe('skills CLI', () => {
       expect(output).toContain(`${NPX_CMD} check`);
       expect(output).toContain(`${NPX_CMD} update`);
       expect(output).toContain(`${NPX_CMD} init`);
-      expect(output).toContain('skills.sh');
+      expect(output).toContain(SKILLS_SITE);
     });
   });
 

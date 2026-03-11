@@ -1,8 +1,5 @@
 // Export types
-export type { HostProvider, ProviderMatch, ProviderRegistry, RemoteSkill } from './types.ts';
-
-// Export registry functions
-export { registry, registerProvider, findProvider, getProviders } from './registry.ts';
+export type { HostProvider, ProviderMatch, RemoteSkill } from './types.ts';
 
 // Export individual providers
 export {
