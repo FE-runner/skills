@@ -1,8 +1,4 @@
-# AGENTS.md
-
-本文件为 AI 编码助手提供 `bmc-skills` CLI 项目的上下文指引。
-
-## 项目概述
+# bmc-skills CLI
 
 `bmc-skills` 是 `vercel-labs/skills` 的**定制化 fork**，经改造后供内部使用。
 
@@ -178,38 +174,89 @@ npm publish
 2. 运行 `pnpm run -C scripts validate-agents.ts` 进行验证
 3. 运行 `pnpm run -C scripts sync-agents.ts` 更新 README.md
 
-## 关联项目
+## 关联项目：skills-market (全栈 Web 平台)
 
-本项目与 `../skills-market`（全栈 Web 平台）是上下游关系。
+本项目 `skills-cli` 与 `../skills-market` 是上下游关系。
 
 ### 项目概述
+
 - **路径**: `../skills-market`
 - **用途**: agent skills 生态的全栈 Web 平台，提供技能发布、审核、管理和发现功能
 - **技术栈**: Next.js 16 (App Router), React 19, Prisma 7 (MySQL), TypeScript, Tailwind CSS 4
+- **仓库**: http://git.domob-inc.cn/bmc/skills/skills-market.git
 
-### 交互方式
-- CLI 的 `find` 命令通过 `GET /api/search?q=<query>&limit=10` 搜索 market 上的技能
-- CLI 的 `add` 命令安装技能到本地 agent 目录
-- CLI 的 `check`/`update` 命令通过 GitHub API 检查更新
+### 上下游关系
 
-### 关键对照
+```
+skills-market (全栈 Web 平台)        skills-cli (npm CLI 工具)
+┌─────────────────────────┐          ┌──────────────────────────┐
+│ - 技能发布/审核/管理      │          │ - 技能安装/卸载/更新       │
+│ - 用户认证/权限管理       │  ◄────►  │ - 技能搜索 (find 命令)    │
+│ - API: /api/skills/*    │          │ - 多 agent 支持            │
+│ - API: /api/reviews/*   │          │ - skills-lock.json 管理   │
+│ - COS 文件存储           │          │ - 检查更新/同步            │
+└─────────────────────────┘          └──────────────────────────┘
+```
+
+### Market 平台 API 路由
+
+| 路由 | 方法 | 说明 |
+|------|------|------|
+| `/api/auth/feishu` | GET | 飞书 OAuth 登录跳转 |
+| `/api/auth/feishu/callback` | GET | 飞书 OAuth 回调 |
+| `/api/auth/logout` | POST | 登出 |
+| `/api/auth/me` | GET | 获取当前用户信息 |
+| `/api/skills` | GET | 获取技能列表（支持分页/筛选） |
+| `/api/skills` | POST | 创建新技能 |
+| `/api/skills/[id]` | GET/PUT/DELETE | 技能 CRUD |
+| `/api/skills/[id]/publish` | POST | 提交技能审核 |
+| `/api/skills/[id]/versions` | GET | 获取版本历史 |
+| `/api/skills/[id]/files/[...path]` | GET | 获取技能文件内容 |
+| `/api/reviews` | GET/POST | 审核列表 / 执行审核 |
+| `/api/users` | GET | 用户列表 |
+
+#### CLI 直接调用的 API
+- **搜索 API**: `GET /api/search?q=<query>&limit=10`
+  - 返回: `{ skills: [{ id, name, installs, source }] }`
+  - CLI 中在 `src/find.ts` 的 `searchSkillsAPI()` 函数调用
+  - API 基地址: `SEARCH_API_BASE`（默认 `https://skills.sh`）
+
+### Market 数据模型
+
+核心模型在 `../skills-market/prisma/schema.prisma`：
+
+```
+User     → id, email, name, avatar, feishuOpenId, role(ADMIN/REVIEWER/USER), status(ACTIVE/DISABLED)
+Skill    → id, name, category, visibility(PRIVATE/PUBLIC), status(PENDING/APPROVED/REJECTED), version, filePath, fileTree, changelog, currentVersion
+SkillVersion → id, skillId, version, filePath, fileTree, changelog
+Review   → id, skillId, reviewerId, action(APPROVE/REJECT), comment
+```
+
+### Market 关键文件（需要了解时可读取）
+
+| 文件 | 说明 |
+|------|------|
+| `../skills-market/CLAUDE.md` | Market 项目完整架构文档 |
+| `../skills-market/prisma/schema.prisma` | 数据库模型定义 |
+| `../skills-market/lib/types.ts` | 前端共享类型（SkillListItem, SkillDetail 等） |
+| `../skills-market/app/api/skills/route.ts` | 技能列表 API（GET/POST） |
+| `../skills-market/app/api/skills/[id]/route.ts` | 技能详情 API（GET/PUT/DELETE） |
+| `../skills-market/lib/cos.ts` | COS 文件存储逻辑 |
+| `../skills-market/lib/validations/index.ts` | Zod 校验规则 |
+
+### 共享概念对照
 
 | 概念 | skills-market | skills-cli |
 |------|--------------|------------|
-| 技能数据结构 | `prisma/schema.prisma` Skill 模型 | `src/types.ts` Skill/RemoteSkill 接口 |
+| 技能数据结构 | Prisma Skill 模型 | `src/types.ts` Skill/RemoteSkill 接口 |
 | 技能内容 | COS 存储 + fileTree JSON | SKILL.md 文件 + 附属文件 |
-| Agent 类型 | 无（平台无关） | `src/types.ts` AgentType（40+ agent） |
-| 搜索 API | `/api/search` 或 `/api/skills` | `src/find.ts` 调用 SEARCH_API_BASE |
+| Agent 类型 | 无（平台无关） | `src/types.ts` AgentType |
+| 搜索 | `/api/search` 或 `/api/skills` | `src/find.ts` 调用 SEARCH_API_BASE |
 | 品牌/URL | 部署在 skills.sh | `src/branding.ts` 中 SKILLS_SITE |
 
 ### 开发注意事项
-1. **修改 find 命令**: 如果变更搜索请求格式，需确认 market 的 `/api/search` 是否兼容
-2. **修改 Skill/RemoteSkill 类型**: 需检查 market 的 Prisma 模型和 `lib/types.ts` 是否需同步
-3. **修改 branding.ts 中的 URL**: 确保 market 端的对应路由存在
 
-### Market 关键文件（需要了解时可读取）
-- `../skills-market/AGENTS.md` — Market 完整架构文档
-- `../skills-market/prisma/schema.prisma` — 数据库模型定义
-- `../skills-market/lib/types.ts` — 前端共享类型
-- `../skills-market/app/api/skills/route.ts` — 技能列表 API
-- `../skills-market/lib/cos.ts` — COS 文件存储逻辑
+1. **修改 find 命令时**: 如果变更搜索请求格式，需确认 market 的 `/api/search` 是否兼容
+2. **修改 Skill/RemoteSkill 类型时**: 需检查 market 的 Prisma 模型和 `lib/types.ts` 是否需同步
+3. **修改 branding.ts 中的 URL 时**: 确保 market 端的对应路由存在
+4. **修改安装文件结构时**: market 端的技能文件存储格式（COS + fileTree）需保持一致
