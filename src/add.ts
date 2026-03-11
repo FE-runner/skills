@@ -63,7 +63,7 @@ import {
 } from './skill-lock.ts';
 import { addSkillToLocalLock, computeSkillFolderHash } from './local-lock.ts';
 import type { Skill, AgentType, ParsedSource } from './types.ts';
-import { NPX_CMD, EXAMPLE_REPO, FIND_SKILLS_REPO, SKILLS_SITE } from './branding.ts';
+import { NPX_CMD, EXAMPLE_REPO, SKILLS_SITE } from './branding.ts';
 import packageJson from '../package.json' with { type: 'json' };
 export function initTelemetry(version: string): void {
   setVersion(version);
@@ -2495,23 +2495,20 @@ async function promptForFindSkills(
       p.log.step('Installing find-skills skill...');
 
       try {
-        // Call runAdd directly
-        await runAdd([FIND_SKILLS_REPO], {
-          skill: ['find-skills'],
+        // 从 Skills Market 安装 find-skills
+        await runAdd(['find-skills'], {
           global: true,
           yes: true,
           agent: findSkillsAgents,
         });
       } catch {
         p.log.warn('Failed to install find-skills. You can try again with:');
-        p.log.message(pc.dim(`  ${NPX_CMD} add ${FIND_SKILLS_REPO}@find-skills -g -y --all`));
+        p.log.message(pc.dim(`  ${NPX_CMD} add find-skills -g -y --all`));
       }
     } else {
       // User declined - dismiss the prompt
       await dismissPrompt('findSkillsPrompt');
-      p.log.message(
-        pc.dim(`You can install it later with: ${NPX_CMD} add ${FIND_SKILLS_REPO}@find-skills`)
-      );
+      p.log.message(pc.dim(`You can install it later with: ${NPX_CMD} add find-skills`));
     }
   } catch {
     // Don't fail the main installation if prompt fails

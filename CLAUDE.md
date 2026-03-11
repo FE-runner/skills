@@ -12,7 +12,7 @@
 | 领域 | 上游 | BMC Fork |
 |------|------|----------|
 | 包名 | `skills` | `bmc-skills` |
-| Market API | `https://skills.sh` | `http://localhost:3000`（通过 `SKILLS_API_URL`） |
+| Market API | `https://skills.sh` | `http://localhost:3000` |
 | 遥测 | 默认开启 | 默认**关闭** |
 | COS Provider | 无 | 新增（`providers/cos.ts`） |
 | Market Provider | 无 | 新增（`providers/market.ts`） |

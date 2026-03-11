@@ -21,11 +21,8 @@ export const EXAMPLE_REPO = 'vercel-labs/agent-skills';
 /** Default example repo full GitHub URL */
 export const EXAMPLE_REPO_URL = `https://github.com/${EXAMPLE_REPO}`;
 
-/** The skills repo that contains find-skills (owner/repo format) */
-export const FIND_SKILLS_REPO = 'vercel-labs/skills';
-
-/** Skills Market website and API base URL (overridable via SKILLS_API_URL env var) */
-export const SKILLS_SITE = process.env.SKILLS_API_URL || 'http://localhost:3000';
+/** Skills Market website and API base URL */
+export const SKILLS_SITE = 'http://10.0.0.207:3920';
 
 /** Telemetry endpoint URL */
 export const TELEMETRY_URL = 'https://add-skill.vercel.sh/t';
