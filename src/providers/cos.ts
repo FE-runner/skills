@@ -106,9 +106,10 @@ export function isCosUrl(input: string): boolean {
  * Parse a COS URL into its components.
  *
  * Supported formats:
- * - https://<bucket>.cos.<region>.myqcloud.com
  * - https://<bucket>.cos.<region>.myqcloud.com/skills/<id>
  * - https://<bucket>.cos.<region>.myqcloud.com/skills/<id>/versions/<version>
+ *
+ * Requires a skill ID in the path; bare bucket URLs are not supported.
  */
 export function parseCosUrl(url: string): CosUrlParts | null {
   try {
@@ -119,12 +120,8 @@ export function parseCosUrl(url: string): CosUrlParts | null {
     const bucket = hostMatch[1]!;
     const region = hostMatch[2]!;
 
-    // Parse optional path: /skills/<id>/versions/<version>
+    // Parse path: /skills/<id>/versions/<version>
     const path = parsed.pathname.replace(/^\/+|\/+$/g, ''); // trim slashes
-
-    if (!path) {
-      return { bucket, region };
-    }
 
     // Match: skills/<id>/versions/<version>
     const fullMatch = path.match(/^skills\/([^/]+)\/versions\/([^/]+)$/);
@@ -138,7 +135,8 @@ export function parseCosUrl(url: string): CosUrlParts | null {
       return { bucket, region, skillId: skillMatch[1]! };
     }
 
-    return { bucket, region };
+    // 无 skillId，不支持
+    return null;
   } catch {
     return null;
   }
@@ -220,23 +218,6 @@ export class CosProvider implements HostProvider {
     } while (true);
 
     return allXml;
-  }
-
-  /**
-   * List all skill IDs in the bucket.
-   * Looks for directories under `skills/` prefix.
-   */
-  async listSkillIds(bucket: string, region: string): Promise<string[]> {
-    const xml = await this.listObjects(bucket, region, 'skills/', '/');
-    const prefixes = extractPrefixes(xml);
-
-    // Extract skill IDs from prefixes like "skills/my-skill/"
-    return prefixes
-      .map((p) => {
-        const m = p.match(/^skills\/([^/]+)\/$/);
-        return m ? m[1]! : null;
-      })
-      .filter((id): id is string => id !== null);
   }
 
   /**
@@ -381,7 +362,8 @@ export class CosProvider implements HostProvider {
   }
 
   /**
-   * Fetch all skills from a COS bucket (each with its latest version).
+   * Fetch all skills from a COS URL.
+   * Requires a skill ID in the URL path.
    */
   async fetchAllSkills(url: string): Promise<CosSkill[]> {
     const parts = parseCosUrl(url);
@@ -395,31 +377,13 @@ export class CosProvider implements HostProvider {
       return skill ? [skill] : [];
     }
 
-    // If a specific skill is given (no version), fetch latest
+    // Skill ID without version: fetch latest
     if (skillId) {
       const skill = await this.fetchSkill(url);
       return skill ? [skill] : [];
     }
 
-    // Otherwise list and fetch all skills
-    const skillIds = await this.listSkillIds(bucket, region);
-    if (skillIds.length === 0) return [];
-
-    // Resolve latest version for each skill in parallel
-    const skills = await Promise.all(
-      skillIds.map(async (id) => {
-        try {
-          const versions = await this.listVersions(bucket, region, id);
-          const latest = this.resolveLatestVersion(versions);
-          if (!latest) return null;
-          return this.fetchSkillVersion(bucket, region, id, latest);
-        } catch {
-          return null;
-        }
-      })
-    );
-
-    return skills.filter((s): s is CosSkill => s !== null);
+    return [];
   }
 
   toRawUrl(url: string): string {
