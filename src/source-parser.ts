@@ -1,7 +1,6 @@
 import { isAbsolute, resolve } from 'path';
 import type { ParsedSource } from './types.ts';
 import { isCosUrl } from './providers/cos.ts';
-import { SKILLS_SITE } from './branding.ts';
 
 /**
  * Extract owner/repo (or group/subgroup/repo for GitLab) from a parsed source
@@ -230,16 +229,6 @@ export function parseSource(input: string): ParsedSource {
     };
   }
 
-  // Market install token URL: https://skills.sh/install/<token>
-  if (isMarketInstallUrl(input)) {
-    const token = extractInstallToken(input);
-    return {
-      type: 'market',
-      url: input,
-      installToken: token ?? undefined,
-    };
-  }
-
   // Well-known skills: arbitrary HTTP(S) URLs that aren't GitHub/GitLab
   // This is the final fallback for URLs - we'll check for /.well-known/skills/index.json
   if (isWellKnownUrl(input)) {
@@ -290,44 +279,6 @@ function isWellKnownUrl(input: string): boolean {
     return true;
   } catch {
     return false;
-  }
-}
-
-/**
- * Check if a URL is a market install token URL.
- * Format: https://skills.sh/install/<token> (or any SKILLS_SITE host)
- */
-function isMarketInstallUrl(input: string): boolean {
-  if (!input.startsWith('http://') && !input.startsWith('https://')) {
-    return false;
-  }
-
-  try {
-    const parsed = new URL(input);
-    const siteUrl = new URL(SKILLS_SITE);
-
-    // Match the configured skills site hostname
-    if (parsed.hostname !== siteUrl.hostname) {
-      return false;
-    }
-
-    // Must be /install/<token> path
-    return /^\/install\/[a-f0-9]+$/.test(parsed.pathname);
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Extract the install token from a market install URL.
- */
-function extractInstallToken(input: string): string | null {
-  try {
-    const parsed = new URL(input);
-    const match = parsed.pathname.match(/^\/install\/([a-f0-9]+)$/);
-    return match ? match[1]! : null;
-  } catch {
-    return null;
   }
 }
 

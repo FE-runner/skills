@@ -71,8 +71,6 @@ export interface ParsedSource {
   ref?: string;
   /** Skill name extracted from @skill syntax (e.g., owner/repo@skill-name) */
   skillFilter?: string;
-  /** Install token extracted from market install URL */
-  installToken?: string;
   /** Market skill ID resolved from name */
   marketSkillId?: string;
   /** Market skill name (without author prefix or version suffix) */

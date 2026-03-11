@@ -52,7 +52,7 @@ import {
   cosProvider,
   type CosSkill,
 } from './providers/index.ts';
-import { marketProvider, type MarketSkill } from './providers/market.ts';
+import { marketProvider } from './providers/market.ts';
 import {
   addSkillToLock,
   fetchSkillFolderHash,
@@ -1333,33 +1333,25 @@ async function handleMarketSkill(
   options: AddOptions,
   spinner: ReturnType<typeof p.spinner>
 ): Promise<void> {
-  let skill: MarketSkill | null = null;
+  // Name-based install: [author/]name[@version]
+  const skillName = parsed.marketName || source;
+  const author = parsed.marketAuthor;
+  const version = parsed.marketVersion;
 
-  if (parsed.installToken) {
-    // Token-based install (private skills)
-    spinner.start('Installing from market token...');
-    skill = await marketProvider.fetchByToken(parsed.installToken);
-  } else {
-    // Name-based install: [author/]name[@version]
-    const skillName = parsed.marketName || source;
-    const author = parsed.marketAuthor;
-    const version = parsed.marketVersion;
+  const displayName = author ? `${author}/${skillName}` : skillName;
+  spinner.start(`Resolving "${displayName}" from Skills Market...`);
+  const resolved = await marketProvider.resolve(skillName, author);
 
-    const displayName = author ? `${author}/${skillName}` : skillName;
-    spinner.start(`Resolving "${displayName}" from Skills Market...`);
-    const resolved = await marketProvider.resolve(skillName, author);
-
-    if (!resolved) {
-      spinner.stop(pc.red('Not found'));
-      p.outro(pc.red(`Skill "${displayName}" not found on Skills Market`));
-      process.exit(1);
-    }
-
-    spinner.stop(`Found: ${pc.cyan(resolved.name)} ${pc.dim(`v${resolved.currentVersion}`)}`);
-
-    spinner.start('Downloading skill files...');
-    skill = await marketProvider.fetchById(resolved.id, version, author);
+  if (!resolved) {
+    spinner.stop(pc.red('Not found'));
+    p.outro(pc.red(`Skill "${displayName}" not found on Skills Market`));
+    process.exit(1);
   }
+
+  spinner.stop(`Found: ${pc.cyan(resolved.name)} ${pc.dim(`v${resolved.currentVersion}`)}`);
+
+  spinner.start('Downloading skill files...');
+  const skill = await marketProvider.fetchById(resolved.id, version, author);
 
   if (!skill) {
     spinner.stop(pc.red('Failed to fetch skill'));
@@ -1548,7 +1540,9 @@ async function handleMarketSkill(
   const failed = results.filter((r) => !r.success);
 
   // Track installation
-  const sourceIdentifier = parsed.installToken ? `market/token` : `market/${skill.installName}`;
+  const sourceIdentifier = parsed.marketAuthor
+    ? `market/${parsed.marketAuthor}/${skill.installName}`
+    : `market/${skill.installName}`;
 
   track({
     event: 'install',

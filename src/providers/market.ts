@@ -1,5 +1,4 @@
-import matter from 'gray-matter';
-import type { HostProvider, ProviderMatch, RemoteSkill } from './types.ts';
+import type { RemoteSkill } from './types.ts';
 import { SKILLS_SITE } from '../branding.ts';
 
 /**
@@ -58,66 +57,19 @@ interface CheckResponse {
 }
 
 /**
- * Market URL patterns:
- * - https://skills.sh/install/<token>  (token-based private install)
- * - Other skills.sh URLs are not direct install targets
- */
-const INSTALL_TOKEN_RE = /^https?:\/\/[^/]+\/install\/([a-f0-9]+)$/;
-
-/**
  * Skills Market provider.
  *
- * Handles two install flows:
- * 1. Public skills: resolve by name → install by ID
- * 2. Private skills: install via token URL (https://skills.sh/install/<token>)
+ * Install flow: resolve by name → install by ID
+ * For private skills, pass author (e.g., "张三_EMP001") to resolve and install.
  *
  * Also supports check/update via the /api/skills/:id/check endpoint.
  */
-export class MarketProvider implements HostProvider {
+export class MarketProvider {
   readonly id = 'market';
   readonly displayName = 'Skills Market';
 
   private get apiBase(): string {
     return SKILLS_SITE;
-  }
-
-  /**
-   * Match skills.sh install token URLs.
-   * Format: https://skills.sh/install/<token>
-   */
-  match(url: string): ProviderMatch {
-    const tokenMatch = url.match(INSTALL_TOKEN_RE);
-    if (tokenMatch) {
-      return {
-        matches: true,
-        sourceIdentifier: `market/token/${tokenMatch[1]}`,
-      };
-    }
-
-    return { matches: false };
-  }
-
-  /**
-   * Fetch a skill via token URL.
-   */
-  async fetchSkill(url: string): Promise<MarketSkill | null> {
-    const tokenMatch = url.match(INSTALL_TOKEN_RE);
-    if (!tokenMatch) return null;
-
-    const token = tokenMatch[1]!;
-    return this.fetchByToken(token);
-  }
-
-  toRawUrl(url: string): string {
-    return url;
-  }
-
-  getSourceIdentifier(url: string): string {
-    const tokenMatch = url.match(INSTALL_TOKEN_RE);
-    if (tokenMatch) {
-      return `market/token/${tokenMatch[1]}`;
-    }
-    return 'market';
   }
 
   // ─── Public API Methods ───
@@ -157,21 +109,6 @@ export class MarketProvider implements HostProvider {
 
       const data = unwrapEnvelope<InstallResponse>(await res.json());
       return this.toMarketSkill(data, skillId);
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Install a private skill via token.
-   */
-  async fetchByToken(token: string): Promise<MarketSkill | null> {
-    try {
-      const res = await fetch(`${this.apiBase}/api/install/${token}`);
-      if (!res.ok) return null;
-
-      const data = unwrapEnvelope<InstallResponse>(await res.json());
-      return this.toMarketSkill(data, `token:${token}`);
     } catch {
       return null;
     }

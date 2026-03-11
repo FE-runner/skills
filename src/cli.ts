@@ -291,6 +291,18 @@ const LOCK_FILE = '.skill-lock.json';
 const CHECK_UPDATES_API_URL = 'https://add-skill.vercel.sh/check-updates';
 const CURRENT_LOCK_VERSION = 3; // Bumped from 2 to 3 for folder hash support
 
+/**
+ * 从 market source 字段解析出 author 和 skillName。
+ * 格式: "market/skillName" 或 "market/author/skillName"
+ */
+function parseMarketSource(source: string): { author?: string; skillName: string } {
+  const parts = source.replace('market/', '').split('/');
+  if (parts.length >= 2) {
+    return { author: parts[0], skillName: parts.slice(1).join('/') };
+  }
+  return { skillName: parts[0]! };
+}
+
 interface SkillLockEntry {
   source: string;
   sourceType: string;
@@ -298,6 +310,8 @@ interface SkillLockEntry {
   skillPath?: string;
   /** GitHub tree SHA for the entire skill folder (v3) */
   skillFolderHash: string;
+  /** Installed version (market skills only) */
+  version?: string;
   installedAt: string;
   updatedAt: string;
 }
@@ -415,7 +429,8 @@ async function runCheck(args: string[] = []): Promise<void> {
 
     for (const { name, entry } of marketSkills) {
       try {
-        const checkResult = await marketProvider.check(entry.skillPath!);
+        const { author } = parseMarketSource(entry.source);
+        const checkResult = await marketProvider.check(entry.skillPath!, author);
         if (!checkResult) {
           errors.push({ name, source: entry.source, error: 'Could not fetch from Skills Market' });
         } else if (checkResult.currentVersion !== entry.version) {
@@ -437,7 +452,8 @@ async function runCheck(args: string[] = []): Promise<void> {
       if (entry.sourceType === 'market' && entry.skillId) {
         totalSkills++;
         try {
-          const checkResult = await marketProvider.check(entry.skillId);
+          const { author } = parseMarketSource(entry.source);
+          const checkResult = await marketProvider.check(entry.skillId, author);
           if (!checkResult) {
             errors.push({
               name,
@@ -517,9 +533,11 @@ async function runUpdate(args: string[] = []): Promise<void> {
       if (entry.sourceType === 'market' && entry.skillPath) {
         checkedCount++;
         try {
-          const checkResult = await marketProvider.check(entry.skillPath);
+          const { author } = parseMarketSource(entry.source);
+          const checkResult = await marketProvider.check(entry.skillPath, author);
           if (checkResult && checkResult.currentVersion !== entry.version) {
-            updates.push({ name: skillName, installUrl: skillName });
+            const installUrl = entry.source.replace('market/', '');
+            updates.push({ name: skillName, installUrl });
           }
         } catch {
           // Skip skills that fail to check
@@ -550,9 +568,11 @@ async function runUpdate(args: string[] = []): Promise<void> {
       if (entry.sourceType === 'market' && entry.skillId) {
         checkedCount++;
         try {
-          const checkResult = await marketProvider.check(entry.skillId);
+          const { author } = parseMarketSource(entry.source);
+          const checkResult = await marketProvider.check(entry.skillId, author);
           if (checkResult && checkResult.currentVersion !== entry.version) {
-            updates.push({ name: skillName, installUrl: skillName });
+            const installUrl = entry.source.replace('market/', '');
+            updates.push({ name: skillName, installUrl });
           }
         } catch {
           // Skip skills that fail to check
