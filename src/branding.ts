@@ -15,11 +15,8 @@ export const NPX_CMD = `npx ${PACKAGE_NAME}`;
 /** The help usage line */
 export const USAGE_CMD = `${BIN_NAME} <command> [options]`;
 
-/** Default example repo shown in help/banner (owner/repo format) */
-export const EXAMPLE_REPO = 'vercel-labs/agent-skills';
-
-/** Default example repo full GitHub URL */
-export const EXAMPLE_REPO_URL = `https://github.com/${EXAMPLE_REPO}`;
+/** Default example shown in help/banner (market skill name) */
+export const EXAMPLE_REPO = 'a2ui-components';
 
 /** Skills Market website and API base URL */
 export const SKILLS_SITE = 'https://blueai-skills-market.domob-inc.cn';

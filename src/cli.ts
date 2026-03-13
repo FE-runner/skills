@@ -22,7 +22,6 @@ import {
   USAGE_CMD,
   PACKAGE_NAME,
   EXAMPLE_REPO,
-  EXAMPLE_REPO_URL,
   SKILLS_SITE,
 } from './branding.ts';
 
@@ -121,7 +120,7 @@ ${BOLD}Usage:${RESET} ${USAGE_CMD}
 ${BOLD}Manage Skills:${RESET}
   add <package>        Add a skill package (alias: a)
                        e.g. ${EXAMPLE_REPO}
-                            ${EXAMPLE_REPO_URL}
+                            <authorId>/<skill-name>
   remove [skills]      Remove installed skills
   list, ls             List installed skills
   find [query]         Search for skills interactively
@@ -168,10 +167,10 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ${BIN_NAME} add ${EXAMPLE_REPO}
   ${DIM}$${RESET} ${BIN_NAME} add ${EXAMPLE_REPO} -g
   ${DIM}$${RESET} ${BIN_NAME} add ${EXAMPLE_REPO} --agent claude-code cursor
-  ${DIM}$${RESET} ${BIN_NAME} add ${EXAMPLE_REPO} --skill pr-review commit
+  ${DIM}$${RESET} ${BIN_NAME} add owner/repo --skill my-skill another-skill
   ${DIM}$${RESET} ${BIN_NAME} remove                        ${DIM}# interactive remove${RESET}
-  ${DIM}$${RESET} ${BIN_NAME} remove web-design             ${DIM}# remove by name${RESET}
-  ${DIM}$${RESET} ${BIN_NAME} rm --global frontend-design
+  ${DIM}$${RESET} ${BIN_NAME} remove my-skill               ${DIM}# remove by name${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} rm --global my-skill
   ${DIM}$${RESET} ${BIN_NAME} list                          ${DIM}# list project skills${RESET}
   ${DIM}$${RESET} ${BIN_NAME} ls -g                         ${DIM}# list global skills${RESET}
   ${DIM}$${RESET} ${BIN_NAME} ls -a claude-code             ${DIM}# filter by agent${RESET}

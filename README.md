@@ -25,8 +25,8 @@ npx bmc-skills add a2ui-components
 # Skills Market — 指定版本
 npx bmc-skills add a2ui-components@1.0.0
 
-# Skills Market — 安装私有技能（需 author 前缀）
-npx bmc-skills add 李阳_242613/create-adaptable-composable
+# Skills Market — 安装私有技能（需 authorId 前缀）
+npx bmc-skills add <authorId>/create-adaptable-composable
 
 # COS 直链 — 安装指定技能
 npx bmc-skills add https://<bucket>.cos.<region>.myqcloud.com/skills_storage/<id>
@@ -35,19 +35,19 @@ npx bmc-skills add https://<bucket>.cos.<region>.myqcloud.com/skills_storage/<id
 npx bmc-skills add https://<bucket>.cos.<region>.myqcloud.com/skills_storage/<id>/versions/<version>
 
 # GitHub 简写格式 (owner/repo)
-npx bmc-skills add vercel-labs/agent-skills
+npx bmc-skills add owner/repo
 
 # 完整 GitHub URL
-npx bmc-skills add https://github.com/vercel-labs/agent-skills
+npx bmc-skills add https://github.com/owner/repo
 
 # 指向仓库中某个技能的直接路径
-npx bmc-skills add https://github.com/vercel-labs/agent-skills/tree/main/skills/web-design-guidelines
+npx bmc-skills add https://github.com/owner/repo/tree/main/skills/my-skill
 
 # GitLab URL
-npx bmc-skills add https://gitlab.com/org/repo
+npx bmc-skills add https://gitlab.com/owner/repo
 
 # 任意 git URL
-npx bmc-skills add git@github.com:vercel-labs/agent-skills.git
+npx bmc-skills add git@github.com:owner/repo.git
 
 # 本地路径
 npx bmc-skills add ./my-local-skills
@@ -69,28 +69,28 @@ npx bmc-skills add ./my-local-skills
 
 ```bash
 # 列出仓库中的技能
-npx bmc-skills add vercel-labs/agent-skills --list
+npx bmc-skills add owner/repo --list
 
 # 安装指定技能
-npx bmc-skills add vercel-labs/agent-skills --skill frontend-design --skill skill-creator
+npx bmc-skills add owner/repo --skill my-skill --skill another-skill
 
 # 安装名称含空格的技能（需加引号）
-npx bmc-skills add owner/repo --skill "Convex Best Practices"
+npx bmc-skills add owner/repo --skill "Skill With Spaces"
 
 # 安装到指定 Agent
-npx bmc-skills add vercel-labs/agent-skills -a claude-code -a opencode
+npx bmc-skills add a2ui-components -a claude-code -a opencode
 
 # 非交互式安装（适用于 CI/CD）
-npx bmc-skills add vercel-labs/agent-skills --skill frontend-design -g -a claude-code -y
+npx bmc-skills add a2ui-components -g -a claude-code -y
 
 # 将仓库中所有技能安装到所有 Agent
-npx bmc-skills add vercel-labs/agent-skills --all
+npx bmc-skills add owner/repo --all
 
 # 将所有技能安装到指定 Agent
-npx bmc-skills add vercel-labs/agent-skills --skill '*' -a claude-code
+npx bmc-skills add owner/repo --skill '*' -a claude-code
 
 # 将指定技能安装到所有 Agent
-npx bmc-skills add vercel-labs/agent-skills --agent '*' --skill frontend-design
+npx bmc-skills add owner/repo --agent '*' --skill my-skill
 ```
 
 ### 安装范围
@@ -111,14 +111,14 @@ npx bmc-skills add vercel-labs/agent-skills --agent '*' --skill frontend-design
 
 ## 其他命令
 
-| 命令                             | 说明                           |
-| -------------------------------- | ------------------------------ |
-| `npx bmc-skills list`            | 列出已安装的技能（别名：`ls`） |
-| `npx bmc-skills find [query]`    | 交互式搜索或按关键词搜索技能   |
-| `npx bmc-skills remove [skills]` | 从 Agent 中移除已安装的技能    |
-| `npx bmc-skills check`           | 检查可用的技能更新（默认项目级，`-g` 全局） |
+| 命令                             | 说明                                              |
+| -------------------------------- | ------------------------------------------------- |
+| `npx bmc-skills list`            | 列出已安装的技能（别名：`ls`）                    |
+| `npx bmc-skills find [query]`    | 交互式搜索或按关键词搜索技能                      |
+| `npx bmc-skills remove [skills]` | 从 Agent 中移除已安装的技能                       |
+| `npx bmc-skills check`           | 检查可用的技能更新（默认项目级，`-g` 全局）       |
 | `npx bmc-skills update`          | 更新已安装技能到最新版本（默认项目级，`-g` 全局） |
-| `npx bmc-skills init [name]`     | 创建新的 SKILL.md 模板         |
+| `npx bmc-skills init [name]`     | 创建新的 SKILL.md 模板                            |
 
 ### `bmc-skills list`
 
@@ -431,24 +431,21 @@ CLI 在仓库中的以下位置搜索技能：
 | 变量                      | 说明                                                          |
 | ------------------------- | ------------------------------------------------------------- |
 | `INSTALL_INTERNAL_SKILLS` | 设为 `1` 或 `true` 以显示和安装标记为 `internal: true` 的技能 |
-| `DISABLE_TELEMETRY`       | 设置此变量以禁用匿名使用遥测                                  |
-| `DO_NOT_TRACK`            | 禁用遥测的替代方式                                            |
 
 ```bash
 # 安装内部技能
-INSTALL_INTERNAL_SKILLS=1 npx bmc-skills add vercel-labs/agent-skills --list
+INSTALL_INTERNAL_SKILLS=1 npx bmc-skills add a2ui-components --list
 ```
 
 ## 遥测
 
 此 CLI 已禁用遥测功能，不会收集或发送任何使用数据。
 
-如需重新启用，修改 `src/branding.ts` 中的 `TELEMETRY_URL` 和 `AUDIT_URL` 为你自己的端点，然后取消 `src/telemetry.ts` 中 `isEnabled()` 函数的注释。
-
 ## 相关链接
 
+- [Skills Market](https://blueai-skills-market.domob-inc.cn) — 内部技能市场
 - [Agent Skills 规范](https://agentskills.io)
-- [Skills Market](http://git.domob-inc.cn/bmc/skills/skills-market) — 内部技能市场
+
 - [Amp 技能文档](https://ampcode.com/manual#agent-skills)
 - [Antigravity 技能文档](https://antigravity.google/docs/skills)
 - [Factory AI / Droid 技能文档](https://docs.factory.ai/cli/configuration/skills)
