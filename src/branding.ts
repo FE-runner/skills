@@ -22,7 +22,7 @@ export const EXAMPLE_REPO = 'vercel-labs/agent-skills';
 export const EXAMPLE_REPO_URL = `https://github.com/${EXAMPLE_REPO}`;
 
 /** Skills Market website and API base URL */
-export const SKILLS_SITE = 'http://localhost:3000';
+export const SKILLS_SITE = 'https://blueai-skills-market.domob-inc.cn';
 
 /** Telemetry endpoint URL */
 export const TELEMETRY_URL = 'https://add-skill.vercel.sh/t';
