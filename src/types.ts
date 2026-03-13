@@ -75,7 +75,7 @@ export interface ParsedSource {
   marketSkillId?: string;
   /** Market skill name (without author prefix or version suffix) */
   marketName?: string;
-  /** Author prefix for private market skills (e.g., "张三_EMP001") */
+  /** Author prefix for private market skills (userId) */
   marketAuthor?: string;
   /** Explicit version from install command (e.g., "1.0.0" from "name@1.0.0") */
   marketVersion?: string;

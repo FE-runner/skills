@@ -193,7 +193,7 @@ export function parseSource(input: string): ParsedSource {
 
   // Market install command: [author/]name[@version]
   // Check BEFORE GitHub shorthand so that market skills take priority.
-  // e.g., `bmc-skills add 智能文案生成器@1.0.0` or `bmc-skills add 张三_EMP001/智能文案生成器@1.0.0`
+  // e.g., `bmc-skills add 智能文案生成器@1.0.0` or `bmc-skills add <userId>/智能文案生成器@1.0.0`
   if (isMarketInstallCommand(input)) {
     return parseMarketInstallCommand(input);
   }
@@ -240,7 +240,7 @@ export function parseSource(input: string): ParsedSource {
 
   // Bare skill name (no slashes, no protocol) — resolve via Skills Market
   // e.g., `bmc-skills add 智能文案生成器` or `bmc-skills add 智能文案生成器@1.0.0`
-  // e.g., `bmc-skills add 张三_EMP001/智能文案生成器@1.0.0` (private skill with author prefix)
+  // e.g., `bmc-skills add <userId>/智能文案生成器@1.0.0` (private skill with author prefix)
   if (isBareSkillName(input)) {
     return parseMarketInstallCommand(input);
   }
@@ -286,7 +286,7 @@ function isWellKnownUrl(input: string): boolean {
  * Check if input looks like a market install command that should take priority
  * over GitHub shorthand. Matches patterns with:
  * - @version suffix (e.g., "name@1.0.0", "author/name@1.0.0")
- * - Non-ASCII characters (e.g., "智能文案生成器", "张三_EMP001/智能文案生成器")
+ * - Non-ASCII characters (e.g., "智能文案生成器", "<userId>/智能文案生成器")
  * Does NOT match pure ASCII owner/repo without @ (leave that to GitHub shorthand).
  */
 function isMarketInstallCommand(input: string): boolean {

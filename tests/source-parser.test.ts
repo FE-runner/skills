@@ -352,19 +352,19 @@ describe('Market install command tests', () => {
       expect(result.marketVersion).toBe('1.0.0');
     });
 
-    it('Chinese author and skill name', () => {
-      const result = parseSource('张三_12345/智能文案生成器');
+    it('Chinese author (userId) and skill name', () => {
+      const result = parseSource('cm1abc2def/智能文案生成器');
       expect(result.type).toBe('market');
       expect(result.marketName).toBe('智能文案生成器');
-      expect(result.marketAuthor).toBe('张三_12345');
+      expect(result.marketAuthor).toBe('cm1abc2def');
       expect(result.marketVersion).toBeUndefined();
     });
 
-    it('Chinese author, skill name, and version', () => {
-      const result = parseSource('张三_12345/智能文案生成器@2.1.0');
+    it('Chinese skill name with userId author and version', () => {
+      const result = parseSource('cm1abc2def/智能文案生成器@2.1.0');
       expect(result.type).toBe('market');
       expect(result.marketName).toBe('智能文案生成器');
-      expect(result.marketAuthor).toBe('张三_12345');
+      expect(result.marketAuthor).toBe('cm1abc2def');
       expect(result.marketVersion).toBe('2.1.0');
     });
   });
@@ -379,10 +379,10 @@ describe('Market install command tests', () => {
     });
 
     it('author/name@version', () => {
-      const result = parseSource('john_EMP001/my-skill@3.2.1');
+      const result = parseSource('cm1abc2def/my-skill@3.2.1');
       expect(result.type).toBe('market');
       expect(result.marketName).toBe('my-skill');
-      expect(result.marketAuthor).toBe('john_EMP001');
+      expect(result.marketAuthor).toBe('cm1abc2def');
       expect(result.marketVersion).toBe('3.2.1');
     });
 

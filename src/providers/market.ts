@@ -60,7 +60,7 @@ interface CheckResponse {
  * Skills Market provider.
  *
  * Install flow: resolve by name → install by ID
- * For private skills, pass author (e.g., "张三_EMP001") to resolve and install.
+ * For private skills, pass author (userId) to resolve and install.
  *
  * Also supports check/update via the /api/skills/:id/check endpoint.
  */
@@ -77,7 +77,7 @@ export class MarketProvider {
   /**
    * Resolve a skill name to its market ID.
    * Used for bare-name installs: `bmc-skills add <skill-name>`
-   * For private skills, pass author (e.g., "张三_EMP001") to resolve by author prefix.
+   * For private skills, pass author (userId) to resolve by authorId.
    */
   async resolve(name: string, author?: string): Promise<ResolveResponse | null> {
     try {
@@ -94,7 +94,7 @@ export class MarketProvider {
 
   /**
    * Install a skill by its market ID.
-   * Pass `author` for private skills (format: "用户名_工号").
+   * Pass `author` for private skills (userId format).
    */
   async fetchById(skillId: string, version?: string, author?: string): Promise<MarketSkill | null> {
     try {
