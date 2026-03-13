@@ -287,7 +287,8 @@ function isWellKnownUrl(input: string): boolean {
  * over GitHub shorthand. Matches patterns with:
  * - @version suffix (e.g., "name@1.0.0", "author/name@1.0.0")
  * - Non-ASCII characters (e.g., "智能文案生成器", "<userId>/智能文案生成器")
- * Does NOT match pure ASCII owner/repo without @ (leave that to GitHub shorthand).
+ * - author/name format (e.g., "cmmnedkm200000jov51yqjlo6/bmc-field-shortcut-dev")
+ *   Market resolution takes priority; if not found, falls back to GitHub in add flow.
  */
 function isMarketInstallCommand(input: string): boolean {
   // Must not be a URL or local path
@@ -301,6 +302,15 @@ function isMarketInstallCommand(input: string): boolean {
   // Contains @ with version-like suffix → market install command
   const atIdx = input.lastIndexOf('@');
   if (atIdx > 0 && /^\d+(\.\d+)*$/.test(input.slice(atIdx + 1))) return true;
+
+  // author/name format (single slash, no subpaths, no @) → try Market first
+  // e.g., "userId/skill-name" — Market resolution will be attempted first,
+  // with fallback to GitHub in the add flow if not found.
+  // Excludes: "owner/repo@skill" (GitHub skill filter) and "owner/repo/path" (subpaths)
+  if (!input.includes('@')) {
+    const parts = input.split('/');
+    if (parts.length === 2 && parts[0]!.length > 0 && parts[1]!.length > 0) return true;
+  }
 
   return false;
 }

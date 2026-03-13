@@ -1332,7 +1332,7 @@ async function handleMarketSkill(
   parsed: ParsedSource,
   options: AddOptions,
   spinner: ReturnType<typeof p.spinner>
-): Promise<void> {
+): Promise<{ fallbackToGitHub: boolean }> {
   // Name-based install: [author/]name[@version]
   const skillName = parsed.marketName || source;
   const author = parsed.marketAuthor;
@@ -1343,6 +1343,11 @@ async function handleMarketSkill(
   const resolved = await marketProvider.resolve(skillName, author);
 
   if (!resolved) {
+    // Market 找不到，如果输入是 author/name 格式，回退到 GitHub shorthand
+    if (parsed.marketAuthor && !parsed.marketVersion) {
+      spinner.stop(pc.dim('Not found on Skills Market, trying GitHub...'));
+      return { fallbackToGitHub: true };
+    }
     spinner.stop(pc.red('Not found'));
     p.outro(pc.red(`Skill "${displayName}" not found on Skills Market`));
     process.exit(1);
@@ -1640,6 +1645,8 @@ async function handleMarketSkill(
   p.outro(
     pc.green('Done!') + pc.dim('  Review skills before use; they run with full agent permissions.')
   );
+
+  return { fallbackToGitHub: false };
 }
 
 export async function runAdd(args: string[], options: AddOptions = {}): Promise<void> {
@@ -1689,7 +1696,7 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
     const spinner = p.spinner();
 
     spinner.start('Parsing source...');
-    const parsed = parseSource(source);
+    const parsed: ParsedSource = parseSource(source);
     spinner.stop(
       `Source: ${parsed.type === 'local' ? parsed.localPath! : parsed.url}${parsed.ref ? ` @ ${pc.yellow(parsed.ref)}` : ''}${parsed.subpath ? ` (${parsed.subpath})` : ''}${parsed.skillFilter ? ` ${pc.dim('@')}${pc.cyan(parsed.skillFilter)}` : ''}`
     );
@@ -1706,10 +1713,13 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
       return;
     }
 
-    // Handle skills from the Skills Market (token-based install)
+    // Handle skills from the Skills Market
     if (parsed.type === 'market') {
-      await handleMarketSkill(source, parsed, options, spinner);
-      return;
+      const { fallbackToGitHub } = await handleMarketSkill(source, parsed, options, spinner);
+      if (!fallbackToGitHub) return;
+      // Market 未找到，回退为 GitHub shorthand（author/name → owner/repo）
+      parsed.type = 'github';
+      parsed.url = `https://github.com/${parsed.marketAuthor}/${parsed.marketName}.git`;
     }
 
     let skillsDir: string;

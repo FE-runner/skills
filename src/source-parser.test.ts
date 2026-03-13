@@ -73,12 +73,14 @@ describe('source-parser', () => {
   });
 
   describe('Existing GitHub Support', () => {
-    it('parses github shorthand', () => {
+    it('parses github shorthand as market (market priority)', () => {
       const result = parseSource('vercel-labs/agent-skills');
       expect(result).toEqual({
-        type: 'github',
-        url: 'https://github.com/vercel-labs/agent-skills.git',
-        subpath: undefined,
+        type: 'market',
+        url: 'vercel-labs/agent-skills',
+        marketAuthor: 'vercel-labs',
+        marketName: 'agent-skills',
+        marketVersion: undefined,
       });
     });
 

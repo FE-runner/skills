@@ -132,12 +132,12 @@ describe('parseSource', () => {
   });
 
   describe('GitHub shorthand tests', () => {
-    it('GitHub shorthand - owner/repo', () => {
+    it('GitHub shorthand - owner/repo now resolves as market (market priority)', () => {
       const result = parseSource('owner/repo');
-      expect(result.type).toBe('github');
-      expect(result.url).toBe('https://github.com/owner/repo.git');
-      expect(result.ref).toBeUndefined();
-      expect(result.subpath).toBeUndefined();
+      expect(result.type).toBe('market');
+      expect(result.marketAuthor).toBe('owner');
+      expect(result.marketName).toBe('repo');
+      expect(result.marketVersion).toBeUndefined();
     });
 
     it('GitHub shorthand - owner/repo/path', () => {
@@ -222,9 +222,10 @@ describe('getOwnerRepo', () => {
     expect(getOwnerRepo(parsed)).toBe('owner/repo');
   });
 
-  it('getOwnerRepo - GitHub shorthand', () => {
+  it('getOwnerRepo - market type (from owner/repo shorthand) returns null', () => {
     const parsed = parseSource('owner/repo');
-    expect(getOwnerRepo(parsed)).toBe('owner/repo');
+    // market 类型的 url 不是 HTTP URL，所以 getOwnerRepo 返回 null
+    expect(getOwnerRepo(parsed)).toBeNull();
   });
 
   it('getOwnerRepo - GitHub shorthand with subpath', () => {
@@ -317,10 +318,13 @@ describe('getOwnerRepo', () => {
 });
 
 describe('Source aliases', () => {
-  it('resolves coinbase/agentWallet to coinbase/agentic-wallet-skills', () => {
+  it('resolves coinbase/agentWallet to market type (via alias)', () => {
     const result = parseSource('coinbase/agentWallet');
-    expect(result.type).toBe('github');
-    expect(result.url).toBe('https://github.com/coinbase/agentic-wallet-skills.git');
+    // alias 先将 coinbase/agentWallet 映射为 coinbase/agentic-wallet-skills
+    // 然后 isMarketInstallCommand 匹配 author/name 格式
+    expect(result.type).toBe('market');
+    expect(result.marketAuthor).toBe('coinbase');
+    expect(result.marketName).toBe('agentic-wallet-skills');
   });
 });
 
@@ -395,9 +399,11 @@ describe('Market install command tests', () => {
   });
 
   describe('does NOT match as market command', () => {
-    it('pure ASCII owner/repo stays as GitHub shorthand', () => {
+    it('pure ASCII owner/repo is now resolved as market (market priority)', () => {
       const result = parseSource('owner/repo');
-      expect(result.type).toBe('github');
+      expect(result.type).toBe('market');
+      expect(result.marketAuthor).toBe('owner');
+      expect(result.marketName).toBe('repo');
     });
 
     it('owner/repo@skill-name stays as GitHub shorthand (non-version @)', () => {
