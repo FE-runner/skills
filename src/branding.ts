@@ -19,7 +19,7 @@ export const USAGE_CMD = `${BIN_NAME} <command> [options]`;
 export const EXAMPLE_REPO = 'a2ui-components';
 
 /** Skills Market website and API base URL */
-export const SKILLS_SITE = 'https://blueai-skills-market.domob-inc.cn';
+export const SKILLS_SITE = 'https://blueai-skills-market.bluemediagroup.cn';
 
 /** Telemetry endpoint URL */
 export const TELEMETRY_URL = 'https://add-skill.vercel.sh/t';
