@@ -94,6 +94,9 @@ const SOURCE_ALIASES: Record<string, string> = {
 };
 
 export function parseSource(input: string): ParsedSource {
+  // 去除首尾空格
+  input = input.trim();
+
   // Resolve source aliases before parsing
   const alias = SOURCE_ALIASES[input];
   if (alias) {

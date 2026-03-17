@@ -1676,6 +1676,23 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
     process.exit(1);
   }
 
+  // 校验技能名称不包含空格（trim 后仍包含内部空格则拒绝）
+  const trimmedSource = source.trim();
+  if (trimmedSource.includes(' ')) {
+    console.log();
+    console.log(
+      pc.bgRed(pc.white(pc.bold(' ERROR '))) +
+        ' ' +
+        pc.red('Skill name cannot contain spaces: ') +
+        pc.yellow(`"${source}"`)
+    );
+    console.log();
+    console.log(pc.dim('  Usage:'));
+    console.log(`    ${pc.cyan(NPX_CMD + ' add')} ${pc.yellow('<source>')} ${pc.dim('[options]')}`);
+    console.log();
+    process.exit(1);
+  }
+
   // --all implies --skill '*' and --agent '*' and -y
   if (options.all) {
     options.skill = ['*'];
