@@ -4,10 +4,10 @@
  */
 
 /** The npm package name */
-export const PACKAGE_NAME = 'bmc-skills';
+export const PACKAGE_NAME = 'blueai-skills';
 
 /** The CLI binary command name */
-export const BIN_NAME = 'bmc-skills';
+export const BIN_NAME = 'blueai-skills';
 
 /** The npx invocation command */
 export const NPX_CMD = `npx ${PACKAGE_NAME}`;
