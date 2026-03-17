@@ -1,4 +1,4 @@
-# bmc-skills
+# blueai-skills
 
 > 本项目 fork 自 [vercel-labs/skills](https://github.com/vercel-labs/skills)，为公司内部定制版本，仅供内部使用。
 
@@ -13,44 +13,44 @@
 ## 安装技能
 
 ```bash
-npx bmc-skills add a2ui-components
+npx blueai-skills add a2ui-components
 ```
 
 ### 来源格式
 
 ```bash
 # Skills Market — 按名称安装
-npx bmc-skills add a2ui-components
+npx blueai-skills add a2ui-components
 
 # Skills Market — 指定版本
-npx bmc-skills add a2ui-components@1.0.0
+npx blueai-skills add a2ui-components@1.0.0
 
 # Skills Market — 安装私有技能（需 authorId 前缀）
-npx bmc-skills add <authorId>/create-adaptable-composable
+npx blueai-skills add <authorId>/create-adaptable-composable
 
 # COS 直链 — 安装指定技能
-npx bmc-skills add https://<bucket>.cos.<region>.myqcloud.com/skills_storage/<id>
+npx blueai-skills add https://<bucket>.cos.<region>.myqcloud.com/skills_storage/<id>
 
 # COS 直链 — 安装指定版本
-npx bmc-skills add https://<bucket>.cos.<region>.myqcloud.com/skills_storage/<id>/versions/<version>
+npx blueai-skills add https://<bucket>.cos.<region>.myqcloud.com/skills_storage/<id>/versions/<version>
 
 # GitHub 简写格式 (owner/repo)
-npx bmc-skills add owner/repo
+npx blueai-skills add owner/repo
 
 # 完整 GitHub URL
-npx bmc-skills add https://github.com/owner/repo
+npx blueai-skills add https://github.com/owner/repo
 
 # 指向仓库中某个技能的直接路径
-npx bmc-skills add https://github.com/owner/repo/tree/main/skills/my-skill
+npx blueai-skills add https://github.com/owner/repo/tree/main/skills/my-skill
 
 # GitLab URL
-npx bmc-skills add https://gitlab.com/owner/repo
+npx blueai-skills add https://gitlab.com/owner/repo
 
 # 任意 git URL
-npx bmc-skills add git@github.com:owner/repo.git
+npx blueai-skills add git@github.com:owner/repo.git
 
 # 本地路径
-npx bmc-skills add ./my-local-skills
+npx blueai-skills add ./my-local-skills
 ```
 
 ### 选项
@@ -69,28 +69,28 @@ npx bmc-skills add ./my-local-skills
 
 ```bash
 # 列出仓库中的技能
-npx bmc-skills add owner/repo --list
+npx blueai-skills add owner/repo --list
 
 # 安装指定技能
-npx bmc-skills add owner/repo --skill my-skill --skill another-skill
+npx blueai-skills add owner/repo --skill my-skill --skill another-skill
 
 # 安装名称含空格的技能（需加引号）
-npx bmc-skills add owner/repo --skill "Skill With Spaces"
+npx blueai-skills add owner/repo --skill "Skill With Spaces"
 
 # 安装到指定 Agent
-npx bmc-skills add a2ui-components -a claude-code -a opencode
+npx blueai-skills add a2ui-components -a claude-code -a opencode
 
 # 非交互式安装（适用于 CI/CD）
-npx bmc-skills add a2ui-components -g -a claude-code -y
+npx blueai-skills add a2ui-components -g -a claude-code -y
 
 # 将仓库中所有技能安装到所有 Agent
-npx bmc-skills add owner/repo --all
+npx blueai-skills add owner/repo --all
 
 # 将所有技能安装到指定 Agent
-npx bmc-skills add owner/repo --skill '*' -a claude-code
+npx blueai-skills add owner/repo --skill '*' -a claude-code
 
 # 将指定技能安装到所有 Agent
-npx bmc-skills add owner/repo --agent '*' --skill my-skill
+npx blueai-skills add owner/repo --agent '*' --skill my-skill
 ```
 
 ### 安装范围
@@ -111,103 +111,103 @@ npx bmc-skills add owner/repo --agent '*' --skill my-skill
 
 ## 其他命令
 
-| 命令                             | 说明                                              |
-| -------------------------------- | ------------------------------------------------- |
-| `npx bmc-skills list`            | 列出已安装的技能（别名：`ls`）                    |
-| `npx bmc-skills find [query]`    | 交互式搜索或按关键词搜索技能                      |
-| `npx bmc-skills remove [skills]` | 从 Agent 中移除已安装的技能                       |
-| `npx bmc-skills check`           | 检查可用的技能更新（默认项目级，`-g` 全局）       |
-| `npx bmc-skills update`          | 更新已安装技能到最新版本（默认项目级，`-g` 全局） |
-| `npx bmc-skills init [name]`     | 创建新的 SKILL.md 模板                            |
+| 命令                                | 说明                                              |
+| ----------------------------------- | ------------------------------------------------- |
+| `npx blueai-skills list`            | 列出已安装的技能（别名：`ls`）                    |
+| `npx blueai-skills find [query]`    | 交互式搜索或按关键词搜索技能                      |
+| `npx blueai-skills remove [skills]` | 从 Agent 中移除已安装的技能                       |
+| `npx blueai-skills check`           | 检查可用的技能更新（默认项目级，`-g` 全局）       |
+| `npx blueai-skills update`          | 更新已安装技能到最新版本（默认项目级，`-g` 全局） |
+| `npx blueai-skills init [name]`     | 创建新的 SKILL.md 模板                            |
 
-### `bmc-skills list`
+### `blueai-skills list`
 
 列出所有已安装的技能，类似于 `npm ls`。
 
 ```bash
 # 列出所有已安装技能（项目级和全局）
-npx bmc-skills list
+npx blueai-skills list
 
 # 仅列出全局技能
-npx bmc-skills ls -g
+npx blueai-skills ls -g
 
 # 按指定 Agent 筛选
-npx bmc-skills ls -a claude-code -a cursor
+npx blueai-skills ls -a claude-code -a cursor
 ```
 
-### `bmc-skills find`
+### `blueai-skills find`
 
 交互式搜索或按关键词搜索技能。
 
 ```bash
 # 交互式搜索（fzf 风格）
-npx bmc-skills find
+npx blueai-skills find
 
 # 按关键词搜索
-npx bmc-skills find typescript
+npx blueai-skills find typescript
 ```
 
-### `bmc-skills check` / `bmc-skills update`
+### `blueai-skills check` / `blueai-skills update`
 
 检查和更新已安装的技能。默认检查项目级（local lock），加 `-g` 检查全局。
 
 ```bash
 # 检查项目级技能是否有更新
-npx bmc-skills check
+npx blueai-skills check
 
 # 检查全局技能是否有更新
-npx bmc-skills check -g
+npx blueai-skills check -g
 
 # 更新项目级技能到最新版本
-npx bmc-skills update
+npx blueai-skills update
 
 # 更新全局技能到最新版本
-npx bmc-skills update -g
+npx blueai-skills update -g
 ```
 
 Market 技能通过版本号比对检测更新；GitHub 技能通过文件夹 hash 比对检测更新。
 
-### `bmc-skills init`
+### `blueai-skills init`
 
 ```bash
 # 在当前目录创建 SKILL.md
-npx bmc-skills init
+npx blueai-skills init
 
 # 在子目录中创建新技能
-npx bmc-skills init my-skill
+npx blueai-skills init my-skill
 ```
 
-### `bmc-skills remove`
+### `blueai-skills remove`
 
 从 Agent 中移除已安装的技能。
 
 ```bash
 # 交互式移除（从已安装技能中选择）
-npx bmc-skills remove
+npx blueai-skills remove
 
 # 按名称移除指定技能
-npx bmc-skills remove web-design-guidelines
+npx blueai-skills remove web-design-guidelines
 
 # 移除多个技能
-npx bmc-skills remove frontend-design web-design-guidelines
+npx blueai-skills remove frontend-design web-design-guidelines
 
 # 从全局范围移除
-npx bmc-skills remove --global web-design-guidelines
+npx blueai-skills remove --global web-design-guidelines
 
 # 仅从指定 Agent 移除
-npx bmc-skills remove --agent claude-code cursor my-skill
+npx blueai-skills remove --agent claude-code cursor my-skill
 
 # 移除所有已安装技能，无需确认
-npx bmc-skills remove --all
+npx blueai-skills remove --all
 
 # 从指定 Agent 移除所有技能
-npx bmc-skills remove --skill '*' -a cursor
+npx blueai-skills remove --skill '*' -a cursor
 
 # 从所有 Agent 移除指定技能
-npx bmc-skills remove my-skill --agent '*'
+npx blueai-skills remove my-skill --agent '*'
 
 # 使用 'rm' 别名
-npx bmc-skills rm my-skill
+npx blueai-skills rm my-skill
 ```
 
 | 选项           | 说明                                     |
@@ -434,7 +434,7 @@ CLI 在仓库中的以下位置搜索技能：
 
 ```bash
 # 安装内部技能
-INSTALL_INTERNAL_SKILLS=1 npx bmc-skills add a2ui-components --list
+INSTALL_INTERNAL_SKILLS=1 npx blueai-skills add a2ui-components --list
 ```
 
 ## 遥测

@@ -47,7 +47,7 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
 
           # Get changelog from commits since last tag
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")blueai-skills
           if [ -z "$PREV_TAG" ]; then
             CHANGELOG=$(git log --format="- %s" --no-merges)
           else

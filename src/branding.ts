@@ -10,7 +10,7 @@ export const PACKAGE_NAME = 'blueai-skills';
 export const BIN_NAME = 'blueai-skills';
 
 /** The npx invocation command */
-export const NPX_CMD = `npx ${PACKAGE_NAME}`;
+export const NPX_CMD = `npx ${PACKAGE_NAME}@latest`;
 
 /** The help usage line */
 export const USAGE_CMD = `${BIN_NAME} <command> [options]`;

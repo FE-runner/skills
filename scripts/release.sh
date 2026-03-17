@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# bmc-skills 发布脚本
+# blueai-skills 发布脚本
 # 用法:
 #   ./scripts/release.sh patch    # 0.0.1 -> 0.0.2
 #   ./scripts/release.sh minor    # 0.0.1 -> 0.1.0

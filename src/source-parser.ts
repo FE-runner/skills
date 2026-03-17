@@ -193,7 +193,7 @@ export function parseSource(input: string): ParsedSource {
 
   // Market install command: [author/]name[@version]
   // Check BEFORE GitHub shorthand so that market skills take priority.
-  // e.g., `bmc-skills add 智能文案生成器@1.0.0` or `bmc-skills add <userId>/智能文案生成器@1.0.0`
+  // e.g., `blueai-skills add 智能文案生成器@1.0.0` or `blueai-skills add <userId>/智能文案生成器@1.0.0`
   if (isMarketInstallCommand(input)) {
     return parseMarketInstallCommand(input);
   }
@@ -239,8 +239,8 @@ export function parseSource(input: string): ParsedSource {
   }
 
   // Bare skill name (no slashes, no protocol) — resolve via Skills Market
-  // e.g., `bmc-skills add 智能文案生成器` or `bmc-skills add 智能文案生成器@1.0.0`
-  // e.g., `bmc-skills add <userId>/智能文案生成器@1.0.0` (private skill with author prefix)
+  // e.g., `blueai-skills add 智能文案生成器` or `blueai-skills add 智能文案生成器@1.0.0`
+  // e.g., `blueai-skills add <userId>/智能文案生成器@1.0.0` (private skill with author prefix)
   if (isBareSkillName(input)) {
     return parseMarketInstallCommand(input);
   }

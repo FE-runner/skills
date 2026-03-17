@@ -76,7 +76,7 @@ export class MarketProvider {
 
   /**
    * Resolve a skill name to its market ID.
-   * Used for bare-name installs: `bmc-skills add <skill-name>`
+   * Used for bare-name installs: `blueai-skills add <skill-name>`
    * For private skills, pass author (userId) to resolve by authorId.
    */
   async resolve(name: string, author?: string): Promise<ResolveResponse | null> {
