@@ -1568,6 +1568,7 @@ async function handleMarketSkill(
         skillFolderHash: skill.skillFolderHash,
         skillPath: skill.skillId,
         version: skill.version,
+        authorId: resolved.authorId,
       });
     } catch {
       // Don't fail installation if lock file update fails
@@ -1589,6 +1590,7 @@ async function handleMarketSkill(
             computedHash,
             version: skill.version,
             skillId: skill.skillId,
+            authorId: resolved.authorId,
           },
           cwd
         );

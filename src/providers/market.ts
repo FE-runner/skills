@@ -47,6 +47,7 @@ interface ResolveResponse {
   id: string;
   name: string;
   currentVersion: string;
+  authorId: string;
 }
 
 /**

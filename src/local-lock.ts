@@ -27,6 +27,8 @@ export interface LocalSkillLockEntry {
   version?: string;
   /** Market skill ID for update checking */
   skillId?: string;
+  /** Market skill author ID for private skill verification */
+  authorId?: string;
 }
 
 /**

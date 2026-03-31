@@ -28,6 +28,8 @@ export interface SkillLockEntry {
   skillFolderHash: string;
   /** Installed version (market skills only) */
   version?: string;
+  /** Market skill author ID for private skill verification */
+  authorId?: string;
   /** ISO timestamp when the skill was first installed */
   installedAt: string;
   /** ISO timestamp when the skill was last updated */
