@@ -262,11 +262,37 @@ export function parseSource(input: string): ParsedSource {
     input = alias;
   }
 
-  // github: 前缀简写: github:owner/repo -> owner/repo（交给现有简写逻辑处理）
+  // github: 前缀简写: github:owner/repo -> 直接构建 GitHub URL
   // 也支持 github:owner/repo/subpath 和 github:owner/repo@skill
+  // 注意：不能递归调用 parseSource()，否则会被 Market 优先拦截
   const githubPrefixMatch = input.match(/^github:(.+)$/);
   if (githubPrefixMatch) {
-    return parseSource(appendFragmentRef(githubPrefixMatch[1]!, fragmentRef, fragmentSkillFilter));
+    const ghInput = githubPrefixMatch[1]!;
+
+    // github:owner/repo@skill-name
+    const ghAtSkillMatch = ghInput.match(/^([^/]+)\/([^/@]+)@(.+)$/);
+    if (ghAtSkillMatch) {
+      const [, owner, repo, skillFilter] = ghAtSkillMatch;
+      return {
+        type: 'github',
+        url: `https://github.com/${owner}/${repo}.git`,
+        ...(fragmentRef ? { ref: fragmentRef } : {}),
+        skillFilter: fragmentSkillFilter || skillFilter,
+      };
+    }
+
+    // github:owner/repo 或 github:owner/repo/subpath
+    const ghShorthandMatch = ghInput.match(/^([^/]+)\/([^/]+)(?:\/(.+?))?\/?$/);
+    if (ghShorthandMatch) {
+      const [, owner, repo, subpath] = ghShorthandMatch;
+      return {
+        type: 'github',
+        url: `https://github.com/${owner}/${repo}.git`,
+        ...(fragmentRef ? { ref: fragmentRef } : {}),
+        subpath: subpath ? sanitizeSubpath(subpath) : subpath,
+        ...(fragmentSkillFilter ? { skillFilter: fragmentSkillFilter } : {}),
+      };
+    }
   }
 
   // gitlab: 前缀简写: gitlab:owner/repo -> https://gitlab.com/owner/repo
@@ -366,7 +392,8 @@ export function parseSource(input: string): ParsedSource {
   // Market install command: [author/]name[@version]
   // 在 GitHub 简写之前检查，确保 Market 技能优先解析。
   // e.g., `blueai-skills add 智能文案生成器@1.0.0` or `blueai-skills add <userId>/智能文案生成器@1.0.0`
-  if (isMarketInstallCommand(input)) {
+  // 但如果用户使用了 #branch fragment ref，说明意图是 git 源，跳过 Market 解析
+  if (!fragmentRef && isMarketInstallCommand(input)) {
     return parseMarketInstallCommand(input);
   }
 
