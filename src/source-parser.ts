@@ -13,6 +13,19 @@ export function getOwnerRepo(parsed: ParsedSource): string | null {
     return null;
   }
 
+  // 处理 Git SSH URL (例如 git@gitlab.com:owner/repo.git, git@github.com:owner/repo.git)
+  const sshMatch = parsed.url.match(/^git@[^:]+:(.+)$/);
+  if (sshMatch) {
+    let path = sshMatch[1]!;
+    path = path.replace(/\.git$/, '');
+
+    // 至少需要 owner/repo（一个斜杠）
+    if (path.includes('/')) {
+      return path;
+    }
+    return null;
+  }
+
   // Only handle HTTP(S) URLs
   if (!parsed.url.startsWith('http://') && !parsed.url.startsWith('https://')) {
     return null;
@@ -70,6 +83,29 @@ export async function isRepoPrivate(owner: string, repo: string): Promise<boolea
 }
 
 /**
+ * 清理子路径，防止路径遍历攻击。
+ * 拒绝包含 ".." 段的子路径（可能逃逸到仓库根目录之外）。
+ * 返回清理后的子路径，如果子路径不安全则抛出错误。
+ */
+export function sanitizeSubpath(subpath: string): string {
+  // 统一使用正斜杠以便一致处理
+  const normalized = subpath.replace(/\\/g, '/');
+
+  // 检查每个路径段是否包含 ".."
+  const segments = normalized.split('/');
+  for (const segment of segments) {
+    if (segment === '..') {
+      throw new Error(
+        `Unsafe subpath: "${subpath}" contains path traversal segments. ` +
+          `Subpaths must not contain ".." components.`
+      );
+    }
+  }
+
+  return subpath;
+}
+
+/**
  * Check if a string represents a local file system path
  */
 function isLocalPath(input: string): boolean {
@@ -93,15 +129,113 @@ const SOURCE_ALIASES: Record<string, string> = {
   'coinbase/agentWallet': 'coinbase/agentic-wallet-skills',
 };
 
+// ============================================
+// Fragment ref 解析（上游 FEAT-01: branch ref 支持）
+// ============================================
+
+interface FragmentRefResult {
+  inputWithoutFragment: string;
+  ref?: string;
+  skillFilter?: string;
+}
+
+function decodeFragmentValue(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+/**
+ * 判断输入是否看起来像 git 源（用于决定是否将 # 后缀解析为 ref）。
+ * 避免对普通 well-known URL 误解析 fragment。
+ */
+function looksLikeGitSource(input: string): boolean {
+  if (input.startsWith('github:') || input.startsWith('gitlab:') || input.startsWith('git@')) {
+    return true;
+  }
+
+  if (input.startsWith('http://') || input.startsWith('https://')) {
+    try {
+      const parsed = new URL(input);
+      const pathname = parsed.pathname;
+
+      // 仅对 GitHub 的 repo/tree URL 将 fragment 当作 ref
+      if (parsed.hostname === 'github.com') {
+        return /^\/[^/]+\/[^/]+(?:\.git)?(?:\/tree\/[^/]+(?:\/.*)?)?\/?$/.test(pathname);
+      }
+
+      // 仅对 gitlab.com 的 repo/tree URL 将 fragment 当作 ref
+      if (parsed.hostname === 'gitlab.com') {
+        return /^\/.+?\/[^/]+(?:\.git)?(?:\/-\/tree\/[^/]+(?:\/.*)?)?\/?$/.test(pathname);
+      }
+    } catch {
+      // 继续到下面的通用检查
+    }
+  }
+
+  if (/^https?:\/\/.+\.git(?:$|[/?])/i.test(input)) {
+    return true;
+  }
+
+  return (
+    !input.includes(':') &&
+    !input.startsWith('.') &&
+    !input.startsWith('/') &&
+    /^([^/]+)\/([^/]+)(?:\/(.+)|@(.+))?$/.test(input)
+  );
+}
+
+/**
+ * 解析输入中的 fragment ref（#branch 或 #branch@skill-filter）。
+ * 仅对 git 类源生效，避免影响 well-known URL 的 fragment 语义。
+ */
+function parseFragmentRef(input: string): FragmentRefResult {
+  const hashIndex = input.indexOf('#');
+  if (hashIndex < 0) {
+    return { inputWithoutFragment: input };
+  }
+
+  const inputWithoutFragment = input.slice(0, hashIndex);
+  const fragment = input.slice(hashIndex + 1);
+
+  // 仅对 git 类源将 URL fragment 解析为 git ref
+  if (!fragment || !looksLikeGitSource(inputWithoutFragment)) {
+    return { inputWithoutFragment: input };
+  }
+
+  const atIndex = fragment.indexOf('@');
+  if (atIndex === -1) {
+    return {
+      inputWithoutFragment,
+      ref: decodeFragmentValue(fragment),
+    };
+  }
+
+  const ref = fragment.slice(0, atIndex);
+  const skillFilter = fragment.slice(atIndex + 1);
+  return {
+    inputWithoutFragment,
+    ref: ref ? decodeFragmentValue(ref) : undefined,
+    skillFilter: skillFilter ? decodeFragmentValue(skillFilter) : undefined,
+  };
+}
+
+function appendFragmentRef(input: string, ref?: string, skillFilter?: string): string {
+  if (!ref) {
+    return input;
+  }
+  return `${input}#${ref}${skillFilter ? `@${skillFilter}` : ''}`;
+}
+
+// ============================================
+// 主解析函数
+// ============================================
+
 export function parseSource(input: string): ParsedSource {
   // 去除首尾空格
   input = input.trim();
-
-  // Resolve source aliases before parsing
-  const alias = SOURCE_ALIASES[input];
-  if (alias) {
-    input = alias;
-  }
 
   // Local path: absolute, relative, or current directory
   if (isLocalPath(input)) {
@@ -114,6 +248,39 @@ export function parseSource(input: string): ParsedSource {
     };
   }
 
+  // 解析 fragment ref（#branch 或 #branch@skill-filter）
+  const {
+    inputWithoutFragment,
+    ref: fragmentRef,
+    skillFilter: fragmentSkillFilter,
+  } = parseFragmentRef(input);
+  input = inputWithoutFragment;
+
+  // Resolve source aliases before parsing
+  const alias = SOURCE_ALIASES[input];
+  if (alias) {
+    input = alias;
+  }
+
+  // github: 前缀简写: github:owner/repo -> owner/repo（交给现有简写逻辑处理）
+  // 也支持 github:owner/repo/subpath 和 github:owner/repo@skill
+  const githubPrefixMatch = input.match(/^github:(.+)$/);
+  if (githubPrefixMatch) {
+    return parseSource(appendFragmentRef(githubPrefixMatch[1]!, fragmentRef, fragmentSkillFilter));
+  }
+
+  // gitlab: 前缀简写: gitlab:owner/repo -> https://gitlab.com/owner/repo
+  const gitlabPrefixMatch = input.match(/^gitlab:(.+)$/);
+  if (gitlabPrefixMatch) {
+    return parseSource(
+      appendFragmentRef(
+        `https://gitlab.com/${gitlabPrefixMatch[1]!}`,
+        fragmentRef,
+        fragmentSkillFilter
+      )
+    );
+  }
+
   // GitHub URL with path: https://github.com/owner/repo/tree/branch/path/to/skill
   const githubTreeWithPathMatch = input.match(/github\.com\/([^/]+)\/([^/]+)\/tree\/([^/]+)\/(.+)/);
   if (githubTreeWithPathMatch) {
@@ -121,8 +288,8 @@ export function parseSource(input: string): ParsedSource {
     return {
       type: 'github',
       url: `https://github.com/${owner}/${repo}.git`,
-      ref,
-      subpath,
+      ref: ref || fragmentRef,
+      subpath: subpath ? sanitizeSubpath(subpath) : subpath,
     };
   }
 
@@ -133,7 +300,7 @@ export function parseSource(input: string): ParsedSource {
     return {
       type: 'github',
       url: `https://github.com/${owner}/${repo}.git`,
-      ref,
+      ref: ref || fragmentRef,
     };
   }
 
@@ -145,6 +312,7 @@ export function parseSource(input: string): ParsedSource {
     return {
       type: 'github',
       url: `https://github.com/${owner}/${cleanRepo}.git`,
+      ...(fragmentRef ? { ref: fragmentRef } : {}),
     };
   }
 
@@ -160,8 +328,8 @@ export function parseSource(input: string): ParsedSource {
       return {
         type: 'gitlab',
         url: `${protocol}://${hostname}/${repoPath.replace(/\.git$/, '')}.git`,
-        ref,
-        subpath,
+        ref: ref || fragmentRef,
+        subpath: subpath ? sanitizeSubpath(subpath) : subpath,
       };
     }
   }
@@ -174,7 +342,7 @@ export function parseSource(input: string): ParsedSource {
       return {
         type: 'gitlab',
         url: `${protocol}://${hostname}/${repoPath.replace(/\.git$/, '')}.git`,
-        ref,
+        ref: ref || fragmentRef,
       };
     }
   }
@@ -190,12 +358,13 @@ export function parseSource(input: string): ParsedSource {
       return {
         type: 'gitlab',
         url: `https://gitlab.com/${repoPath}.git`,
+        ...(fragmentRef ? { ref: fragmentRef } : {}),
       };
     }
   }
 
   // Market install command: [author/]name[@version]
-  // Check BEFORE GitHub shorthand so that market skills take priority.
+  // 在 GitHub 简写之前检查，确保 Market 技能优先解析。
   // e.g., `blueai-skills add 智能文案生成器@1.0.0` or `blueai-skills add <userId>/智能文案生成器@1.0.0`
   if (isMarketInstallCommand(input)) {
     return parseMarketInstallCommand(input);
@@ -210,17 +379,20 @@ export function parseSource(input: string): ParsedSource {
     return {
       type: 'github',
       url: `https://github.com/${owner}/${repo}.git`,
-      skillFilter,
+      ...(fragmentRef ? { ref: fragmentRef } : {}),
+      skillFilter: fragmentSkillFilter || skillFilter,
     };
   }
 
-  const shorthandMatch = input.match(/^([^/]+)\/([^/]+)(?:\/(.+))?$/);
+  const shorthandMatch = input.match(/^([^/]+)\/([^/]+)(?:\/(.+?))?\/?$/);
   if (shorthandMatch && !input.includes(':') && !input.startsWith('.') && !input.startsWith('/')) {
     const [, owner, repo, subpath] = shorthandMatch;
     return {
       type: 'github',
       url: `https://github.com/${owner}/${repo}.git`,
-      subpath,
+      ...(fragmentRef ? { ref: fragmentRef } : {}),
+      subpath: subpath ? sanitizeSubpath(subpath) : subpath,
+      ...(fragmentSkillFilter ? { skillFilter: fragmentSkillFilter } : {}),
     };
   }
 
@@ -233,7 +405,8 @@ export function parseSource(input: string): ParsedSource {
   }
 
   // Well-known skills: arbitrary HTTP(S) URLs that aren't GitHub/GitLab
-  // This is the final fallback for URLs - we'll check for /.well-known/skills/index.json
+  // This is the final fallback for URLs - we'll check for /.well-known/agent-skills/index.json
+  // then fall back to /.well-known/skills/index.json
   if (isWellKnownUrl(input)) {
     return {
       type: 'well-known',
@@ -252,6 +425,7 @@ export function parseSource(input: string): ParsedSource {
   return {
     type: 'git',
     url: input,
+    ...(fragmentRef ? { ref: fragmentRef } : {}),
   };
 }
 
@@ -286,12 +460,12 @@ function isWellKnownUrl(input: string): boolean {
 }
 
 /**
- * Check if input looks like a market install command that should take priority
- * over GitHub shorthand. Matches patterns with:
- * - @version suffix (e.g., "name@1.0.0", "author/name@1.0.0")
- * - Non-ASCII characters (e.g., "智能文案生成器", "<userId>/智能文案生成器")
- * - author/name format (e.g., "cmmnedkm200000jov51yqjlo6/bmc-field-shortcut-dev")
- *   Market resolution takes priority; if not found, falls back to GitHub in add flow.
+ * 检查输入是否像 Market 安装命令（应优先于 GitHub 简写解析）。
+ * 匹配以下模式：
+ * - @version 后缀 (e.g., "name@1.0.0", "author/name@1.0.0")
+ * - 非 ASCII 字符 (e.g., "智能文案生成器", "<userId>/智能文案生成器")
+ * - author/name 格式 (e.g., "cmmnedkm200000jov51yqjlo6/bmc-field-shortcut-dev")
+ *   Market 解析优先；如未找到，在 add 流程中回退到 GitHub。
  */
 function isMarketInstallCommand(input: string): boolean {
   // Must not be a URL or local path
@@ -299,15 +473,15 @@ function isMarketInstallCommand(input: string): boolean {
   if (input.startsWith('http://') || input.startsWith('https://')) return false;
   if (input.trim().length === 0) return false;
 
-  // Contains non-ASCII → market skill name
+  // Contains non-ASCII -> market skill name
   if (/[^\x00-\x7F]/.test(input)) return true;
 
-  // Contains @ with version-like suffix → market install command
+  // Contains @ with version-like suffix -> market install command
   const atIdx = input.lastIndexOf('@');
   if (atIdx > 0 && /^\d+(\.\d+)*$/.test(input.slice(atIdx + 1))) return true;
 
-  // author/name format (single slash, no subpaths, no @) → try Market first
-  // e.g., "userId/skill-name" — Market resolution will be attempted first,
+  // author/name format (single slash, no subpaths, no @) -> try Market first
+  // e.g., "userId/skill-name" -- Market resolution will be attempted first,
   // with fallback to GitHub in the add flow if not found.
   // Excludes: "owner/repo@skill" (GitHub skill filter) and "owner/repo/path" (subpaths)
   if (!input.includes('@')) {
@@ -319,9 +493,9 @@ function isMarketInstallCommand(input: string): boolean {
 }
 
 /**
- * Check if input is a bare skill name (no slashes, no @version).
- * Used as fallback after GitHub shorthand matching.
- * Examples: "my-skill", "commit-assistant"
+ * 检查输入是否为裸技能名（无斜杠、无 @version）。
+ * 在 GitHub 简写匹配之后作为回退使用。
+ * 示例: "my-skill", "commit-assistant"
  */
 function isBareSkillName(input: string): boolean {
   if (input.includes('/')) return false;
@@ -335,18 +509,18 @@ function isBareSkillName(input: string): boolean {
 }
 
 /**
- * Parse a market install command into a ParsedSource.
- * Input format: [author/]name[@version]
+ * 将 Market 安装命令解析为 ParsedSource。
+ * 输入格式: [author/]name[@version]
  */
 function parseMarketInstallCommand(input: string): ParsedSource {
-  // 1. Extract version from @suffix (use lastIndexOf to handle names with potential @ chars)
+  // 1. 从 @suffix 提取版本（使用 lastIndexOf 处理名称中可能包含 @ 字符的情况）
   const atIdx = input.lastIndexOf('@');
   let version: string | undefined;
   let nameStr: string;
 
   if (atIdx > 0) {
     const candidate = input.slice(atIdx + 1);
-    // Validate that the part after @ looks like a version (digits and dots)
+    // 验证 @ 后面的部分是否看起来像版本号（数字和点）
     if (/^\d+(\.\d+)*$/.test(candidate)) {
       version = candidate;
       nameStr = input.slice(0, atIdx);
@@ -357,7 +531,7 @@ function parseMarketInstallCommand(input: string): ParsedSource {
     nameStr = input;
   }
 
-  // 2. Extract author prefix from slash
+  // 2. 从斜杠中提取 author 前缀
   const slashIdx = nameStr.indexOf('/');
   let author: string | undefined;
   let name: string;
