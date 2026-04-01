@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.4.3
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-04-01T08:11:02.502Z"
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-04-01T10:29:21.186Z"
 last_activity: 2026-04-01
 progress:
   total_phases: 3
   completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
+  total_plans: 3
+  completed_plans: 2
   percent: 0
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-01)
 
 **Core value:** 安全地引入上游新功能和 bug 修复，不破坏 BMC 定制化的任何内容
-**Current focus:** Phase 01 — merge-prep
+**Current focus:** Phase 02 — selective-merge
 
 ## Current Position
 
-Phase: 2
-Plan: Not started
-Status: Phase complete — ready for verification
+Phase: 02 (selective-merge) — EXECUTING
+Plan: 2 of 2
+Status: Executing Phase 02
 Last activity: 2026-04-01
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [███████░░░] 67%
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Progress: [░░░░░░░░░░] 0%
 
 *Updated after each plan completion*
 | Phase 01 P01 | 4min | 2 tasks | 1 files |
+| Phase 02 P01 | 7min | 2 tasks | 25 files |
 
 ## Accumulated Context
 
@@ -66,6 +67,7 @@ Recent decisions affecting current work:
 - 冲突策略：始终保留 BMC 定制版本
 - [Phase 01]: 在 master 上提交 .gitattributes 后再创建 sync 分支，确保两个分支都有合并保护
 - [Phase 01]: 使用已缓存的 upstream fetch 数据（GitHub 网络不可达时），upstream/main 指向 v1.4.7
+- [Phase 02]: cli.ts 和 source-parser.ts 临时保留 ours 版本，留给 Plan 02-02 正式解决
 
 ### Pending Todos
 
@@ -77,6 +79,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-01T07:59:17.999Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-04-01T10:29:21.184Z
+Stopped at: Completed 02-01-PLAN.md
 Resume file: None

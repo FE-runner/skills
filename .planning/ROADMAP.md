@@ -42,7 +42,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — 执行 git merge，解决保护文件和中等冲突文件（agents/types/installer/skill-lock/local-lock/add）
+- [x] 02-01-PLAN.md — 执行 git merge，解决保护文件和中等冲突文件（agents/types/installer/skill-lock/local-lock/add）
 - [ ] 02-02-PLAN.md — 解决高冲突文件（source-parser.ts, cli.ts），提交合并
 
 ### Phase 3: 验证与收尾

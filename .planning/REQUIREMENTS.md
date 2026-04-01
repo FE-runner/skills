@@ -15,33 +15,33 @@ Requirements for this sync. Each maps to roadmap phases.
 
 ### 安全修复 (SEC)
 
-- [ ] **SEC-01**: 合并子路径遍历防护（sanitize-name 改进）
-- [ ] **SEC-02**: 合并 auth token 安全处理
+- [x] **SEC-01**: 合并子路径遍历防护（sanitize-name 改进）
+- [x] **SEC-02**: 合并 auth token 安全处理
 
 ### Bug 修复 (BUG)
 
-- [ ] **BUG-01**: 合并 Windows ENOENT 修复
-- [ ] **BUG-02**: 合并损坏 symlink 跳过逻辑
-- [ ] **BUG-03**: 合并 SSH URL 解析修复
-- [ ] **BUG-04**: 合并 lock 文件路径硬编码修复
-- [ ] **BUG-05**: 合并 check-updates 安全限制
-- [ ] **BUG-06**: 合并分叉检测修复
+- [x] **BUG-01**: 合并 Windows ENOENT 修复
+- [x] **BUG-02**: 合并损坏 symlink 跳过逻辑
+- [x] **BUG-03**: 合并 SSH URL 解析修复
+- [x] **BUG-04**: 合并 lock 文件路径硬编码修复
+- [x] **BUG-05**: 合并 check-updates 安全限制
+- [x] **BUG-06**: 合并分叉检测修复
 
 ### 新功能 (FEAT)
 
 - [ ] **FEAT-01**: 合并 branch ref 支持（owner/repo#branch 格式）
 - [ ] **FEAT-02**: 合并 --json 输出 flag
-- [ ] **FEAT-03**: 合并新 agent 定义（warp/deepagents/firebender/bob）
-- [ ] **FEAT-04**: 合并 update-source.ts 模块
+- [x] **FEAT-03**: 合并新 agent 定义（warp/deepagents/firebender/bob）
+- [x] **FEAT-04**: 合并 update-source.ts 模块
 
 ### 定制保护 (PROT)
 
-- [ ] **PROT-01**: branding.ts 保持 BMC 定制版本不变
-- [ ] **PROT-02**: providers/cos.ts 保持不变
-- [ ] **PROT-03**: providers/market.ts 保持不变
-- [ ] **PROT-04**: telemetry.ts 保持 BMC 定制版本不变
-- [ ] **PROT-05**: find.ts 保持 BMC Market API 实现不变
-- [ ] **PROT-06**: package.json 保持 BMC 名称/版本/依赖不变
+- [x] **PROT-01**: branding.ts 保持 BMC 定制版本不变
+- [x] **PROT-02**: providers/cos.ts 保持不变
+- [x] **PROT-03**: providers/market.ts 保持不变
+- [x] **PROT-04**: telemetry.ts 保持 BMC 定制版本不变
+- [x] **PROT-05**: find.ts 保持 BMC Market API 实现不变
+- [x] **PROT-06**: package.json 保持 BMC 名称/版本/依赖不变
 
 ### 验证 (VAL)
 
@@ -76,24 +76,24 @@ Deferred to future sync cycles.
 | PREP-01 | Phase 1 | Complete |
 | PREP-02 | Phase 1 | Complete |
 | PREP-03 | Phase 1 | Complete |
-| SEC-01 | Phase 2 | Pending |
-| SEC-02 | Phase 2 | Pending |
-| BUG-01 | Phase 2 | Pending |
-| BUG-02 | Phase 2 | Pending |
-| BUG-03 | Phase 2 | Pending |
-| BUG-04 | Phase 2 | Pending |
-| BUG-05 | Phase 2 | Pending |
-| BUG-06 | Phase 2 | Pending |
+| SEC-01 | Phase 2 | Complete |
+| SEC-02 | Phase 2 | Complete |
+| BUG-01 | Phase 2 | Complete |
+| BUG-02 | Phase 2 | Complete |
+| BUG-03 | Phase 2 | Complete |
+| BUG-04 | Phase 2 | Complete |
+| BUG-05 | Phase 2 | Complete |
+| BUG-06 | Phase 2 | Complete |
 | FEAT-01 | Phase 2 | Pending |
 | FEAT-02 | Phase 2 | Pending |
-| FEAT-03 | Phase 2 | Pending |
-| FEAT-04 | Phase 2 | Pending |
-| PROT-01 | Phase 2 | Pending |
-| PROT-02 | Phase 2 | Pending |
-| PROT-03 | Phase 2 | Pending |
-| PROT-04 | Phase 2 | Pending |
-| PROT-05 | Phase 2 | Pending |
-| PROT-06 | Phase 2 | Pending |
+| FEAT-03 | Phase 2 | Complete |
+| FEAT-04 | Phase 2 | Complete |
+| PROT-01 | Phase 2 | Complete |
+| PROT-02 | Phase 2 | Complete |
+| PROT-03 | Phase 2 | Complete |
+| PROT-04 | Phase 2 | Complete |
+| PROT-05 | Phase 2 | Complete |
+| PROT-06 | Phase 2 | Complete |
 | VAL-01 | Phase 3 | Pending |
 | VAL-02 | Phase 3 | Pending |
 | VAL-03 | Phase 3 | Pending |
