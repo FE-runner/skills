@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.4.3
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-04-01T10:29:21.186Z"
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-04-01T10:42:40.165Z"
 last_activity: 2026-04-01
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 3
-  completed_plans: 2
-  percent: 0
+  completed_plans: 3
+  percent: 67
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-04-01)
 
 Phase: 02 (selective-merge) — EXECUTING
 Plan: 2 of 2
-Status: Executing Phase 02
+Status: Phase complete — ready for verification
 Last activity: 2026-04-01
 
 Progress: [███████░░░] 67%
@@ -54,6 +54,7 @@ Progress: [███████░░░] 67%
 *Updated after each plan completion*
 | Phase 01 P01 | 4min | 2 tasks | 1 files |
 | Phase 02 P01 | 7min | 2 tasks | 25 files |
+| Phase 02 P02 | 9min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,8 @@ Recent decisions affecting current work:
 - [Phase 01]: 在 master 上提交 .gitattributes 后再创建 sync 分支，确保两个分支都有合并保护
 - [Phase 01]: 使用已缓存的 upstream fetch 数据（GitHub 网络不可达时），upstream/main 指向 v1.4.7
 - [Phase 02]: cli.ts 和 source-parser.ts 临时保留 ours 版本，留给 Plan 02-02 正式解决
+- [Phase 02]: 保留 BMC Market 优先解析位置，在 GitHub shorthand 之前检查 Market 命令
+- [Phase 02]: global update 使用上游 CLI 入口点直接调用，local update 保留 BMC 原有模式
 
 ### Pending Todos
 
@@ -79,6 +82,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-01T10:29:21.184Z
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-04-01T10:42:40.162Z
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None

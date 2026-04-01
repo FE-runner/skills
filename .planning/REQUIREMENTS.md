@@ -29,8 +29,8 @@ Requirements for this sync. Each maps to roadmap phases.
 
 ### 新功能 (FEAT)
 
-- [ ] **FEAT-01**: 合并 branch ref 支持（owner/repo#branch 格式）
-- [ ] **FEAT-02**: 合并 --json 输出 flag
+- [x] **FEAT-01**: 合并 branch ref 支持（owner/repo#branch 格式）
+- [x] **FEAT-02**: 合并 --json 输出 flag
 - [x] **FEAT-03**: 合并新 agent 定义（warp/deepagents/firebender/bob）
 - [x] **FEAT-04**: 合并 update-source.ts 模块
 
@@ -84,8 +84,8 @@ Deferred to future sync cycles.
 | BUG-04 | Phase 2 | Complete |
 | BUG-05 | Phase 2 | Complete |
 | BUG-06 | Phase 2 | Complete |
-| FEAT-01 | Phase 2 | Pending |
-| FEAT-02 | Phase 2 | Pending |
+| FEAT-01 | Phase 2 | Complete |
+| FEAT-02 | Phase 2 | Complete |
 | FEAT-03 | Phase 2 | Complete |
 | FEAT-04 | Phase 2 | Complete |
 | PROT-01 | Phase 2 | Complete |

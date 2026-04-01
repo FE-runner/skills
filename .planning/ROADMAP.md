@@ -11,7 +11,7 @@
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
 - [x] **Phase 1: 合并准备** - 配置 upstream remote、合并保护和工作分支
-- [ ] **Phase 2: 选择性合并** - 执行合并，引入上游改进，保护 BMC 定制内容
+- [x] **Phase 2: 选择性合并** - 执行合并，引入上游改进，保护 BMC 定制内容 (completed 2026-04-01)
 - [ ] **Phase 3: 验证与收尾** - 构建测试通过，BMC 功能冒烟测试，品牌检查
 
 ## Phase Details
@@ -43,7 +43,7 @@ Plans:
 
 Plans:
 - [x] 02-01-PLAN.md — 执行 git merge，解决保护文件和中等冲突文件（agents/types/installer/skill-lock/local-lock/add）
-- [ ] 02-02-PLAN.md — 解决高冲突文件（source-parser.ts, cli.ts），提交合并
+- [x] 02-02-PLAN.md — 解决高冲突文件（source-parser.ts, cli.ts），提交合并
 
 ### Phase 3: 验证与收尾
 **Goal**: 合并后的代码通过所有自动化检查，BMC 定制功能经冒烟测试确认可用
@@ -67,5 +67,5 @@ Phases execute in numeric order: 1 -> 2 -> 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. 合并准备 | 1/1 | Complete | 2026-04-01 |
-| 2. 选择性合并 | 0/2 | Planning complete | - |
+| 2. 选择性合并 | 2/2 | Complete   | 2026-04-01 |
 | 3. 验证与收尾 | 0/0 | Not started | - |
