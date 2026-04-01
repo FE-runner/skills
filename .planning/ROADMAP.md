@@ -24,10 +24,10 @@
   1. `git remote -v` 显示 upstream 指向 vercel-labs/skills
   2. `.gitattributes` 中配置了 `merge=ours` 驱动，覆盖 branding.ts、cos.ts、market.ts、telemetry.ts、find.ts
   3. 当前工作在 `sync/upstream` 分支上，master 未被修改
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 01-01: TBD
+- [ ] 01-01-PLAN.md — 配置 upstream remote、.gitattributes 合并保护、创建 sync 工作分支
 
 ### Phase 2: 选择性合并
 **Goal**: 上游的安全修复、Bug 修复和新功能已合并到 sync 分支，BMC 所有定制内容完整保留
@@ -65,6 +65,6 @@ Phases execute in numeric order: 1 -> 2 -> 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. 合并准备 | 0/0 | Not started | - |
+| 1. 合并准备 | 0/1 | Planning complete | - |
 | 2. 选择性合并 | 0/0 | Not started | - |
 | 3. 验证与收尾 | 0/0 | Not started | - |
