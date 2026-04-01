@@ -27,7 +27,7 @@
 **Plans**: 1 plan
 
 Plans:
-- [ ] 01-01-PLAN.md — 配置 upstream remote、.gitattributes 合并保护、创建 sync 工作分支
+- [x] 01-01-PLAN.md — 配置 upstream remote、.gitattributes 合并保护、创建 sync 工作分支
 
 ### Phase 2: 选择性合并
 **Goal**: 上游的安全修复、Bug 修复和新功能已合并到 sync 分支，BMC 所有定制内容完整保留

@@ -9,9 +9,9 @@ Requirements for this sync. Each maps to roadmap phases.
 
 ### 准备 (PREP)
 
-- [ ] **PREP-01**: 添加 vercel-labs/skills 作为 upstream remote
-- [ ] **PREP-02**: 配置 .gitattributes merge=ours 驱动保护 BMC 定制文件
-- [ ] **PREP-03**: 在独立分支 sync/upstream 上操作，不直接修改 master
+- [x] **PREP-01**: 添加 vercel-labs/skills 作为 upstream remote
+- [x] **PREP-02**: 配置 .gitattributes merge=ours 驱动保护 BMC 定制文件
+- [x] **PREP-03**: 在独立分支 sync/upstream 上操作，不直接修改 master
 
 ### 安全修复 (SEC)
 
@@ -73,9 +73,9 @@ Deferred to future sync cycles.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PREP-01 | Phase 1 | Pending |
-| PREP-02 | Phase 1 | Pending |
-| PREP-03 | Phase 1 | Pending |
+| PREP-01 | Phase 1 | Complete |
+| PREP-02 | Phase 1 | Complete |
+| PREP-03 | Phase 1 | Complete |
 | SEC-01 | Phase 2 | Pending |
 | SEC-02 | Phase 2 | Pending |
 | BUG-01 | Phase 2 | Pending |
