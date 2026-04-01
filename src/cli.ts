@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 
-import { spawn, spawnSync } from 'child_process';
-import { writeFileSync, readFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'fs';
+import { spawnSync } from 'child_process';
+import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
 import { basename, join, dirname } from 'path';
 import { homedir } from 'os';
-import { createHash } from 'crypto';
 import { fileURLToPath } from 'url';
 import { runAdd, parseAddOptions, initTelemetry } from './add.ts';
 import { runFind } from './find.ts';
@@ -16,6 +15,7 @@ import { track } from './telemetry.ts';
 import { readLocalLock } from './local-lock.ts';
 import { fetchSkillFolderHash, getGitHubToken } from './skill-lock.ts';
 import { marketProvider } from './providers/market.ts';
+import { buildUpdateInstallSource, formatSourceInput } from './update-source.ts';
 import {
   NPX_CMD,
   BIN_NAME,
@@ -158,6 +158,7 @@ ${BOLD}Experimental Sync Options:${RESET}
 ${BOLD}List Options:${RESET}
   -g, --global           List global skills (default: project)
   -a, --agent <agents>   Filter by specific agents
+  --json                 Output as JSON (machine-readable, no ANSI codes)
 
 ${BOLD}Options:${RESET}
   --help, -h        Show this help message
@@ -174,6 +175,7 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ${BIN_NAME} list                          ${DIM}# list project skills${RESET}
   ${DIM}$${RESET} ${BIN_NAME} ls -g                         ${DIM}# list global skills${RESET}
   ${DIM}$${RESET} ${BIN_NAME} ls -a claude-code             ${DIM}# filter by agent${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} ls --json                      ${DIM}# JSON output${RESET}
   ${DIM}$${RESET} ${BIN_NAME} find                          ${DIM}# interactive search${RESET}
   ${DIM}$${RESET} ${BIN_NAME} find typescript               ${DIM}# search by keyword${RESET}
   ${DIM}$${RESET} ${BIN_NAME} check
@@ -287,13 +289,13 @@ Describe when this skill should be used.
 
 const AGENTS_DIR = '.agents';
 const LOCK_FILE = '.skill-lock.json';
-const CHECK_UPDATES_API_URL = 'https://add-skill.vercel.sh/check-updates';
 const CURRENT_LOCK_VERSION = 3; // Bumped from 2 to 3 for folder hash support
 
 interface SkillLockEntry {
   source: string;
   sourceType: string;
   sourceUrl: string;
+  ref?: string;
   skillPath?: string;
   /** GitHub tree SHA for the entire skill folder (v3) */
   skillFolderHash: string;
@@ -310,30 +312,12 @@ interface SkillLockFile {
   skills: Record<string, SkillLockEntry>;
 }
 
-interface CheckUpdatesRequest {
-  skills: Array<{
-    name: string;
-    source: string;
-    path?: string;
-    skillFolderHash: string;
-  }>;
-}
-
-interface CheckUpdatesResponse {
-  updates: Array<{
-    name: string;
-    source: string;
-    currentHash: string;
-    latestHash: string;
-  }>;
-  errors?: Array<{
-    name: string;
-    source: string;
-    error: string;
-  }>;
-}
-
 function getSkillLockPath(): string {
+  // 支持 XDG_STATE_HOME（上游改进）
+  const xdgStateHome = process.env.XDG_STATE_HOME;
+  if (xdgStateHome) {
+    return join(xdgStateHome, 'skills', LOCK_FILE);
+  }
   return join(homedir(), AGENTS_DIR, LOCK_FILE);
 }
 
@@ -356,13 +340,49 @@ function readSkillLock(): SkillLockFile {
   }
 }
 
-function writeSkillLock(lock: SkillLockFile): void {
-  const lockPath = getSkillLockPath();
-  const dir = join(homedir(), AGENTS_DIR);
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
+// ============================================
+// 上游改进：跳过的技能提示（无法自动检查更新的技能）
+// ============================================
+
+interface SkippedSkill {
+  name: string;
+  reason: string;
+  sourceUrl: string;
+  ref?: string;
+}
+
+/**
+ * 判断为什么一个技能无法自动检查更新。
+ */
+function getSkipReason(entry: SkillLockEntry): string {
+  if (entry.sourceType === 'local') {
+    return 'Local path';
   }
-  writeFileSync(lockPath, JSON.stringify(lock, null, 2), 'utf-8');
+  if (entry.sourceType === 'git') {
+    return 'Git URL (hash tracking not supported)';
+  }
+  if (!entry.skillFolderHash) {
+    return 'No version hash available';
+  }
+  if (!entry.skillPath) {
+    return 'No skill path recorded';
+  }
+  return 'No version tracking';
+}
+
+/**
+ * 打印无法自动检查更新的技能列表，附带原因和手动更新命令。
+ */
+function printSkippedSkills(skipped: SkippedSkill[]): void {
+  if (skipped.length === 0) return;
+  console.log();
+  console.log(`${DIM}${skipped.length} skill(s) cannot be checked automatically:${RESET}`);
+  for (const skill of skipped) {
+    console.log(`  ${TEXT}•${RESET} ${skill.name} ${DIM}(${skill.reason})${RESET}`);
+    console.log(
+      `    ${DIM}To update: ${TEXT}${NPX_CMD} add ${formatSourceInput(skill.sourceUrl, skill.ref)} -g -y${RESET}`
+    );
+  }
 }
 
 async function runCheck(args: string[] = []): Promise<void> {
@@ -376,12 +396,13 @@ async function runCheck(args: string[] = []): Promise<void> {
   let totalSkills = 0;
 
   if (isGlobal) {
-    // Global mode: check global lock (GitHub + market skills)
+    // 全局模式：检查全局 lock（GitHub + market 技能）
     const lock = readSkillLock();
     const token = getGitHubToken();
 
     const githubSkills = new Map<string, Array<{ name: string; entry: SkillLockEntry }>>();
     const marketSkills: Array<{ name: string; entry: SkillLockEntry }> = [];
+    const skipped: SkippedSkill[] = [];
 
     for (const [skillName, entry] of Object.entries(lock.skills)) {
       if (!entry) continue;
@@ -391,6 +412,14 @@ async function runCheck(args: string[] = []): Promise<void> {
         const existing = githubSkills.get(entry.source) || [];
         existing.push({ name: skillName, entry });
         githubSkills.set(entry.source, existing);
+      } else {
+        // 无法自动检查的技能（上游改进：提供跳过原因和手动命令）
+        skipped.push({
+          name: skillName,
+          reason: getSkipReason(entry),
+          sourceUrl: entry.sourceUrl,
+          ref: entry.ref,
+        });
       }
     }
 
@@ -400,7 +429,7 @@ async function runCheck(args: string[] = []): Promise<void> {
     for (const [source, skills] of githubSkills) {
       for (const { name, entry } of skills) {
         try {
-          const latestHash = await fetchSkillFolderHash(source, entry.skillPath!, token);
+          const latestHash = await fetchSkillFolderHash(source, entry.skillPath!, token, entry.ref);
           if (!latestHash) {
             errors.push({ name, source, error: 'Could not fetch from GitHub' });
           } else if (latestHash !== entry.skillFolderHash) {
@@ -432,8 +461,45 @@ async function runCheck(args: string[] = []): Promise<void> {
         });
       }
     }
+
+    if (totalSkills === 0) {
+      console.log(`${DIM}No skills tracked in lock file.${RESET}`);
+      console.log(`${DIM}Install skills with${RESET} ${TEXT}${NPX_CMD} add <package>${RESET}`);
+      printSkippedSkills(skipped);
+      return;
+    }
+
+    console.log(`${DIM}Checking ${totalSkills} skill(s) for updates...${RESET}`);
+    console.log();
+
+    if (updates.length === 0) {
+      console.log(`${TEXT}✓ All skills are up to date${RESET}`);
+    } else {
+      console.log(`${TEXT}${updates.length} update(s) available:${RESET}`);
+      console.log();
+      for (const update of updates) {
+        console.log(`  ${TEXT}↑${RESET} ${update.name}`);
+        console.log(`    ${DIM}source: ${update.source}${RESET}`);
+      }
+      console.log();
+      console.log(
+        `${DIM}Run${RESET} ${TEXT}${NPX_CMD} update -g${RESET} ${DIM}to update all skills${RESET}`
+      );
+    }
+
+    if (errors.length > 0) {
+      console.log();
+      console.log(`${DIM}Could not check ${errors.length} skill(s) (may need reinstall)${RESET}`);
+      console.log();
+      for (const error of errors) {
+        console.log(`  ${DIM}✗${RESET} ${error.name}`);
+        console.log(`    ${DIM}source: ${error.source}${RESET}`);
+      }
+    }
+
+    printSkippedSkills(skipped);
   } else {
-    // Local mode: check local lock (market skills only)
+    // 本地模式：检查本地 lock（仅 market 技能）
     const localLock = await readLocalLock();
 
     for (const [name, entry] of Object.entries(localLock.skills)) {
@@ -459,35 +525,35 @@ async function runCheck(args: string[] = []): Promise<void> {
         }
       }
     }
-  }
 
-  if (totalSkills === 0) {
-    console.log(`${DIM}No skills tracked in lock file.${RESET}`);
-    console.log(`${DIM}Install skills with${RESET} ${TEXT}${NPX_CMD} add <package>${RESET}`);
-    return;
-  }
-
-  console.log(`${DIM}Checking ${totalSkills} skill(s) for updates...${RESET}`);
-  console.log();
-
-  if (updates.length === 0) {
-    console.log(`${TEXT}✓ All skills are up to date${RESET}`);
-  } else {
-    console.log(`${TEXT}${updates.length} update(s) available:${RESET}`);
-    console.log();
-    for (const update of updates) {
-      console.log(`  ${TEXT}↑${RESET} ${update.name}`);
-      console.log(`    ${DIM}source: ${update.source}${RESET}`);
+    if (totalSkills === 0) {
+      console.log(`${DIM}No skills tracked in lock file.${RESET}`);
+      console.log(`${DIM}Install skills with${RESET} ${TEXT}${NPX_CMD} add <package>${RESET}`);
+      return;
     }
-    console.log();
-    console.log(
-      `${DIM}Run${RESET} ${TEXT}${NPX_CMD} update${isGlobal ? ' -g' : ''}${RESET} ${DIM}to update all skills${RESET}`
-    );
-  }
 
-  if (errors.length > 0) {
+    console.log(`${DIM}Checking ${totalSkills} skill(s) for updates...${RESET}`);
     console.log();
-    console.log(`${DIM}Could not check ${errors.length} skill(s) (may need reinstall)${RESET}`);
+
+    if (updates.length === 0) {
+      console.log(`${TEXT}✓ All skills are up to date${RESET}`);
+    } else {
+      console.log(`${TEXT}${updates.length} update(s) available:${RESET}`);
+      console.log();
+      for (const update of updates) {
+        console.log(`  ${TEXT}↑${RESET} ${update.name}`);
+        console.log(`    ${DIM}source: ${update.source}${RESET}`);
+      }
+      console.log();
+      console.log(
+        `${DIM}Run${RESET} ${TEXT}${NPX_CMD} update${RESET} ${DIM}to update all skills${RESET}`
+      );
+    }
+
+    if (errors.length > 0) {
+      console.log();
+      console.log(`${DIM}Could not check ${errors.length} skill(s) (may need reinstall)${RESET}`);
+    }
   }
 
   // Track telemetry
@@ -510,9 +576,10 @@ async function runUpdate(args: string[] = []): Promise<void> {
   let checkedCount = 0;
 
   if (isGlobal) {
-    // Global mode: check global lock
+    // 全局模式：检查全局 lock
     const lock = readSkillLock();
     const token = getGitHubToken();
+    const skipped: SkippedSkill[] = [];
 
     for (const [skillName, entry] of Object.entries(lock.skills)) {
       if (!entry) continue;
@@ -526,28 +593,105 @@ async function runUpdate(args: string[] = []): Promise<void> {
             updates.push({ name: skillName, installUrl });
           }
         } catch {
-          // Skip skills that fail to check
+          // 跳过检查失败的技能
         }
       } else if (entry.sourceType === 'github' && entry.skillFolderHash && entry.skillPath) {
         checkedCount++;
         try {
-          const latestHash = await fetchSkillFolderHash(entry.source, entry.skillPath, token);
+          const latestHash = await fetchSkillFolderHash(
+            entry.source,
+            entry.skillPath,
+            token,
+            entry.ref
+          );
           if (latestHash && latestHash !== entry.skillFolderHash) {
-            let installUrl = entry.sourceUrl.replace(/\.git$/, '').replace(/\/$/, '');
-            let skillFolder = entry.skillPath;
-            if (skillFolder.endsWith('/SKILL.md')) skillFolder = skillFolder.slice(0, -9);
-            else if (skillFolder.endsWith('SKILL.md')) skillFolder = skillFolder.slice(0, -8);
-            if (skillFolder.endsWith('/')) skillFolder = skillFolder.slice(0, -1);
-            if (skillFolder) installUrl = `${installUrl}/tree/main/${skillFolder}`;
+            // 使用上游 buildUpdateInstallSource 构建安装源（支持 ref 和 subpath）
+            const installUrl = buildUpdateInstallSource(entry);
             updates.push({ name: skillName, installUrl });
           }
         } catch {
-          // Skip skills that fail to check
+          // 跳过检查失败的技能
         }
+      } else {
+        // 无法自动检查的技能
+        skipped.push({
+          name: skillName,
+          reason: getSkipReason(entry),
+          sourceUrl: entry.sourceUrl,
+          ref: entry.ref,
+        });
       }
     }
+
+    if (checkedCount === 0) {
+      console.log(`${DIM}No skills tracked in lock file.${RESET}`);
+      console.log(`${DIM}Install skills with${RESET} ${TEXT}${NPX_CMD} add <package>${RESET}`);
+      printSkippedSkills(skipped);
+      return;
+    }
+
+    if (updates.length === 0) {
+      console.log(`${TEXT}✓ All skills are up to date${RESET}`);
+      printSkippedSkills(skipped);
+      console.log();
+      return;
+    }
+
+    console.log(`${TEXT}Found ${updates.length} update(s)${RESET}`);
+    console.log();
+
+    // 逐个重新安装有更新的技能
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const update of updates) {
+      console.log(`${TEXT}Updating ${update.name}...${RESET}`);
+
+      // 使用 CLI 入口点直接重新安装（避免嵌套 npm exec/npx）
+      const cliEntry = join(__dirname, '..', 'bin', 'cli.mjs');
+      if (!existsSync(cliEntry)) {
+        failCount++;
+        console.log(
+          `  ${DIM}✗ Failed to update ${update.name}: CLI entrypoint not found at ${cliEntry}${RESET}`
+        );
+        continue;
+      }
+      const result = spawnSync(process.execPath, [cliEntry, 'add', update.installUrl, '-g', '-y'], {
+        stdio: ['inherit', 'pipe', 'pipe'],
+        encoding: 'utf-8',
+        shell: process.platform === 'win32',
+      });
+
+      if (result.status === 0) {
+        successCount++;
+        console.log(`  ${TEXT}✓${RESET} Updated ${update.name}`);
+      } else {
+        failCount++;
+        console.log(`  ${DIM}✗ Failed to update ${update.name}${RESET}`);
+      }
+    }
+
+    console.log();
+    if (successCount > 0) {
+      console.log(`${TEXT}✓ Updated ${successCount} skill(s)${RESET}`);
+    }
+    if (failCount > 0) {
+      console.log(`${DIM}Failed to update ${failCount} skill(s)${RESET}`);
+    }
+
+    printSkippedSkills(skipped);
+
+    // Track telemetry
+    track({
+      event: 'update',
+      skillCount: String(updates.length),
+      successCount: String(successCount),
+      failCount: String(failCount),
+    });
+
+    console.log();
   } else {
-    // Local mode: check local lock (market skills only)
+    // 本地模式：检查本地 lock（仅 market 技能）
     const localLock = await readLocalLock();
 
     for (const [skillName, entry] of Object.entries(localLock.skills)) {
@@ -560,66 +704,66 @@ async function runUpdate(args: string[] = []): Promise<void> {
             updates.push({ name: skillName, installUrl });
           }
         } catch {
-          // Skip skills that fail to check
+          // 跳过检查失败的技能
         }
       }
     }
-  }
 
-  if (checkedCount === 0) {
-    console.log(`${DIM}No skills tracked in lock file.${RESET}`);
-    console.log(`${DIM}Install skills with${RESET} ${TEXT}${NPX_CMD} add <package>${RESET}`);
-    return;
-  }
+    if (checkedCount === 0) {
+      console.log(`${DIM}No skills tracked in lock file.${RESET}`);
+      console.log(`${DIM}Install skills with${RESET} ${TEXT}${NPX_CMD} add <package>${RESET}`);
+      return;
+    }
 
-  if (updates.length === 0) {
-    console.log(`${TEXT}✓ All skills are up to date${RESET}`);
+    if (updates.length === 0) {
+      console.log(`${TEXT}✓ All skills are up to date${RESET}`);
+      console.log();
+      return;
+    }
+
+    console.log(`${TEXT}Found ${updates.length} update(s)${RESET}`);
     console.log();
-    return;
-  }
 
-  console.log(`${TEXT}Found ${updates.length} update(s)${RESET}`);
-  console.log();
+    // 逐个重新安装有更新的技能
+    let successCount = 0;
+    let failCount = 0;
 
-  // Reinstall each skill that has an update
-  let successCount = 0;
-  let failCount = 0;
+    for (const update of updates) {
+      console.log(`${TEXT}Updating ${update.name}...${RESET}`);
 
-  for (const update of updates) {
-    console.log(`${TEXT}Updating ${update.name}...${RESET}`);
+      const flags = ['-y'];
+      const selfArgs = [process.argv[1]!, 'add', update.installUrl, ...flags];
+      const result = spawnSync(process.execPath, selfArgs, {
+        stdio: ['inherit', 'pipe', 'pipe'],
+      });
 
-    const flags = isGlobal ? ['-g', '-y'] : ['-y'];
-    const selfArgs = [process.argv[1]!, 'add', update.installUrl, ...flags];
-    const result = spawnSync(process.execPath, selfArgs, {
-      stdio: ['inherit', 'pipe', 'pipe'],
+      if (result.status === 0) {
+        successCount++;
+        console.log(`  ${TEXT}✓${RESET} Updated ${update.name}`);
+      } else {
+        failCount++;
+        console.log(`  ${DIM}✗ Failed to update ${update.name}${RESET}`);
+      }
+    }
+
+    console.log();
+    if (successCount > 0) {
+      console.log(`${TEXT}✓ Updated ${successCount} skill(s)${RESET}`);
+    }
+    if (failCount > 0) {
+      console.log(`${DIM}Failed to update ${failCount} skill(s)${RESET}`);
+    }
+
+    // Track telemetry
+    track({
+      event: 'update',
+      skillCount: String(updates.length),
+      successCount: String(successCount),
+      failCount: String(failCount),
     });
 
-    if (result.status === 0) {
-      successCount++;
-      console.log(`  ${TEXT}✓${RESET} Updated ${update.name}`);
-    } else {
-      failCount++;
-      console.log(`  ${DIM}✗ Failed to update ${update.name}${RESET}`);
-    }
+    console.log();
   }
-
-  console.log();
-  if (successCount > 0) {
-    console.log(`${TEXT}✓ Updated ${successCount} skill(s)${RESET}`);
-  }
-  if (failCount > 0) {
-    console.log(`${DIM}Failed to update ${failCount} skill(s)${RESET}`);
-  }
-
-  // Track telemetry
-  track({
-    event: 'update',
-    skillCount: String(updates.length),
-    successCount: String(successCount),
-    failCount: String(failCount),
-  });
-
-  console.log();
 }
 
 // ============================================
