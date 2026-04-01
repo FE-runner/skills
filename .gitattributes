@@ -1,0 +1,10 @@
+# BMC 定制文件合并保护
+# 在 git merge 时自动保留 BMC 版本，忽略上游变更
+src/branding.ts merge=ours
+src/providers/cos.ts merge=ours
+src/providers/market.ts merge=ours
+src/providers/index.ts merge=ours
+src/telemetry.ts merge=ours
+src/find.ts merge=ours
+package.json merge=ours
+README.md merge=ours
