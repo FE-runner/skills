@@ -45,10 +45,10 @@ Requirements for this sync. Each maps to roadmap phases.
 
 ### 验证 (VAL)
 
-- [ ] **VAL-01**: 合并后 pnpm build 通过
-- [ ] **VAL-02**: 合并后 pnpm test 通过
-- [ ] **VAL-03**: BMC 定制功能冒烟测试（market install, COS provider, find 命令）
-- [ ] **VAL-04**: 搜索确认无上游硬编码品牌名泄露
+- [x] **VAL-01**: 合并后 pnpm build 通过
+- [x] **VAL-02**: 合并后 pnpm test 通过
+- [x] **VAL-03**: BMC 定制功能冒烟测试（market install, COS provider, find 命令）
+- [x] **VAL-04**: 搜索确认无上游硬编码品牌名泄露
 
 ## v2 Requirements
 
@@ -94,10 +94,10 @@ Deferred to future sync cycles.
 | PROT-04 | Phase 2 | Complete |
 | PROT-05 | Phase 2 | Complete |
 | PROT-06 | Phase 2 | Complete |
-| VAL-01 | Phase 3 | Pending |
-| VAL-02 | Phase 3 | Pending |
-| VAL-03 | Phase 3 | Pending |
-| VAL-04 | Phase 3 | Pending |
+| VAL-01 | Phase 3 | Complete |
+| VAL-02 | Phase 3 | Complete |
+| VAL-03 | Phase 3 | Complete |
+| VAL-04 | Phase 3 | Complete |
 
 **Coverage:**
 - v1 requirements: 25 total

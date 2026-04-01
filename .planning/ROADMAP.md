@@ -12,7 +12,7 @@
 
 - [x] **Phase 1: 合并准备** - 配置 upstream remote、合并保护和工作分支
 - [x] **Phase 2: 选择性合并** - 执行合并，引入上游改进，保护 BMC 定制内容 (completed 2026-04-01)
-- [ ] **Phase 3: 验证与收尾** - 构建测试通过，BMC 功能冒烟测试，品牌检查
+- [x] **Phase 3: 验证与收尾** - 构建测试通过，BMC 功能冒烟测试，品牌检查 (completed 2026-04-01)
 
 ## Phase Details
 
@@ -54,10 +54,10 @@ Plans:
   2. `pnpm test` 全部测试通过
   3. `skills find <keyword>` 正确调用 BMC Market API（非 skills.sh）
   4. 代码中无 "skills.sh" 或上游品牌名硬编码泄露（branding.ts 中的配置除外）
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 03-01: TBD
+- [x] 03-01-PLAN.md — 构建验证、测试验证、BMC 冒烟测试、品牌检查
 
 ## Progress
 
@@ -68,4 +68,4 @@ Phases execute in numeric order: 1 -> 2 -> 3
 |-------|----------------|--------|-----------|
 | 1. 合并准备 | 1/1 | Complete | 2026-04-01 |
 | 2. 选择性合并 | 2/2 | Complete   | 2026-04-01 |
-| 3. 验证与收尾 | 0/0 | Not started | - |
+| 3. 验证与收尾 | 1/1 | Complete | 2026-04-01 |
