@@ -10,7 +10,7 @@
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
-- [ ] **Phase 1: 合并准备** - 配置 upstream remote、合并保护和工作分支
+- [x] **Phase 1: 合并准备** - 配置 upstream remote、合并保护和工作分支
 - [ ] **Phase 2: 选择性合并** - 执行合并，引入上游改进，保护 BMC 定制内容
 - [ ] **Phase 3: 验证与收尾** - 构建测试通过，BMC 功能冒烟测试，品牌检查
 
@@ -39,10 +39,11 @@ Plans:
   3. `package.json` 中 name 为 `blueai-skills`，version 为 BMC 格式
   4. 上游新增的 agent 定义（warp/deepagents/firebender/bob）存在于 `src/agents.ts`
   5. 上游的 branch ref 支持（owner/repo#branch）和 --json flag 功能代码已引入
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: TBD
+- [ ] 02-01-PLAN.md — 执行 git merge，解决保护文件和中等冲突文件（agents/types/installer/skill-lock/local-lock/add）
+- [ ] 02-02-PLAN.md — 解决高冲突文件（source-parser.ts, cli.ts），提交合并
 
 ### Phase 3: 验证与收尾
 **Goal**: 合并后的代码通过所有自动化检查，BMC 定制功能经冒烟测试确认可用
@@ -65,6 +66,6 @@ Phases execute in numeric order: 1 -> 2 -> 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. 合并准备 | 0/1 | Planning complete | - |
-| 2. 选择性合并 | 0/0 | Not started | - |
+| 1. 合并准备 | 1/1 | Complete | 2026-04-01 |
+| 2. 选择性合并 | 0/2 | Planning complete | - |
 | 3. 验证与收尾 | 0/0 | Not started | - |
