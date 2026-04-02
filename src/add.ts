@@ -32,6 +32,7 @@ import {
 } from './installer.ts';
 import {
   detectInstalledAgents,
+  detectProjectAgents,
   agents,
   getUniversalAgents,
   getNonUniversalAgents,
@@ -581,7 +582,17 @@ async function handleWellKnownSkills(
       }
     } else if (installedAgents.length === 1 || options.yes) {
       // Auto-select detected agents + ensure universal agents are included
-      targetAgents = ensureUniversalAgents(installedAgents);
+      // -y 项目安装时，优先使用项目中已有的 agent 目录
+      if (options.yes && !options.global) {
+        const projectAgents = await detectProjectAgents();
+        if (projectAgents.length > 0) {
+          targetAgents = ensureUniversalAgents(projectAgents);
+        } else {
+          targetAgents = ensureUniversalAgents(installedAgents);
+        }
+      } else {
+        targetAgents = ensureUniversalAgents(installedAgents);
+      }
       if (installedAgents.length === 1) {
         const firstAgent = installedAgents[0]!;
         p.log.info(`Installing to: ${pc.cyan(agents[firstAgent].displayName)}`);
@@ -1038,7 +1049,17 @@ async function handleCosSkills(
         targetAgents = selected as AgentType[];
       }
     } else if (installedAgents.length === 1 || options.yes) {
-      targetAgents = ensureUniversalAgents(installedAgents);
+      // -y 项目安装时，优先使用项目中已有的 agent 目录
+      if (options.yes && !options.global) {
+        const projectAgents = await detectProjectAgents();
+        if (projectAgents.length > 0) {
+          targetAgents = ensureUniversalAgents(projectAgents);
+        } else {
+          targetAgents = ensureUniversalAgents(installedAgents);
+        }
+      } else {
+        targetAgents = ensureUniversalAgents(installedAgents);
+      }
       if (installedAgents.length === 1) {
         const firstAgent = installedAgents[0]!;
         p.log.info(`Installing to: ${pc.cyan(agents[firstAgent].displayName)}`);
@@ -1423,7 +1444,17 @@ async function handleMarketSkill(
         targetAgents = selected as AgentType[];
       }
     } else if (installedAgents.length === 1 || options.yes) {
-      targetAgents = ensureUniversalAgents(installedAgents);
+      // -y 项目安装时，优先使用项目中已有的 agent 目录
+      if (options.yes && !options.global) {
+        const projectAgents = await detectProjectAgents();
+        if (projectAgents.length > 0) {
+          targetAgents = ensureUniversalAgents(projectAgents);
+        } else {
+          targetAgents = ensureUniversalAgents(installedAgents);
+        }
+      } else {
+        targetAgents = ensureUniversalAgents(installedAgents);
+      }
       if (installedAgents.length === 1) {
         const firstAgent = installedAgents[0]!;
         p.log.info(`Installing to: ${pc.cyan(agents[firstAgent].displayName)}`);
@@ -2003,7 +2034,17 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
         }
       } else if (installedAgents.length === 1 || options.yes) {
         // Auto-select detected agents + ensure universal agents are included
-        targetAgents = ensureUniversalAgents(installedAgents);
+        // -y 项目安装时，优先使用项目中已有的 agent 目录
+        if (options.yes && !options.global) {
+          const projectAgents = await detectProjectAgents();
+          if (projectAgents.length > 0) {
+            targetAgents = ensureUniversalAgents(projectAgents);
+          } else {
+            targetAgents = ensureUniversalAgents(installedAgents);
+          }
+        } else {
+          targetAgents = ensureUniversalAgents(installedAgents);
+        }
         if (installedAgents.length === 1) {
           const firstAgent = installedAgents[0]!;
           p.log.info(`Installing to: ${pc.cyan(agents[firstAgent].displayName)}`);

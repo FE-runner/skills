@@ -1,6 +1,7 @@
 import { homedir } from 'os';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { readdir } from 'node:fs/promises';
 import { xdgConfig } from 'xdg-basedir';
 import type { AgentConfig, AgentType } from './types.ts';
 
@@ -446,6 +447,35 @@ export async function detectInstalledAgents(): Promise<AgentType[]> {
     }))
   );
   return results.filter((r) => r.installed).map((r) => r.type);
+}
+
+/**
+ * 检测项目中已有技能目录的 agent。
+ * 扫描 cwd 下所有 agent 的 skillsDir，如果目录存在且非空则视为已安装。
+ * 用于 -y 模式下复用项目已有的 agent 选择，而非重新全局检测。
+ */
+export async function detectProjectAgents(cwd?: string): Promise<AgentType[]> {
+  const dir = cwd || process.cwd();
+  const seen = new Set<string>();
+  const result: AgentType[] = [];
+
+  for (const [type, config] of Object.entries(agents) as [AgentType, AgentConfig][]) {
+    const skillsDir = config.skillsDir;
+    if (seen.has(skillsDir)) continue;
+    seen.add(skillsDir);
+
+    const fullPath = join(dir, skillsDir);
+    try {
+      const entries = await readdir(fullPath);
+      if (entries.length > 0) {
+        result.push(type as AgentType);
+      }
+    } catch {
+      // 目录不存在，跳过
+    }
+  }
+
+  return result;
 }
 
 export function getAgentConfig(type: AgentType): AgentConfig {
