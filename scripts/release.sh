@@ -22,7 +22,7 @@ fi
 CURRENT=$(node -p "require('./package.json').version")
 echo "当前版本: $CURRENT"
 
-# 解析 bmc 版本号: 1.4.3-bmc0.0.1 -> base=1.4.3, bmc=0.0.1
+# 解析 bmc 版本号: 1.4.7-bmc1.2.0 -> base=1.4.7, bmc=1.2.0
 BASE_VER=$(echo "$CURRENT" | sed 's/-bmc.*//')
 BMC_VER=$(echo "$CURRENT" | sed -n 's/.*-bmc//p')
 
