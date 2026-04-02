@@ -1363,7 +1363,7 @@ async function handleMarketSkill(
   spinner.stop(`Found: ${pc.cyan(resolved.name)} ${pc.dim(`v${resolved.currentVersion}`)}`);
 
   spinner.start('Downloading skill files...');
-  const skill = await marketProvider.fetchById(resolved.id, version, author);
+  const skill = await marketProvider.fetchById(resolved.id, version, author, resolved.teamId);
 
   if (!skill) {
     spinner.stop(pc.red('Failed to fetch skill'));

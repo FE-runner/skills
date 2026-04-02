@@ -48,6 +48,7 @@ interface ResolveResponse {
   name: string;
   currentVersion: string;
   authorId: string;
+  teamId?: string; // 当通过 team 解析时返回
 }
 
 /**
@@ -96,12 +97,19 @@ export class MarketProvider {
   /**
    * Install a skill by its market ID.
    * Pass `author` for private skills (userId format).
+   * Pass `team` for team skills (teamId format),优先于 author。
    */
-  async fetchById(skillId: string, version?: string, author?: string): Promise<MarketSkill | null> {
+  async fetchById(
+    skillId: string,
+    version?: string,
+    author?: string,
+    team?: string
+  ): Promise<MarketSkill | null> {
     try {
       const params = new URLSearchParams();
       if (version) params.set('version', version);
-      if (author) params.set('author', author);
+      if (team) params.set('team', team);
+      else if (author) params.set('author', author);
       const qs = params.toString();
       const url = `${this.apiBase}/api/skills/${skillId}/install${qs ? `?${qs}` : ''}`;
 
