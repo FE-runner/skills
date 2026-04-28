@@ -124,6 +124,7 @@ ${BOLD}Manage Skills:${RESET}
   remove [skills]      Remove installed skills
   list, ls             List installed skills
   find [query]         Search for skills interactively
+                       --uid <union_id>   Include your private & team skills
 
 ${BOLD}Updates:${RESET}
   check                Check for available skill updates
@@ -178,6 +179,7 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ${BIN_NAME} ls --json                      ${DIM}# JSON output${RESET}
   ${DIM}$${RESET} ${BIN_NAME} find                          ${DIM}# interactive search${RESET}
   ${DIM}$${RESET} ${BIN_NAME} find typescript               ${DIM}# search by keyword${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} find typescript --uid on_xxx  ${DIM}# include private & team skills${RESET}
   ${DIM}$${RESET} ${BIN_NAME} check
   ${DIM}$${RESET} ${BIN_NAME} update
   ${DIM}$${RESET} ${BIN_NAME} experimental_install            ${DIM}# restore from skills-lock.json${RESET}

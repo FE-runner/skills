@@ -24,12 +24,15 @@ export interface SearchSkill {
   slug: string;
   source: string;
   installs: number;
+  scope?: 'public' | 'private' | 'team';
+  authorId?: string;
 }
 
 // Search via API
-export async function searchSkillsAPI(query: string): Promise<SearchSkill[]> {
+export async function searchSkillsAPI(query: string, uid?: string): Promise<SearchSkill[]> {
   try {
-    const url = `${SKILLS_SITE}/api/search?q=${encodeURIComponent(query)}&limit=10`;
+    let url = `${SKILLS_SITE}/api/search?q=${encodeURIComponent(query)}&limit=10`;
+    if (uid) url += `&uid=${encodeURIComponent(uid)}`;
     const res = await fetch(url);
 
     if (!res.ok) return [];
@@ -43,6 +46,8 @@ export async function searchSkillsAPI(query: string): Promise<SearchSkill[]> {
         name: string;
         installs: number;
         source: string;
+        scope?: 'public' | 'private' | 'team';
+        authorId?: string;
       }>;
     };
 
@@ -51,6 +56,8 @@ export async function searchSkillsAPI(query: string): Promise<SearchSkill[]> {
       slug: skill.id,
       source: skill.source || '',
       installs: skill.installs,
+      scope: skill.scope,
+      authorId: skill.authorId,
     }));
   } catch {
     return [];
@@ -65,7 +72,7 @@ const MOVE_UP = (n: number) => `\x1b[${n}A`;
 const MOVE_TO_COL = (n: number) => `\x1b[${n}G`;
 
 // Custom fzf-style search prompt using raw readline
-async function runSearchPrompt(initialQuery = ''): Promise<SearchSkill | null> {
+async function runSearchPrompt(initialQuery = '', uid?: string): Promise<SearchSkill | null> {
   let results: SearchSkill[] = [];
   let selectedIndex = 0;
   let query = initialQuery;
@@ -122,9 +129,15 @@ async function runSearchPrompt(initialQuery = ''): Promise<SearchSkill | null> {
         const source = skill.source ? ` ${DIM}${skill.source}${RESET}` : '';
         const installs = formatInstalls(skill.installs);
         const installsBadge = installs ? ` ${CYAN}${installs}${RESET}` : '';
+        const scopeBadge =
+          skill.scope === 'private'
+            ? ` ${MAGENTA}[private]${RESET}`
+            : skill.scope === 'team'
+              ? ` ${YELLOW}[team]${RESET}`
+              : '';
         const loadingIndicator = loading && i === 0 ? ` ${DIM}...${RESET}` : '';
 
-        lines.push(`  ${arrow} ${name}${source}${installsBadge}${loadingIndicator}`);
+        lines.push(`  ${arrow} ${name}${source}${scopeBadge}${installsBadge}${loadingIndicator}`);
       }
     }
 
@@ -166,7 +179,7 @@ async function runSearchPrompt(initialQuery = ''): Promise<SearchSkill | null> {
 
     debounceTimer = setTimeout(async () => {
       try {
-        results = await searchSkillsAPI(q);
+        results = await searchSkillsAPI(q, uid);
         selectedIndex = 0;
       } catch {
         results = [];
@@ -266,7 +279,17 @@ async function isRepoPublic(owner: string, repo: string): Promise<boolean> {
 }
 
 export async function runFind(args: string[]): Promise<void> {
-  const query = args.join(' ');
+  // 解析 --uid 参数
+  let uid: string | undefined;
+  const filteredArgs: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--uid' && i + 1 < args.length) {
+      uid = args[++i];
+    } else {
+      filteredArgs.push(args[i]!);
+    }
+  }
+  const query = filteredArgs.join(' ');
   const isNonInteractive = !process.stdin.isTTY;
   const agentTip = `${DIM}Tip: if running in a coding agent, follow these steps:${RESET}
 ${DIM}  1) ${NPX_CMD} find [query]${RESET}
@@ -274,7 +297,7 @@ ${DIM}  2) ${NPX_CMD} add <owner/repo@skill>${RESET}`;
 
   // Non-interactive mode: just print results and exit
   if (query) {
-    const results = await searchSkillsAPI(query);
+    const results = await searchSkillsAPI(query, uid);
 
     // Track telemetry for non-interactive search
     track({
@@ -293,9 +316,26 @@ ${DIM}  2) ${NPX_CMD} add <owner/repo@skill>${RESET}`;
 
     for (const skill of results.slice(0, 6)) {
       const installs = formatInstalls(skill.installs);
+      const isPersonal = skill.scope === 'private' || skill.scope === 'team';
       const label = skill.source ? `${skill.source}@${skill.name}` : skill.name;
-      console.log(`${TEXT}${label}${RESET}${installs ? ` ${CYAN}${installs}${RESET}` : ''}`);
-      console.log(`${DIM}└ ${SKILLS_SITE}/${skill.slug}${RESET}`);
+      const scopeBadge =
+        skill.scope === 'private'
+          ? ` ${MAGENTA}[private]${RESET}`
+          : skill.scope === 'team'
+            ? ` ${YELLOW}[team]${RESET}`
+            : '';
+      const installTarget =
+        skill.scope === 'private' && skill.authorId
+          ? `${skill.authorId}/${skill.name}`
+          : skill.name;
+      console.log(
+        `${TEXT}${label}${RESET}${scopeBadge}${installs ? ` ${CYAN}${installs}${RESET}` : ''}`
+      );
+      if (isPersonal) {
+        console.log(`${DIM}└ ${NPX_CMD} add ${installTarget}${RESET}`);
+      } else {
+        console.log(`${DIM}└ ${NPX_CMD} add ${skill.name}${RESET}`);
+      }
       console.log();
     }
     return;
@@ -306,7 +346,7 @@ ${DIM}  2) ${NPX_CMD} add <owner/repo@skill>${RESET}`;
     console.log(agentTip);
     console.log();
   }
-  const selected = await runSearchPrompt();
+  const selected = await runSearchPrompt(undefined, uid);
 
   // Track telemetry for interactive search
   track({
@@ -323,21 +363,26 @@ ${DIM}  2) ${NPX_CMD} add <owner/repo@skill>${RESET}`;
   }
 
   // Use source (owner/repo) and skill name for installation
-  const pkg = selected.source || selected.slug;
+  const isPersonal = selected.scope === 'private' || selected.scope === 'team';
+  const pkg =
+    isPersonal && selected.authorId
+      ? `${selected.authorId}/${selected.name}`
+      : selected.source || selected.name;
   const skillName = selected.name;
 
   console.log();
   console.log(`${TEXT}Installing ${BOLD}${skillName}${RESET} from ${DIM}${pkg}${RESET}...`);
   console.log();
 
-  // Run add directly since we're in the same CLI
-  const { source, options } = parseAddOptions([pkg, '--skill', skillName]);
+  // GitHub 源需要 --skill 指定技能名；市场技能（含私有）直接用名称作为标识符
+  const addArgs = selected.source ? [pkg, '--skill', skillName] : [pkg];
+  const { source, options } = parseAddOptions(addArgs);
   await runAdd(source, options);
 
   console.log();
 
   const info = getOwnerRepoFromString(pkg);
-  if (info && (await isRepoPublic(info.owner, info.repo))) {
+  if (!isPersonal && info && (await isRepoPublic(info.owner, info.repo))) {
     console.log(`${DIM}View the skill at${RESET} ${TEXT}${SKILLS_SITE}/${selected.slug}${RESET}`);
   } else {
     console.log(`${DIM}Discover more skills at${RESET} ${TEXT}${SKILLS_SITE}${RESET}`);
