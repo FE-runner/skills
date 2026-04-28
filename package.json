@@ -1,6 +1,6 @@
 {
   "name": "blueai-skills",
-  "version": "1.4.7-bmc1.3.0",
+  "version": "1.4.7-bmc1.3.1",
   "description": "The open agent skills ecosystem",
   "type": "module",
   "bin": {
