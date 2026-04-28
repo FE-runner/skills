@@ -79,6 +79,7 @@ async function runSearchPrompt(initialQuery = '', uid?: string): Promise<SearchS
   let loading = false;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let lastRenderedLines = 0;
+  let requestSeq = 0; // 请求序号，忽略过期响应
 
   // Enable raw mode for keypress events
   if (process.stdin.isTTY) {
@@ -176,17 +177,23 @@ async function runSearchPrompt(initialQuery = '', uid?: string): Promise<SearchS
     // Adaptive debounce: shorter queries = longer wait (user still typing)
     // 2 chars: 250ms, 3 chars: 200ms, 4 chars: 150ms, 5+ chars: 150ms
     const debounceMs = Math.max(150, 350 - q.length * 50);
+    const seq = ++requestSeq;
 
     debounceTimer = setTimeout(async () => {
       try {
-        results = await searchSkillsAPI(q, uid);
+        const res = await searchSkillsAPI(q, uid);
+        if (seq !== requestSeq) return; // 丢弃过期响应
+        results = res;
         selectedIndex = 0;
       } catch {
+        if (seq !== requestSeq) return;
         results = [];
       } finally {
-        loading = false;
-        debounceTimer = null;
-        render();
+        if (seq === requestSeq) {
+          loading = false;
+          debounceTimer = null;
+          render();
+        }
       }
     }, debounceMs);
   }
@@ -314,7 +321,7 @@ ${DIM}  2) ${NPX_CMD} add <owner/repo@skill>${RESET}`;
     console.log(`${DIM}Install with${RESET} ${NPX_CMD} add <name>`);
     console.log();
 
-    for (const skill of results.slice(0, 6)) {
+    for (const skill of results.slice(0, 20)) {
       const installs = formatInstalls(skill.installs);
       const isPersonal = skill.scope === 'private' || skill.scope === 'team';
       const label = skill.source ? `${skill.source}@${skill.name}` : skill.name;
