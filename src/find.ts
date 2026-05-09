@@ -31,7 +31,7 @@ export interface SearchSkill {
 // Search via API
 export async function searchSkillsAPI(query: string, uid?: string): Promise<SearchSkill[]> {
   try {
-    let url = `${SKILLS_SITE}/api/search?q=${encodeURIComponent(query)}&limit=10`;
+    let url = `${SKILLS_SITE}/api/skill/search?q=${encodeURIComponent(query)}&limit=10`;
     if (uid) url += `&uid=${encodeURIComponent(uid)}`;
     const res = await fetch(url);
 

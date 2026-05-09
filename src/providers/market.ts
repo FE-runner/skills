@@ -86,7 +86,7 @@ export class MarketProvider {
       const params = new URLSearchParams({ name });
       if (author) params.set('author', author);
 
-      const res = await fetch(`${this.apiBase}/api/skills/resolve?${params}`);
+      const res = await fetch(`${this.apiBase}/api/skill/resolve?${params}`);
       if (!res.ok) return null;
       return unwrapEnvelope<ResolveResponse>(await res.json());
     } catch {
@@ -106,14 +106,17 @@ export class MarketProvider {
     team?: string
   ): Promise<MarketSkill | null> {
     try {
-      const params = new URLSearchParams();
-      if (version) params.set('version', version);
-      if (team) params.set('team', team);
-      else if (author) params.set('author', author);
-      const qs = params.toString();
-      const url = `${this.apiBase}/api/skills/${skillId}/install${qs ? `?${qs}` : ''}`;
+      const body: Record<string, string> = { id: skillId };
+      if (version) body.version = version;
+      if (team) body.team = team;
+      else if (author) body.author = author;
+      const url = `${this.apiBase}/api/skill/install`;
 
-      const res = await fetch(url, { method: 'POST' });
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
       if (!res.ok) return null;
 
       const data = unwrapEnvelope<InstallResponse>(await res.json());
@@ -128,10 +131,9 @@ export class MarketProvider {
    */
   async check(skillId: string, author?: string): Promise<CheckResponse | null> {
     try {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({ id: skillId });
       if (author) params.set('author', author);
-      const qs = params.toString();
-      const url = `${this.apiBase}/api/skills/${skillId}/check${qs ? `?${qs}` : ''}`;
+      const url = `${this.apiBase}/api/skill/check?${params}`;
       const res = await fetch(url);
       if (!res.ok) return null;
       return unwrapEnvelope<CheckResponse>(await res.json());
