@@ -60,7 +60,7 @@ npx blueai-skills add ./my-local-skills
 | `-s, --skill <skills...>` | 按名称安装指定技能（使用 `'*'` 安装所有技能）                                                                                 |
 | `-l, --list`              | 列出可用技能但不安装                                                                                                          |
 | `--copy`                  | 复制文件到 Agent 目录而非使用符号链接                                                                                         |
-| `-y, --yes`               | 跳过所有确认提示                                                                                                              |
+| `-y, --yes`               | 跳过所有确认提示；未指定 `-g` 时默认安装到**项目**，安装方式默认为**符号链接**（多 Agent）或复制（单 Agent）                  |
 | `--all`                   | 将所有技能安装到所有 Agent，无需确认                                                                                          |
 
 ### 示例
@@ -143,7 +143,16 @@ npx blueai-skills find
 
 # 按关键词搜索
 npx blueai-skills find typescript
+
+# 搜索时包含私有和团队技能（需传入飞书 union_id）
+npx blueai-skills find typescript --uid on_xxx
 ```
+
+### 选项
+
+| 选项              | 说明                                                                 |
+| ----------------- | -------------------------------------------------------------------- |
+| `--uid <union_id>` | 传入飞书 union_id，搜索结果中额外包含你的私有技能和所在团队的技能   |
 
 ### `blueai-skills check` / `blueai-skills update`
 

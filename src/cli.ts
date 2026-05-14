@@ -136,11 +136,11 @@ ${BOLD}Project:${RESET}
   experimental_sync    Sync skills from node_modules into agent directories
 
 ${BOLD}Add Options:${RESET}
-  -g, --global           Install skill globally (user-level) instead of project-level
+  -g, --global           Install globally (~/<agent>/skills/) instead of project-level (./<agent>/skills/)
   -a, --agent <agents>   Specify agents to install to (use '*' for all agents)
   -s, --skill <skills>   Specify skill names to install (use '*' for all skills)
   -l, --list             List available skills in the repository without installing
-  -y, --yes              Skip confirmation prompts
+  -y, --yes              Skip confirmation prompts; defaults to project scope (add -g for global) and symlink mode
   --copy                 Copy files instead of symlinking to agent directories
   --all                  Shorthand for --skill '*' --agent '*' -y
   --full-depth           Search all subdirectories even when a root SKILL.md exists
