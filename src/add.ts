@@ -1353,7 +1353,7 @@ async function handleCosSkills(
  * Handle skills from the Skills Market.
  * Supports two flows:
  * 1. Token-based install: URL contains /install/<token>
- * 2. Name-based install: bare skill name resolved via /api/skills/resolve
+ * 2. Name-based install: bare skill name resolved via /api/skill/resolve
  */
 async function handleMarketSkill(
   source: string,

@@ -21,6 +21,7 @@ function formatInstalls(count: number): string {
 
 export interface SearchSkill {
   name: string;
+  displayName: string;
   slug: string;
   source: string;
   installs: number;
@@ -44,6 +45,7 @@ export async function searchSkillsAPI(query: string, uid?: string): Promise<Sear
       skills: Array<{
         id: string;
         name: string;
+        displayName: string;
         installs: number;
         source: string;
         scope?: 'public' | 'private' | 'team';
@@ -53,6 +55,7 @@ export async function searchSkillsAPI(query: string, uid?: string): Promise<Sear
 
     return (payload.skills || []).map((skill) => ({
       name: skill.name,
+      displayName: skill.displayName || skill.name,
       slug: skill.id,
       source: skill.source || '',
       installs: skill.installs,
@@ -126,7 +129,13 @@ async function runSearchPrompt(initialQuery = '', uid?: string): Promise<SearchS
         const skill = visible[i]!;
         const isSelected = i === selectedIndex;
         const arrow = isSelected ? `${BOLD}>${RESET}` : ' ';
-        const name = isSelected ? `${BOLD}${skill.name}${RESET}` : `${TEXT}${skill.name}${RESET}`;
+        const nameStr = isSelected
+          ? `${BOLD}${skill.name}${RESET}`
+          : `${TEXT}${skill.name}${RESET}`;
+        const displayNameBadge =
+          skill.displayName && skill.displayName !== skill.name
+            ? ` ${DIM}${skill.displayName}${RESET}`
+            : '';
         const source = skill.source ? ` ${DIM}${skill.source}${RESET}` : '';
         const installs = formatInstalls(skill.installs);
         const installsBadge = installs ? ` ${CYAN}${installs}${RESET}` : '';
@@ -138,7 +147,9 @@ async function runSearchPrompt(initialQuery = '', uid?: string): Promise<SearchS
               : '';
         const loadingIndicator = loading && i === 0 ? ` ${DIM}...${RESET}` : '';
 
-        lines.push(`  ${arrow} ${name}${source}${scopeBadge}${installsBadge}${loadingIndicator}`);
+        lines.push(
+          `  ${arrow} ${nameStr}${displayNameBadge}${source}${scopeBadge}${installsBadge}${loadingIndicator}`
+        );
       }
     }
 
@@ -325,6 +336,10 @@ ${DIM}  2) ${NPX_CMD} add <owner/repo@skill>${RESET}`;
       const installs = formatInstalls(skill.installs);
       const isPersonal = skill.scope === 'private' || skill.scope === 'team';
       const label = skill.source ? `${skill.source}@${skill.name}` : skill.name;
+      const displayNameSuffix =
+        skill.displayName && skill.displayName !== skill.name
+          ? ` ${DIM}${skill.displayName}${RESET}`
+          : '';
       const scopeBadge =
         skill.scope === 'private'
           ? ` ${MAGENTA}[private]${RESET}`
@@ -336,7 +351,7 @@ ${DIM}  2) ${NPX_CMD} add <owner/repo@skill>${RESET}`;
           ? `${skill.authorId}/${skill.name}`
           : skill.name;
       console.log(
-        `${TEXT}${label}${RESET}${scopeBadge}${installs ? ` ${CYAN}${installs}${RESET}` : ''}`
+        `${TEXT}${label}${RESET}${displayNameSuffix}${scopeBadge}${installs ? ` ${CYAN}${installs}${RESET}` : ''}`
       );
       if (isPersonal) {
         console.log(`${DIM}└ ${NPX_CMD} add ${installTarget}${RESET}`);

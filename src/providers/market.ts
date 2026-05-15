@@ -64,7 +64,7 @@ interface CheckResponse {
  * Install flow: resolve by name → install by ID
  * For private skills, pass author (userId) to resolve and install.
  *
- * Also supports check/update via the /api/skills/:id/check endpoint.
+ * Also supports check/update via the /api/skill/check endpoint.
  */
 export class MarketProvider {
   readonly id = 'market';
