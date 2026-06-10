@@ -27,6 +27,7 @@ export interface SearchSkill {
   installs: number;
   scope?: 'public' | 'private' | 'team';
   authorId?: string;
+  description?: string;
 }
 
 // Search via API
@@ -50,6 +51,7 @@ export async function searchSkillsAPI(query: string, uid?: string): Promise<Sear
         source: string;
         scope?: 'public' | 'private' | 'team';
         authorId?: string;
+        description?: string;
       }>;
     };
 
@@ -61,6 +63,7 @@ export async function searchSkillsAPI(query: string, uid?: string): Promise<Sear
       installs: skill.installs,
       scope: skill.scope,
       authorId: skill.authorId,
+      description: skill.description || '',
     }));
   } catch {
     return [];
@@ -353,6 +356,11 @@ ${DIM}  2) ${NPX_CMD} add <owner/repo@skill>${RESET}`;
       console.log(
         `${TEXT}${label}${RESET}${displayNameSuffix}${scopeBadge}${installs ? ` ${CYAN}${installs}${RESET}` : ''}`
       );
+      if (skill.description) {
+        const brief =
+          skill.description.length > 80 ? skill.description.slice(0, 80) + '…' : skill.description;
+        console.log(`${DIM}  ${brief}${RESET}`);
+      }
       if (isPersonal) {
         console.log(`${DIM}└ ${NPX_CMD} add ${installTarget}${RESET}`);
       } else {
