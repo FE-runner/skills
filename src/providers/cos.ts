@@ -1,4 +1,5 @@
 import matter from 'gray-matter';
+import { createHash } from 'crypto';
 import type { HostProvider, ProviderMatch, RemoteSkill } from './types.ts';
 
 /**
@@ -7,8 +8,8 @@ import type { HostProvider, ProviderMatch, RemoteSkill } from './types.ts';
 export interface CosUrlParts {
   bucket: string;
   region: string;
-  skillId?: string;
-  version?: string;
+  /** skills 容器目录（不含首尾斜杠），即 skillId 的父目录。空字符串表示 bucket 根目录。 */
+  skillsRoot: string;
 }
 
 /**
@@ -17,70 +18,10 @@ export interface CosUrlParts {
 export interface CosSkill extends RemoteSkill {
   /** All files in the skill, keyed by relative path */
   files: Map<string, string>;
-  /** The skill ID (directory name under skills/) */
+  /** The skill ID (directory name under skillsRoot) */
   skillId: string;
   /** The resolved version string */
   version: string;
-}
-
-// ─── COS XML helpers ───
-
-/**
- * Extract CommonPrefixes from COS List Objects XML response.
- * COS returns `<Prefix>...</Prefix>` inside `<CommonPrefixes>` blocks.
- */
-function extractPrefixes(xml: string): string[] {
-  const results: string[] = [];
-  const re = /<CommonPrefixes>\s*<Prefix>([^<]+)<\/Prefix>\s*<\/CommonPrefixes>/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(xml)) !== null) {
-    results.push(m[1]!);
-  }
-  return results;
-}
-
-/**
- * Extract object Keys from COS List Objects XML response.
- */
-function extractKeys(xml: string): string[] {
-  const results: string[] = [];
-  const re = /<Key>([^<]+)<\/Key>/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(xml)) !== null) {
-    results.push(m[1]!);
-  }
-  return results;
-}
-
-/**
- * Check if a COS List Objects response is truncated (has more pages).
- */
-function isTruncated(xml: string): boolean {
-  return xml.includes('<IsTruncated>true</IsTruncated>');
-}
-
-/**
- * Extract NextContinuationToken for pagination.
- */
-function extractNextToken(xml: string): string | null {
-  const m = xml.match(/<NextContinuationToken>([^<]+)<\/NextContinuationToken>/);
-  return m ? m[1]! : null;
-}
-
-// ─── Version comparison ───
-
-/**
- * Compare two dot-separated version strings numerically.
- * e.g., "1.2.3" vs "1.10.0" → correctly returns negative.
- */
-function compareVersions(a: string, b: string): number {
-  const pa = a.split('.').map(Number);
-  const pb = b.split('.').map(Number);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const diff = (pa[i] || 0) - (pb[i] || 0);
-    if (diff !== 0) return diff;
-  }
-  return 0;
 }
 
 // ─── COS URL detection ───
@@ -104,12 +45,10 @@ export function isCosUrl(input: string): boolean {
 
 /**
  * Parse a COS URL into its components.
+ * URL path 整体视为 skillsRoot（skill 容器目录）。
  *
- * Supported formats:
- * - https://<bucket>.cos.<region>.myqcloud.com/skills/<id>
- * - https://<bucket>.cos.<region>.myqcloud.com/skills/<id>/versions/<version>
- *
- * Requires a skill ID in the path; bare bucket URLs are not supported.
+ * - https://<bucket>.cos.<region>.myqcloud.com           skillsRoot=''
+ * - https://<bucket>.cos.<region>.myqcloud.com/<prefix>  skillsRoot='<prefix>'
  */
 export function parseCosUrl(url: string): CosUrlParts | null {
   try {
@@ -119,24 +58,9 @@ export function parseCosUrl(url: string): CosUrlParts | null {
 
     const bucket = hostMatch[1]!;
     const region = hostMatch[2]!;
+    const skillsRoot = parsed.pathname.replace(/^\/+|\/+$/g, '');
 
-    // Parse path: /skills/<id>/versions/<version>
-    const path = parsed.pathname.replace(/^\/+|\/+$/g, ''); // trim slashes
-
-    // Match: skills/<id>/versions/<version>
-    const fullMatch = path.match(/^skills\/([^/]+)\/versions\/([^/]+)$/);
-    if (fullMatch) {
-      return { bucket, region, skillId: fullMatch[1]!, version: fullMatch[2]! };
-    }
-
-    // Match: skills/<id>
-    const skillMatch = path.match(/^skills\/([^/]+)$/);
-    if (skillMatch) {
-      return { bucket, region, skillId: skillMatch[1]! };
-    }
-
-    // 无 skillId，不支持
-    return null;
+    return { bucket, region, skillsRoot };
   } catch {
     return null;
   }
@@ -145,130 +69,37 @@ export function parseCosUrl(url: string): CosUrlParts | null {
 /**
  * Tencent COS skills provider.
  *
- * Discovers skills from public-read COS buckets using the directory structure:
- *   skills/<id>/versions/<version>/SKILL.md
+ * 通过 index.json 索引文件发现并安装技能，无需 ListObjects 权限。
  *
- * Uses COS List Objects V2 API (no auth needed for public-read buckets).
+ * index.json 格式：
+ * {
+ *   "skills": [
+ *     { "name": "my-skill", "files": ["SKILL.md", "references/foo.md"] }
+ *   ]
+ * }
  */
 export class CosProvider implements HostProvider {
   readonly id = 'cos';
   readonly displayName = 'Tencent COS';
 
   match(url: string): ProviderMatch {
-    if (!isCosUrl(url)) {
-      return { matches: false };
-    }
-
+    if (!isCosUrl(url)) return { matches: false };
     const parts = parseCosUrl(url);
-    if (!parts) {
-      return { matches: false };
-    }
-
-    return {
-      matches: true,
-      sourceIdentifier: `cos/${parts.bucket}`,
-    };
+    if (!parts) return { matches: false };
+    return { matches: true, sourceIdentifier: `cos/${parts.bucket}` };
   }
 
-  /**
-   * Build the COS endpoint base URL for a bucket.
-   */
   private baseUrl(bucket: string, region: string): string {
     return `https://${bucket}.cos.${region}.myqcloud.com`;
   }
 
-  /**
-   * Call COS List Objects V2 API and return the raw XML.
-   * Handles pagination automatically, collecting all results.
-   */
-  private async listObjects(
-    bucket: string,
-    region: string,
-    prefix: string,
-    delimiter?: string
-  ): Promise<string> {
-    let allXml = '';
-    let continuationToken: string | null = null;
-
-    do {
-      const params = new URLSearchParams({
-        'list-type': '2',
-        prefix,
-        'max-keys': '1000',
-      });
-      if (delimiter) params.set('delimiter', delimiter);
-      if (continuationToken) params.set('continuation-token', continuationToken);
-
-      const url = `${this.baseUrl(bucket, region)}/?${params.toString()}`;
-      const res = await fetch(url);
-
-      if (!res.ok) {
-        throw new Error(`COS ListObjects failed: ${res.status} ${res.statusText}`);
-      }
-
-      const xml = await res.text();
-      allXml += xml;
-
-      if (isTruncated(xml)) {
-        continuationToken = extractNextToken(xml);
-        if (!continuationToken) break; // safety: avoid infinite loop
-      } else {
-        break;
-      }
-    } while (true);
-
-    return allXml;
+  private cosPath(skillsRoot: string, ...segments: string[]): string {
+    return [skillsRoot, ...segments].filter(Boolean).join('/');
   }
 
-  /**
-   * List all versions for a given skill ID.
-   * Looks for directories under `skills/<id>/versions/` prefix.
-   */
-  async listVersions(bucket: string, region: string, skillId: string): Promise<string[]> {
-    const xml = await this.listObjects(bucket, region, `skills/${skillId}/versions/`, '/');
-    const prefixes = extractPrefixes(xml);
-
-    // Extract version strings from prefixes like "skills/my-skill/versions/1.0.0/"
-    return prefixes
-      .map((p) => {
-        const m = p.match(/^skills\/[^/]+\/versions\/([^/]+)\/$/);
-        return m ? m[1]! : null;
-      })
-      .filter((v): v is string => v !== null);
-  }
-
-  /**
-   * Resolve the latest version from a list of version strings.
-   */
-  resolveLatestVersion(versions: string[]): string | null {
-    if (versions.length === 0) return null;
-    return [...versions].sort(compareVersions).pop()!;
-  }
-
-  /**
-   * List all file keys under a specific skill version.
-   */
-  private async listFileKeys(
-    bucket: string,
-    region: string,
-    skillId: string,
-    version: string
-  ): Promise<string[]> {
-    const prefix = `skills/${skillId}/versions/${version}/`;
-    const xml = await this.listObjects(bucket, region, prefix);
-    const keys = extractKeys(xml);
-
-    // Filter out the prefix itself and any directory markers
-    return keys.filter((k) => k !== prefix && !k.endsWith('/'));
-  }
-
-  /**
-   * Fetch a single file's text content from COS.
-   */
   private async fetchFile(bucket: string, region: string, key: string): Promise<string | null> {
     try {
-      const url = `${this.baseUrl(bucket, region)}/${key}`;
-      const res = await fetch(url);
+      const res = await fetch(`${this.baseUrl(bucket, region)}/${key}`);
       if (!res.ok) return null;
       return await res.text();
     } catch {
@@ -276,62 +107,68 @@ export class CosProvider implements HostProvider {
     }
   }
 
-  /**
-   * Fetch a single skill with all its files for a specific version.
-   */
-  async fetchSkillVersion(
+  private async fetchIndex(
     bucket: string,
     region: string,
-    skillId: string,
-    version: string
+    skillsRoot: string
+  ): Promise<Array<{ name: string; files?: string[] }> | null> {
+    const content = await this.fetchFile(bucket, region, this.cosPath(skillsRoot, 'index.json'));
+    if (!content) return null;
+    try {
+      const json = JSON.parse(content) as { skills?: unknown };
+      if (!Array.isArray(json.skills)) return null;
+      return json.skills as Array<{ name: string; files?: string[] }>;
+    } catch {
+      return null;
+    }
+  }
+
+  private async fetchSkillFromIndex(
+    bucket: string,
+    region: string,
+    skillsRoot: string,
+    entry: { name: string; files?: string[] }
   ): Promise<CosSkill | null> {
-    const prefix = `skills/${skillId}/versions/${version}/`;
-    const fileKeys = await this.listFileKeys(bucket, region, skillId, version);
+    const { name: skillId, files: fileList } = entry;
+    if (!fileList || fileList.length === 0) return null;
 
-    if (fileKeys.length === 0) return null;
-
-    // Must have SKILL.md
-    const skillMdKey = fileKeys.find((k) => {
-      const rel = k.slice(prefix.length);
-      return rel.toLowerCase() === 'skill.md';
-    });
-
-    if (!skillMdKey) return null;
-
-    // Fetch all files in parallel
     const fileEntries = await Promise.all(
-      fileKeys.map(async (key) => {
-        const content = await this.fetchFile(bucket, region, key);
-        const relativePath = key.slice(prefix.length);
-        return content !== null ? { path: relativePath, content } : null;
+      fileList.map(async (relPath) => {
+        const content = await this.fetchFile(
+          bucket,
+          region,
+          this.cosPath(skillsRoot, skillId, relPath)
+        );
+        return content !== null ? { path: relPath, content } : null;
       })
     );
 
     const files = new Map<string, string>();
     let skillMdContent = '';
 
-    for (const entry of fileEntries) {
-      if (!entry) continue;
-      files.set(entry.path, entry.content);
-      if (entry.path.toLowerCase() === 'skill.md') {
-        skillMdContent = entry.content;
-      }
+    for (const e of fileEntries) {
+      if (!e) continue;
+      files.set(e.path, e.content);
+      if (e.path.toLowerCase() === 'skill.md') skillMdContent = e.content;
     }
 
     if (!skillMdContent) return null;
 
-    // Parse frontmatter
     const { data } = matter(skillMdContent);
-    if (!data.name || !data.description) return null;
+    const name = (data.name as string | undefined) ?? skillId;
+    const description = data.description as string | undefined;
+    if (!name || !description) return null;
 
-    const sourceUrl = `${this.baseUrl(bucket, region)}/${skillMdKey}`;
+    const version =
+      (data.version as string | undefined) ||
+      createHash('sha256').update(skillMdContent).digest('hex').slice(0, 8);
 
     return {
-      name: data.name as string,
-      description: data.description as string,
+      name,
+      description,
       content: skillMdContent,
       installName: skillId,
-      sourceUrl,
+      sourceUrl: `${this.baseUrl(bucket, region)}/${this.cosPath(skillsRoot, skillId, 'SKILL.md')}`,
       metadata: data.metadata as Record<string, unknown> | undefined,
       files,
       skillId,
@@ -339,51 +176,24 @@ export class CosProvider implements HostProvider {
     };
   }
 
-  /**
-   * Fetch a skill (latest version) from a COS URL.
-   */
   async fetchSkill(url: string): Promise<CosSkill | null> {
-    const parts = parseCosUrl(url);
-    if (!parts) return null;
-
-    const { bucket, region, skillId, version } = parts;
-
-    // Need a skill ID to fetch a single skill
-    if (!skillId) return null;
-
-    let resolvedVersion = version;
-    if (!resolvedVersion) {
-      const versions = await this.listVersions(bucket, region, skillId);
-      resolvedVersion = this.resolveLatestVersion(versions) ?? undefined;
-      if (!resolvedVersion) return null;
-    }
-
-    return this.fetchSkillVersion(bucket, region, skillId, resolvedVersion);
+    const skills = await this.fetchAllSkills(url);
+    return skills[0] ?? null;
   }
 
-  /**
-   * Fetch all skills from a COS URL.
-   * Requires a skill ID in the URL path.
-   */
   async fetchAllSkills(url: string): Promise<CosSkill[]> {
     const parts = parseCosUrl(url);
     if (!parts) return [];
 
-    const { bucket, region, skillId, version } = parts;
+    const { bucket, region, skillsRoot } = parts;
 
-    // If a specific skill+version is given, fetch just that
-    if (skillId && version) {
-      const skill = await this.fetchSkillVersion(bucket, region, skillId, version);
-      return skill ? [skill] : [];
-    }
+    const index = await this.fetchIndex(bucket, region, skillsRoot);
+    if (!index) return [];
 
-    // Skill ID without version: fetch latest
-    if (skillId) {
-      const skill = await this.fetchSkill(url);
-      return skill ? [skill] : [];
-    }
-
-    return [];
+    const results = await Promise.all(
+      index.map((entry) => this.fetchSkillFromIndex(bucket, region, skillsRoot, entry))
+    );
+    return results.filter((s): s is CosSkill => s !== null);
   }
 
   toRawUrl(url: string): string {

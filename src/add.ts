@@ -917,9 +917,25 @@ async function handleCosSkills(
   if (skills.length === 0) {
     spinner.stop(pc.red('No skills found'));
     p.outro(
-      pc.red(
-        'No skills found in this COS bucket. Make sure the bucket has skills/<id>/versions/<version>/SKILL.md files.'
-      )
+      pc.red(`No index.json found at this COS URL.`) +
+        `\n\n` +
+        pc.dim(`Place an index.json at: ${url.replace(/\/?$/, '/')}index.json\n\n`) +
+        pc.bold(`Example index.json:\n`) +
+        `{\n` +
+        `  "skills": [\n` +
+        `    {\n` +
+        `      "name": "my-skill",\n` +
+        `      "files": ["SKILL.md"]\n` +
+        `    },\n` +
+        `    {\n` +
+        `      "name": "another-skill",\n` +
+        `      "files": ["SKILL.md", "references/commands.md", "examples/demo.sh"]\n` +
+        `    }\n` +
+        `  ]\n` +
+        `}\n\n` +
+        pc.dim(`Notes:\n`) +
+        pc.dim(`  - "name"   directory name under the URL path (also used as install name)\n`) +
+        pc.dim(`  - "files"  all files to install, relative to the skill directory`)
     );
     process.exit(1);
   }
@@ -946,7 +962,7 @@ async function handleCosSkills(
       }
     }
     console.log();
-    p.outro('Run without --list to install');
+    p.outro(`Run without --list to install\n` + pc.dim(`  Install all:  skills add ${url} --all`));
     process.exit(0);
   }
 

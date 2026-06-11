@@ -26,11 +26,11 @@ npx blueai-skills add a2ui-components@1.0.0
 # Skills Market — 安装私有技能（需 authorId 前缀）
 npx blueai-skills add <authorId>/create-adaptable-composable
 
-# COS 直链 — 安装指定技能
-npx blueai-skills add https://<bucket>.cos.<region>.myqcloud.com/skills_storage/<id>
+# COS 直链 — 浏览可用技能
+npx blueai-skills add https://<bucket>.cos.<region>.myqcloud.com/<prefix>/ --list
 
-# COS 直链 — 安装指定版本
-npx blueai-skills add https://<bucket>.cos.<region>.myqcloud.com/skills_storage/<id>/versions/<version>
+# COS 直链 — 安装全部技能
+npx blueai-skills add https://<bucket>.cos.<region>.myqcloud.com/<prefix>/ --all
 
 # GitHub 简写格式 (owner/repo)
 npx blueai-skills add owner/repo
