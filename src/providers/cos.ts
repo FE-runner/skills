@@ -116,9 +116,26 @@ export class CosProvider implements HostProvider {
     if (!content) return null;
     try {
       const json = JSON.parse(content) as { skills?: unknown };
-      if (!Array.isArray(json.skills)) return null;
-      return json.skills as Array<{ name: string; files?: string[] }>;
+      if (!Array.isArray(json.skills)) {
+        console.error(`[COS] index.json: "skills" 字段缺失或不是数组`);
+        return null;
+      }
+      const valid: Array<{ name: string; files?: string[] }> = [];
+      for (let i = 0; i < json.skills.length; i++) {
+        const item = json.skills[i] as Record<string, unknown>;
+        if (typeof item?.name !== 'string' || !item.name) {
+          console.error(`[COS] index.json skills[${i}]: 缺少 "name" 字段，已跳过`);
+          continue;
+        }
+        if (item.files !== undefined && !Array.isArray(item.files)) {
+          console.error(`[COS] index.json skills[${i}] (${item.name}): "files" 不是数组，已跳过`);
+          continue;
+        }
+        valid.push(item as { name: string; files?: string[] });
+      }
+      return valid;
     } catch {
+      console.error(`[COS] index.json: JSON 解析失败`);
       return null;
     }
   }
@@ -152,12 +169,20 @@ export class CosProvider implements HostProvider {
       if (e.path.toLowerCase() === 'skill.md') skillMdContent = e.content;
     }
 
-    if (!skillMdContent) return null;
+    if (!skillMdContent) {
+      console.error(`[COS] ${skillId}: SKILL.md 未找到或下载失败，已跳过`);
+      return null;
+    }
 
     const { data } = matter(skillMdContent);
     const name = (data.name as string | undefined) ?? skillId;
     const description = data.description as string | undefined;
-    if (!name || !description) return null;
+    if (!name || !description) {
+      console.error(
+        `[COS] ${skillId}: SKILL.md 缺少 ${!description ? '"description"' : '"name"'} 字段，已跳过`
+      );
+      return null;
+    }
 
     const version =
       (data.version as string | undefined) ||
