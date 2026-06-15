@@ -121,6 +121,7 @@ ${BOLD}Manage Skills:${RESET}
   add <package>        Add a skill package (alias: a)
                        e.g. ${EXAMPLE_REPO}
                             <authorId>/<skill-name>
+                            t_<teamId>/<team-name>   (install all team skills)
   remove [skills]      Remove installed skills
   list, ls             List installed skills
   find [query]         Search for skills interactively
@@ -170,6 +171,8 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ${BIN_NAME} add ${EXAMPLE_REPO} -g
   ${DIM}$${RESET} ${BIN_NAME} add ${EXAMPLE_REPO} --agent claude-code cursor
   ${DIM}$${RESET} ${BIN_NAME} add owner/repo --skill my-skill another-skill
+  ${DIM}$${RESET} ${BIN_NAME} add t_<teamId>/<team-name>            ${DIM}# install all team skills${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} add t_<teamId>/<team-name> -a claude-code -g -y ${DIM}# team install, silent${RESET}
   ${DIM}$${RESET} ${BIN_NAME} remove                        ${DIM}# interactive remove${RESET}
   ${DIM}$${RESET} ${BIN_NAME} remove my-skill               ${DIM}# remove by name${RESET}
   ${DIM}$${RESET} ${BIN_NAME} rm --global my-skill

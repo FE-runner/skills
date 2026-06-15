@@ -1366,6 +1366,173 @@ async function handleCosSkills(
 }
 
 /**
+ * Handle team install: `blueai-skills add t_<teamId>/<teamName>`
+ * Fetches all installable skills for the team and installs them sequentially.
+ */
+interface TeamInstallSkill {
+  id: string;
+  name: string;
+  displayName: string | null;
+  currentVersion: string | null;
+  visibility: string;
+  authorId: string;
+}
+
+interface TeamInstallData {
+  teamName: string;
+  skills: TeamInstallSkill[];
+}
+
+async function handleTeamInstall(
+  teamId: string,
+  teamName: string,
+  options: AddOptions,
+  spinner: ReturnType<typeof p.spinner>
+): Promise<void> {
+  spinner.start(`Fetching skills for team "${teamName}"...`);
+
+  let teamData: TeamInstallData | null = null;
+  try {
+    const res = await fetch(`${SKILLS_SITE}/api/team/installAll?id=${encodeURIComponent(teamId)}`);
+    if (res.status === 404) {
+      spinner.stop(pc.red('Team not found'));
+      p.outro(pc.red(`团队不存在或已解散：t_${teamId}`));
+      process.exit(1);
+    }
+    if (!res.ok) {
+      const json = (await res.json().catch(() => ({}))) as { message?: string };
+      spinner.stop(pc.red('Failed to fetch team skills'));
+      p.outro(pc.red(json.message || `请求失败：HTTP ${res.status}`));
+      process.exit(1);
+    }
+    const json = (await res.json()) as { data?: TeamInstallData };
+    teamData = json.data ?? null;
+  } catch (err) {
+    spinner.stop(pc.red('Network error'));
+    p.outro(pc.red(`网络错误：${err instanceof Error ? err.message : String(err)}`));
+    process.exit(1);
+  }
+
+  if (!teamData || teamData.skills.length === 0) {
+    spinner.stop(pc.yellow('No installable skills'));
+    p.outro(pc.yellow(`该团队暂无可安装的 skill`));
+    return;
+  }
+
+  const resolvedTeamName = teamData.teamName || teamName;
+  spinner.stop(
+    `Team: ${pc.cyan(resolvedTeamName)} — ${pc.bold(String(teamData.skills.length))} skill${teamData.skills.length > 1 ? 's' : ''}`
+  );
+
+  // 在循环前做一次 agent + scope 选择，后续每个 skill 复用同一份配置
+  let targetAgents: AgentType[];
+  if (options.agent && options.agent.length > 0) {
+    // 用户已通过 --agent 指定，直接用
+    targetAgents = options.agent as AgentType[];
+  } else {
+    // 检测已安装 agent，走标准交互选择流程
+    const installedAgents = await detectInstalledAgents();
+    const validAgents = Object.keys(agents) as AgentType[];
+
+    if (installedAgents.length === 1 || options.yes) {
+      targetAgents = ensureUniversalAgents(
+        installedAgents.length > 0 ? installedAgents : validAgents
+      );
+    } else if (installedAgents.length === 0) {
+      const allAgentChoices = Object.entries(agents).map(([key, config]) => ({
+        value: key as AgentType,
+        label: config.displayName,
+      }));
+      const selected = await promptForAgents(
+        'Which agents do you want to install to?',
+        allAgentChoices
+      );
+      if (p.isCancel(selected)) {
+        p.cancel('Installation cancelled');
+        process.exit(0);
+      }
+      targetAgents = selected as AgentType[];
+    } else {
+      const selected = await selectAgentsInteractive({ global: options.global });
+      if (p.isCancel(selected)) {
+        p.cancel('Installation cancelled');
+        process.exit(0);
+      }
+      targetAgents = selected as AgentType[];
+    }
+  }
+
+  // scope 选择（project vs global），仅在未通过 --global 指定且非 -y 模式时交互
+  let installGlobally = options.global ?? false;
+  const supportsGlobal = targetAgents.some((a) => agents[a]?.globalSkillsDir !== undefined);
+  if (options.global === undefined && !options.yes && supportsGlobal) {
+    const scope = await p.select({
+      message: 'Installation scope',
+      options: [
+        { value: false, label: 'Project', hint: 'Install in current directory' },
+        { value: true, label: 'Global', hint: 'Install in home directory' },
+      ],
+    });
+    if (p.isCancel(scope)) {
+      p.cancel('Installation cancelled');
+      process.exit(0);
+    }
+    installGlobally = scope as boolean;
+  }
+
+  // 安装方式选择（symlink vs copy），仅在未通过 --copy 指定且非 -y 模式时交互
+  let useCopy = options.copy ?? false;
+  if (!options.copy && !options.yes) {
+    const modeChoice = await p.select({
+      message: 'Installation method',
+      options: [
+        {
+          value: 'symlink',
+          label: 'Symlink (Recommended)',
+          hint: 'Single source of truth, easy updates',
+        },
+        { value: 'copy', label: 'Copy to all agents', hint: 'Independent copies for each agent' },
+      ],
+    });
+    if (p.isCancel(modeChoice)) {
+      p.cancel('Installation cancelled');
+      process.exit(0);
+    }
+    useCopy = modeChoice === 'copy';
+  }
+
+  const sharedOptions: AddOptions = {
+    ...options,
+    agent: targetAgents,
+    global: installGlobally,
+    copy: useCopy,
+    yes: true, // agent + scope + installMode 已选定，跳过每个 skill 的重复交互
+  };
+
+  p.log.info(`Installing ${teamData.skills.length} skills from team "${resolvedTeamName}"...`);
+
+  // 依次安装每个 skill，复用 handleMarketSkill 的单 skill 安装逻辑
+  for (const skill of teamData.skills) {
+    const installName =
+      skill.visibility === 'PRIVATE' ? `${skill.authorId}/${skill.name}` : skill.name;
+
+    await handleMarketSkill(
+      installName,
+      {
+        type: 'market',
+        url: installName,
+        marketName: skill.name,
+        marketAuthor: skill.visibility === 'PRIVATE' ? skill.authorId : undefined,
+      },
+      sharedOptions,
+      p.spinner()
+    );
+  }
+
+  p.outro(pc.green(`✓ Installed ${teamData.skills.length} skills from team "${resolvedTeamName}"`));
+}
+
+/**
  * Handle skills from the Skills Market.
  * Supports two flows:
  * 1. Token-based install: URL contains /install/<token>
@@ -1788,6 +1955,14 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
 
     // Handle skills from the Skills Market
     if (parsed.type === 'market') {
+      // t_<teamId>/<teamName> 格式：批量安装团队全部 skill
+      if (parsed.marketAuthor?.startsWith('t_')) {
+        const teamId = parsed.marketAuthor.slice(2); // 剥除 t_ 前缀
+        const teamName = parsed.marketName || teamId;
+        await handleTeamInstall(teamId, teamName, options, spinner);
+        return;
+      }
+
       const { fallbackToGitHub } = await handleMarketSkill(source, parsed, options, spinner);
       if (!fallbackToGitHub) return;
       // Market 未找到，回退为 GitHub shorthand（author/name → owner/repo）

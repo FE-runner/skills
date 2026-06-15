@@ -26,6 +26,9 @@ npx blueai-skills add a2ui-components@1.0.0
 # Skills Market — 安装私有技能（需 authorId 前缀）
 npx blueai-skills add <authorId>/create-adaptable-composable
 
+# Skills Market — 安装团队全部技能（t_ 前缀 + teamId）
+npx blueai-skills add t_<teamId>/<teamName>
+
 # COS 直链 — 浏览可用技能
 npx blueai-skills add https://<bucket>.cos.<region>.myqcloud.com/<prefix>/ --list
 
@@ -89,7 +92,29 @@ npx blueai-skills add owner/repo --skill '*' -a claude-code
 
 # 将指定技能安装到所有 Agent
 npx blueai-skills add owner/repo --agent '*' --skill my-skill
+
+# 安装团队全部技能（在团队页面复制命令）
+npx blueai-skills add t_<teamId>/<teamName>
+
+# 安装团队全部技能，指定 Agent 和全局范围，静默执行
+npx blueai-skills add t_<teamId>/<teamName> -a claude-code -g -y
 ```
+
+### 团队安装
+
+通过 `t_<teamId>/<teamName>` 格式一次安装某个 Skills Market 团队的全部已审核技能。`t_` 前缀用于区分团队来源与私有技能（`authorId/name`）。
+
+安装命令可在团队页面的"安装命令"按钮中复制。
+
+```bash
+# 安装团队全部技能（交互式选择 Agent / 范围 / 安装方式）
+npx blueai-skills add t_<teamId>/<teamName>
+
+# 静默安装：指定 Agent、全局范围、跳过所有确认
+npx blueai-skills add t_<teamId>/<teamName> -a claude-code -g -y
+```
+
+支持全部 `add` 选项：`--agent`、`--global`、`--copy`、`--yes`。Agent、安装范围和安装方式在循环开始前统一询问一次，后续每个技能静默复用同一配置。
 
 ### 安装范围
 
