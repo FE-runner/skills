@@ -3,18 +3,50 @@ set -euo pipefail
 
 # blueai-skills 发布脚本
 # 用法:
-#   ./scripts/release.sh patch    # 0.0.1 -> 0.0.2
-#   ./scripts/release.sh minor    # 0.0.1 -> 0.1.0
-#   ./scripts/release.sh major    # 0.0.1 -> 1.0.0
-#   ./scripts/release.sh          # 默认 patch
+#   ./scripts/release.sh patch      # 0.0.1 -> 0.0.2
+#   ./scripts/release.sh minor      # 0.0.1 -> 0.1.0
+#   ./scripts/release.sh major      # 0.0.1 -> 1.0.0
+#   ./scripts/release.sh            # 默认 patch
+#   ./scripts/release.sh retrigger  # 不改版本号，重推当前 tag 触发 CI
 
 BUMP_TYPE="${1:-patch}"
 REMOTE="old-origin"
 BRANCH="master"
 
+# ── retrigger 模式：不改版本号，删除旧 tag 并在当前 HEAD 重打 ──
+if [[ "$BUMP_TYPE" == "retrigger" ]]; then
+  CURRENT=$(node -p "require('./package.json').version")
+  TAG="v${CURRENT}"
+  echo "retrigger 模式，当前版本: $CURRENT"
+  echo ""
+  read -p "确认重推 $TAG 触发 CI? (y/N) " -n 1 -r
+  echo ""
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "已取消"
+    exit 0
+  fi
+
+  echo "删除远端旧 tag $TAG ..."
+  git push "$REMOTE" --delete "$TAG" 2>/dev/null || echo "  (远端无此 tag，跳过)"
+
+  echo "删除本地旧 tag $TAG ..."
+  git tag -d "$TAG" 2>/dev/null || echo "  (本地无此 tag，跳过)"
+
+  echo "重新打 tag $TAG 到当前 HEAD ..."
+  git tag "$TAG"
+
+  echo "推送 tag $TAG ..."
+  git push "$REMOTE" "$TAG"
+
+  echo ""
+  echo "retrigger 完成! $TAG 已重推，GitHub Actions 将重新发布到 npm。"
+  echo "查看进度: https://github.com/FE-runner/skills/actions"
+  exit 0
+fi
+
 if [[ "$BUMP_TYPE" != "patch" && "$BUMP_TYPE" != "minor" && "$BUMP_TYPE" != "major" ]]; then
   echo "错误: 无效的升级类型 '$BUMP_TYPE'"
-  echo "用法: $0 [patch|minor|major]"
+  echo "用法: $0 [patch|minor|major|retrigger]"
   exit 1
 fi
 
