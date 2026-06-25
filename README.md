@@ -5,7 +5,7 @@
 开放式 AI Agent 技能生态系统的 CLI 工具。
 
 <!-- agent-list:start -->
-Supports **OpenCode**, **Claude Code**, **Codex**, **Cursor**, and [41 more](#available-agents).
+Supports **OpenCode**, **Claude Code**, **Codex**, **Cursor**, and [42 more](#available-agents).
 <!-- agent-list:end -->
 
 ## 安装技能
