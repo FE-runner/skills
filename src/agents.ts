@@ -86,6 +86,15 @@ export const agents: Record<AgentType, AgentConfig> = {
       );
     },
   },
+  hermes: {
+    name: 'hermes',
+    displayName: 'Hermes',
+    skillsDir: 'skills',
+    globalSkillsDir: join(home, '.hermes/skills'),
+    detectInstalled: async () => {
+      return existsSync(join(home, '.hermes'));
+    },
+  },
   cline: {
     name: 'cline',
     displayName: 'Cline',

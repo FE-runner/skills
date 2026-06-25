@@ -5,6 +5,7 @@ export type AgentType =
   | 'bob'
   | 'claude-code'
   | 'openclaw'
+  | 'hermes'
   | 'cline'
   | 'codebuddy'
   | 'codex'
