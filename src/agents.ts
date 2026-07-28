@@ -76,7 +76,7 @@ export const agents: Record<AgentType, AgentConfig> = {
   openclaw: {
     name: 'openclaw',
     displayName: 'OpenClaw',
-    skillsDir: 'skills',
+    skillsDir: '.agents/skills',
     globalSkillsDir: getOpenClawGlobalSkillsDir(),
     detectInstalled: async () => {
       return (
