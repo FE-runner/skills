@@ -10,7 +10,8 @@ set -euo pipefail
 #   ./scripts/release.sh retrigger  # 不改版本号，重推当前 tag 触发 CI
 
 BUMP_TYPE="${1:-patch}"
-REMOTE="old-origin"
+REMOTE="old-origin"       # github 镜像，触发 npm 发布 CI
+ORIGIN_REMOTE="origin"    # gitlab 真源
 BRANCH="master"
 
 # ── retrigger 模式：不改版本号，删除旧 tag 并在当前 HEAD 重打 ──
@@ -28,6 +29,7 @@ if [[ "$BUMP_TYPE" == "retrigger" ]]; then
 
   echo "删除远端旧 tag $TAG ..."
   git push "$REMOTE" --delete "$TAG" 2>/dev/null || echo "  (远端无此 tag，跳过)"
+  git push "$ORIGIN_REMOTE" --delete "$TAG" 2>/dev/null || echo "  ($ORIGIN_REMOTE 无此 tag，跳过)"
 
   echo "删除本地旧 tag $TAG ..."
   git tag -d "$TAG" 2>/dev/null || echo "  (本地无此 tag，跳过)"
@@ -37,6 +39,7 @@ if [[ "$BUMP_TYPE" == "retrigger" ]]; then
 
   echo "推送 tag $TAG ..."
   git push "$REMOTE" "$TAG"
+  git push "$ORIGIN_REMOTE" "$TAG"
 
   echo ""
   echo "retrigger 完成! $TAG 已重推，GitHub Actions 将重新发布到 npm。"
@@ -111,11 +114,50 @@ if [ -n "$(git status --porcelain)" ]; then
   fi
 fi
 
+# 同步远端状态：本地不能落后 origin，old-origin 落后的提交需先合并
+echo ""
+echo "检查远端同步状态..."
+git fetch "$ORIGIN_REMOTE" "$BRANCH" --quiet
+git fetch "$REMOTE" "$BRANCH" --quiet
+
+if [ -n "$(git log HEAD.."$ORIGIN_REMOTE"/"$BRANCH" --oneline)" ]; then
+  echo "错误: 本地落后于 $ORIGIN_REMOTE/$BRANCH，请先 git pull $ORIGIN_REMOTE $BRANCH"
+  exit 1
+fi
+
+MIRROR_AHEAD="$(git log HEAD.."$REMOTE"/"$BRANCH" --oneline)"
+if [ -n "$MIRROR_AHEAD" ]; then
+  echo ""
+  echo "警告: $REMOTE/$BRANCH 有本地缺失的提交（可能是 CI bot 自动提交）:"
+  echo "$MIRROR_AHEAD"
+  echo ""
+  read -p "合并这些提交后继续? (y/N) " -n 1 -r
+  echo ""
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    git merge "$REMOTE/$BRANCH" -m "merge: 合并 $REMOTE 分支的自动提交"
+    if [ -f scripts/sync-agents.ts ]; then
+      echo "重新生成 agent 列表，防止合并丢字段..."
+      node scripts/sync-agents.ts || true
+      if [ -n "$(git status --porcelain)" ]; then
+        git add -A
+        git commit -m "chore: sync-agents 校正合并后的 agent 列表"
+      fi
+    fi
+  else
+    echo "请先手动处理分支差异"
+    exit 1
+  fi
+fi
+
 # 升版本号
 npm version "$NEW_VER" -m "v%s"
 
-# 推送代码和 tag
+# 推送代码和 tag（先推 origin 真源，再推 old-origin 触发 npm 发布 CI）
 echo ""
+echo "推送到 $ORIGIN_REMOTE/$BRANCH ..."
+git push "$ORIGIN_REMOTE" "$BRANCH"
+git push "$ORIGIN_REMOTE" "v${NEW_VER}"
+
 echo "推送到 $REMOTE/$BRANCH ..."
 git push "$REMOTE" "$BRANCH"
 git push "$REMOTE" "v${NEW_VER}"
