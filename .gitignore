@@ -53,6 +53,5 @@ bin/cli-wrapper.mjs
 bin/cli.d.mts
 /.cline
 /.clinerules
-/openspec
 /.github/prompts
 /skills-lock.json
