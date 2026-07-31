@@ -1,6 +1,6 @@
 ## 1. Market Provider 扩展
 
-- [ ] 1.1 在 `src/providers/market.ts` 新增 `whoami(apiKey): Promise<ApiResult<{ name: string; email: string | null; role: string; isSuperAdmin: boolean }>>` 方法，GET `/api/auth/me`，携带 `Authorization: Bearer <api-key>` 头，复用现有 `requestApiResult` 辅助函数
+- [x] 1.1 在 `src/providers/market.ts` 新增 `whoami(apiKey): Promise<ApiResult<{ name: string; email: string | null; role: string; isSuperAdmin: boolean }>>` 方法，GET `/api/auth/me`，携带 `Authorization: Bearer <api-key>` 头，复用现有 `requestApiResult` 辅助函数
 
 ## 2. `skills whoami` 命令
 

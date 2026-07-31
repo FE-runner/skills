@@ -294,6 +294,26 @@ export class MarketProvider {
     });
   }
 
+  /**
+   * 查询当前 API Key 对应的用户身份。用于 `skills whoami` 命令。
+   * `GET /api/auth/me` 内部 `getCurrentUser()` 在 Cookie 缺失时 fallback 到
+   * `getCurrentUserFromBearer()`，已确认支持 `sk-` 前缀 API Key。
+   */
+  async whoami(
+    apiKey: string
+  ): Promise<
+    ApiResult<{ name: string; email: string | null; role: string; isSuperAdmin: boolean }>
+  > {
+    return requestApiResult<{
+      name: string;
+      email: string | null;
+      role: string;
+      isSuperAdmin: boolean;
+    }>(`${this.apiBase}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+  }
+
   // ─── Private Helpers ───
 
   private toMarketSkill(data: InstallResponse, skillId: string): MarketSkill {
