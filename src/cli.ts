@@ -7,9 +7,10 @@ import { homedir } from 'os';
 import { fileURLToPath } from 'url';
 import { runAdd, parseAddOptions, initTelemetry } from './add.ts';
 import { runFind } from './find.ts';
-import { runLogin } from './auth.ts';
+import { runLogin, getApiKey } from './auth.ts';
 import { runPublish } from './publish.ts';
 import { runWithdraw } from './withdraw.ts';
+import { reportApiFailure } from './api-error.ts';
 import { runInstallFromLock } from './install.ts';
 import { runList } from './list.ts';
 import { removeCommand, parseRemoveOptions } from './remove.ts';
@@ -141,6 +142,7 @@ ${BOLD}Project:${RESET}
 
 ${BOLD}Publishing:${RESET}
   login <api-key>          Save your Skills Market API Key for publish/withdraw
+  whoami                   Show the user your API Key is currently logged in as
   publish [path]           Push a local Skill to the Market (upsert)
                            --version <x.y.z>   Override the version number
                            --team <id1,id2>    Distribute to team(s) after push
@@ -201,6 +203,7 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ${BIN_NAME} experimental_sync -y           ${DIM}# sync without prompts${RESET}
 
   ${DIM}$${RESET} ${BIN_NAME} login sk-xxxx                  ${DIM}# save your Market API Key${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} whoami                         ${DIM}# check who your API Key is logged in as${RESET}
   ${DIM}$${RESET} ${BIN_NAME} publish                        ${DIM}# push cwd Skill to the Market${RESET}
   ${DIM}$${RESET} ${BIN_NAME} publish ./my-skill --version 2.0.0
   ${DIM}$${RESET} ${BIN_NAME} publish --team team-a,team-b
@@ -302,6 +305,32 @@ Describe when this skill should be used.
   console.log();
   console.log(`Browse existing skills for inspiration at ${TEXT}${SKILLS_SITE}/${RESET}`);
   console.log();
+}
+
+/**
+ * `skills whoami` 命令：查询当前 API Key 对应的用户身份，不修改任何本地/远端状态。
+ */
+async function runWhoami(): Promise<void> {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    console.error(`请先运行 \`${BIN_NAME} login <api-key>\` 或设置 SKILLS_API_KEY 环境变量`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const result = await marketProvider.whoami(apiKey);
+  if (!result.ok) {
+    reportApiFailure(result);
+    return;
+  }
+
+  const { data } = result;
+  console.log(`名称: ${data.name}`);
+  console.log(`邮箱: ${data.email ?? '（未设置）'}`);
+  console.log(`角色: ${data.role}`);
+  if (data.isSuperAdmin) {
+    console.log(`超级管理员`);
+  }
 }
 
 // ============================================
@@ -824,6 +853,9 @@ async function main(): Promise<void> {
       break;
     case 'withdraw':
       await runWithdraw(restArgs);
+      break;
+    case 'whoami':
+      await runWhoami();
       break;
     case 'experimental_install': {
       showLogo();

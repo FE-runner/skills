@@ -4,10 +4,10 @@
 
 ## 2. `skills whoami` 命令
 
-- [ ] 2.1 在 `src/cli.ts` 新增 `runWhoami()` 函数：读取 `getApiKey()`，缺失时输出与 `publish`/`withdraw` 一致的提示并 `process.exitCode = 1`，不发起网络请求
-- [ ] 2.2 调用 `marketProvider.whoami(apiKey)`；失败时复用 `reportApiFailure`
-- [ ] 2.3 成功时打印 `name`/`email`/`role`；`isSuperAdmin === true` 时额外打印一行"超级管理员"提示
-- [ ] 2.4 注册 `whoami` 命令路由，并在 `--help`/banner 帮助文本中补充一行说明
+- [x] 2.1 在 `src/cli.ts` 新增 `runWhoami()` 函数：读取 `getApiKey()`，缺失时输出与 `publish`/`withdraw` 一致的提示并 `process.exitCode = 1`，不发起网络请求
+- [x] 2.2 调用 `marketProvider.whoami(apiKey)`；失败时复用 `reportApiFailure`
+- [x] 2.3 成功时打印 `name`/`email`/`role`；`isSuperAdmin === true` 时额外打印一行"超级管理员"提示
+- [x] 2.4 注册 `whoami` 命令路由，并在 `--help`/banner 帮助文本中补充一行说明
 
 ## 3. 文档与测试
 
