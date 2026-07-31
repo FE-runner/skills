@@ -7,6 +7,7 @@ import { homedir } from 'os';
 import { fileURLToPath } from 'url';
 import { runAdd, parseAddOptions, initTelemetry } from './add.ts';
 import { runFind } from './find.ts';
+import { runLogin } from './auth.ts';
 import { runInstallFromLock } from './install.ts';
 import { runList } from './list.ts';
 import { removeCommand, parseRemoveOptions } from './remove.ts';
@@ -136,6 +137,13 @@ ${BOLD}Project:${RESET}
   init [name]          Initialize a skill (creates <name>/SKILL.md or ./SKILL.md)
   experimental_sync    Sync skills from node_modules into agent directories
 
+${BOLD}Publishing:${RESET}
+  login <api-key>          Save your Skills Market API Key for publish/withdraw
+  publish [path]           Push a local Skill to the Market (upsert)
+                           --version <x.y.z>   Override the version number
+                           --team <id1,id2>    Distribute to team(s) after push
+  withdraw <name>          Withdraw a public Skill stuck in PENDING review
+
 ${BOLD}Add Options:${RESET}
   -g, --global           Install globally (~/<agent>/skills/) instead of project-level (./<agent>/skills/)
   -a, --agent <agents>   Specify agents to install to (use '*' for all agents)
@@ -189,6 +197,12 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ${BIN_NAME} init my-skill
   ${DIM}$${RESET} ${BIN_NAME} experimental_sync              ${DIM}# sync from node_modules${RESET}
   ${DIM}$${RESET} ${BIN_NAME} experimental_sync -y           ${DIM}# sync without prompts${RESET}
+
+  ${DIM}$${RESET} ${BIN_NAME} login sk-xxxx                  ${DIM}# save your Market API Key${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} publish                        ${DIM}# push cwd Skill to the Market${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} publish ./my-skill --version 2.0.0
+  ${DIM}$${RESET} ${BIN_NAME} publish --team team-a,team-b
+  ${DIM}$${RESET} ${BIN_NAME} withdraw my-skill              ${DIM}# withdraw pending review${RESET}
 
 Discover more skills at ${TEXT}${SKILLS_SITE}/${RESET}
 `);
@@ -799,6 +813,9 @@ async function main(): Promise<void> {
       showLogo();
       console.log();
       runInit(restArgs);
+      break;
+    case 'login':
+      runLogin(restArgs);
       break;
     case 'experimental_install': {
       showLogo();
