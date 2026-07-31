@@ -52,8 +52,8 @@
 
 ## 6. 显式排除（记录，不实现）
 
-- [ ] 6.1 确认未实现浏览器 OAuth / device flow 登录
-- [ ] 6.2 确认未修改 skills-market 服务端 `/api/skill/push` 行为（本次仅 CLI 侧改动）
-- [ ] 6.3 确认未添加二进制文件的 base64 编码支持
-- [ ] 6.4 确认 `withdraw` 命令未添加 `--team` 或其他团队维度参数
-- [ ] 6.5 确认现有 `resolve`/`fetchById`/`check` 三个只读方法的返回契约未被改动（新方法各自独立，不影响 `add`/`check`/`update` 现有调用方）
+- [x] 6.1 确认未实现浏览器 OAuth / device flow 登录
+- [x] 6.2 确认未修改 skills-market 服务端 `/api/skill/push` 行为（本次仅 CLI 侧改动）
+- [x] 6.3 确认未添加二进制文件的 base64 编码支持
+- [x] 6.4 确认 `withdraw` 命令未添加 `--team` 或其他团队维度参数
+- [x] 6.5 确认现有 `resolve`/`fetchById`/`check` 三个只读方法的返回契约未被改动（新方法各自独立，不影响 `add`/`check`/`update` 现有调用方）
