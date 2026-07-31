@@ -142,7 +142,8 @@ npx blueai-skills add t_<teamId>/<teamName> -a claude-code -g -y
 | `npx blueai-skills check`           | 检查可用的技能更新（默认项目级，`-g` 全局）       |
 | `npx blueai-skills update`          | 更新已安装技能到最新版本（默认项目级，`-g` 全局） |
 | `npx blueai-skills init [name]`     | 创建新的 SKILL.md 模板                            |
-| `npx blueai-skills login <api-key>` | 保存 Skills Market API Key，供 publish/withdraw 鉴权 |
+| `npx blueai-skills login <api-key>` | 保存 Skills Market API Key，供 publish/withdraw/whoami 鉴权 |
+| `npx blueai-skills whoami`          | 查看当前保存的 API Key 对应的登录用户             |
 | `npx blueai-skills publish [path]`  | 将本地 Skill 推送/更新到市场（私有 upsert）       |
 | `npx blueai-skills withdraw <name>` | 撤回处于审核中（PENDING）的公开 Skill             |
 
@@ -176,13 +177,16 @@ npx blueai-skills find typescript
 npx blueai-skills find typescript --uid on_xxx
 ```
 
-### `blueai-skills login` / `blueai-skills publish` / `blueai-skills withdraw`
+### `blueai-skills login` / `blueai-skills whoami` / `blueai-skills publish` / `blueai-skills withdraw`
 
 将本地写好的 Skill 发布到 Skills Market（私有 upsert），可选分发到团队；也可撤回卡在审核中的公开 Skill。
 
 ```bash
 # 保存市场 API Key（也可设置环境变量 SKILLS_API_KEY，优先级更高）
 npx blueai-skills login sk-xxxx
+
+# 查看当前 Key 对应的登录用户（不确定是否登录/Key 是否还有效时用）
+npx blueai-skills whoami
 
 # 推送当前目录下的 Skill（同名则更新，不同名则创建，均为私有）
 npx blueai-skills publish

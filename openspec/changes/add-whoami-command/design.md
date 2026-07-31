@@ -17,9 +17,9 @@ skills-market 侧 `GET /api/auth/me` 返回：`{ id, name, email, avatar, role, 
 
 ## Decisions
 
-### 1. 落地位置：`marketProvider.whoami()`，不新开文件
+### 1. 落地位置：独立 `src/whoami.ts`（实现阶段调整）
 
-`whoami` 只是一次 GET 请求 + 打印，逻辑量级跟 `check`/`resolve` 相当，不需要像 `publish`/`withdraw` 那样单独开 `src/whoami.ts`。命令函数 `runWhoami` 直接写在 `src/cli.ts` 里（参照 `runInit`/`runCheck` 的既有模式），provider 方法 `whoami(apiKey)` 加进 `src/providers/market.ts`。
+原计划把 `runWhoami` 直接写在 `src/cli.ts` 里（参照 `runInit`/`runCheck` 的既有模式）。实现阶段发现这样不可单测：`cli.ts` 顶层有一行 `main()` 立即执行——任何测试文件只要 `import` 它，就会以 vitest 的 `process.argv` 触发一次真实的命令分发，无法安全地只拿到 `runWhoami` 这一个函数做 mock 测试（`check`/`update` 现有测试因此只能走子进程 + 真实网络请求这种较重的方式）。改为跟 `publish.ts`/`withdraw.ts` 一致：单独开 `src/whoami.ts` 导出 `runWhoami`，`src/cli.ts` 只做路由注册。provider 方法 `whoami(apiKey)` 仍按原计划加进 `src/providers/market.ts`。
 
 ### 2. 复用 `ApiResult<T>` + `reportApiFailure`，不新增专属错误分支
 

@@ -21,6 +21,10 @@ describe('skills CLI', () => {
       expect(output).toContain('-l, --list');
       expect(output).toContain('-y, --yes');
       expect(output).toContain('--all');
+      expect(output).toContain('login <api-key>');
+      expect(output).toContain('whoami');
+      expect(output).toContain('publish [path]');
+      expect(output).toContain('withdraw <name>');
     });
 
     it('should show same output for -h alias', () => {

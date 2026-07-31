@@ -7,10 +7,10 @@ import { homedir } from 'os';
 import { fileURLToPath } from 'url';
 import { runAdd, parseAddOptions, initTelemetry } from './add.ts';
 import { runFind } from './find.ts';
-import { runLogin, getApiKey } from './auth.ts';
+import { runLogin } from './auth.ts';
 import { runPublish } from './publish.ts';
 import { runWithdraw } from './withdraw.ts';
-import { reportApiFailure } from './api-error.ts';
+import { runWhoami } from './whoami.ts';
 import { runInstallFromLock } from './install.ts';
 import { runList } from './list.ts';
 import { removeCommand, parseRemoveOptions } from './remove.ts';
@@ -305,32 +305,6 @@ Describe when this skill should be used.
   console.log();
   console.log(`Browse existing skills for inspiration at ${TEXT}${SKILLS_SITE}/${RESET}`);
   console.log();
-}
-
-/**
- * `skills whoami` 命令：查询当前 API Key 对应的用户身份，不修改任何本地/远端状态。
- */
-async function runWhoami(): Promise<void> {
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    console.error(`请先运行 \`${BIN_NAME} login <api-key>\` 或设置 SKILLS_API_KEY 环境变量`);
-    process.exitCode = 1;
-    return;
-  }
-
-  const result = await marketProvider.whoami(apiKey);
-  if (!result.ok) {
-    reportApiFailure(result);
-    return;
-  }
-
-  const { data } = result;
-  console.log(`名称: ${data.name}`);
-  console.log(`邮箱: ${data.email ?? '（未设置）'}`);
-  console.log(`角色: ${data.role}`);
-  if (data.isSuperAdmin) {
-    console.log(`超级管理员`);
-  }
 }
 
 // ============================================

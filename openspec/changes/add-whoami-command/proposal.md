@@ -20,6 +20,6 @@
 
 ## Impact
 
-- 影响代码：`src/cli.ts`（新增命令路由）、`src/providers/market.ts`（新增 `whoami(apiKey): Promise<ApiResult<{...}>>` 方法）
+- 影响代码：`src/cli.ts`（新增命令路由）、新增 `src/whoami.ts`（命令实现）、`src/providers/market.ts`（新增 `whoami(apiKey): Promise<ApiResult<{...}>>` 方法）
 - 依赖的外部接口（不修改，仅消费）：skills-market 的 `GET /api/auth/me`（已确认支持 `Authorization: Bearer sk-xxx`，见 `lib/api/auth.ts` 的 `getCurrentUserFromBearer`）
 - 不影响：`login`/`publish`/`withdraw` 现有行为不变

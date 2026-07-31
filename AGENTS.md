@@ -19,6 +19,7 @@ This file provides guidance to AI coding agents working on the `skills` CLI code
 | `skills update`               | Update all skills to latest versions                |
 | `skills init [name]`          | Create a new SKILL.md template                      |
 | `skills login <api-key>`      | Save your Skills Market API Key for publish/withdraw |
+| `skills whoami`               | Show which user your saved API Key is logged in as  |
 | `skills publish [path]`       | Push a local Skill to the Market (upsert); `--version x.y.z`, `--team a,b` |
 | `skills withdraw <name>`      | Withdraw a public Skill stuck in PENDING review     |
 
@@ -105,6 +106,7 @@ If reading an older lock file version, it's wiped. Users must reinstall skills t
 | `skills check`             | `src/cli.ts` + `fetchSkillFolderHash` in `src/skill-lock.ts`  |
 | `skills update`            | `src/cli.ts` direct hash compare + reinstall via `skills add` |
 | `skills login`             | `src/auth.ts` - read/write `~/.blueai/secrets.json`           |
+| `skills whoami`            | `src/whoami.ts` - `marketProvider.whoami` → `GET /api/auth/me` |
 | `skills publish`           | `src/publish.ts` - directory walk + `marketProvider.push`/`publishToTeam` |
 | `skills withdraw`          | `src/withdraw.ts` - `marketProvider.resolveMine`/`withdraw`   |
 
