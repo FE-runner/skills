@@ -33,11 +33,11 @@
 
 ## 4. `skills withdraw` 命令
 
-- [ ] 4.1 新增 `src/withdraw.ts`：解析 `name` 参数，调用 `marketProvider.resolveMine` 拿 `skillId`，再调用 `marketProvider.withdraw`
-- [ ] 4.2 显式校验命令参数：仅接受一个位置参数 `name`，遇到任何 `--` 开头的选项（包括但不限于 `--team`）输出错误并设置 `process.exitCode = 1`，不静默忽略、不继续执行
-- [ ] 4.3 `resolveMine` 返回 `status === 401` 时提示重新登录；返回其他失败时提示"技能不存在"或转述服务端消息（区分网络异常 `status === 0` 与真正的未找到）
-- [ ] 4.4 复用与 `publish` 一致的错误处理逻辑（`process.exitCode = 1`、401 提示登录）
-- [ ] 4.5 在 `src/cli.ts` 注册 `withdraw` 命令路由
+- [x] 4.1 新增 `src/withdraw.ts`：解析 `name` 参数，调用 `marketProvider.resolveMine` 拿 `skillId`，再调用 `marketProvider.withdraw`
+- [x] 4.2 显式校验命令参数：仅接受一个位置参数 `name`，遇到任何 `--` 开头的选项（包括但不限于 `--team`）输出错误并设置 `process.exitCode = 1`，不静默忽略、不继续执行
+- [x] 4.3 `resolveMine` 返回 `status === 401` 时提示重新登录；返回其他失败时提示"技能不存在"或转述服务端消息（区分网络异常 `status === 0` 与真正的未找到）
+- [x] 4.4 复用与 `publish` 一致的错误处理逻辑（`process.exitCode = 1`、401 提示登录）
+- [x] 4.5 在 `src/cli.ts` 注册 `withdraw` 命令路由
 
 ## 5. 文档与测试
 
