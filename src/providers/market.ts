@@ -1,4 +1,5 @@
 import type { RemoteSkill } from './types.ts';
+import type { ApiResult } from '../types.ts';
 import { SKILLS_SITE } from '../branding.ts';
 
 /**
@@ -10,6 +11,47 @@ function unwrapEnvelope<T>(json: unknown): T {
     return (json as { data: T }).data;
   }
   return json as T;
+}
+
+/** 响应信封的宽松形状，仅用于从失败响应里挑出 code/message/details */
+interface ApiEnvelope {
+  code?: string;
+  message?: string;
+  data?: unknown;
+  details?: unknown;
+}
+
+/**
+ * 统一发起请求并解析为 `ApiResult<T>`。
+ * 与既有只读方法（`resolve`/`fetchById`/`check`）的 `catch { return null }` 模式不同，
+ * 这里保留 HTTP 状态码、服务端 code/message/校验详情，供命令层区分 401/404/网络异常。
+ */
+async function requestApiResult<T>(url: string, init: RequestInit): Promise<ApiResult<T>> {
+  let res: Response;
+  try {
+    res = await fetch(url, init);
+  } catch (err) {
+    return { ok: false, status: 0, message: err instanceof Error ? err.message : String(err) };
+  }
+
+  let json: ApiEnvelope | undefined;
+  try {
+    json = (await res.json()) as ApiEnvelope;
+  } catch {
+    // 响应体非 JSON（如服务不可达返回的 HTML 错误页）
+  }
+
+  if (res.ok && json?.code === 'SUCCESS') {
+    return { ok: true, data: json.data as T };
+  }
+
+  return {
+    ok: false,
+    status: res.status,
+    code: json?.code,
+    message: json?.message ?? `HTTP ${res.status}`,
+    issues: json?.details,
+  };
 }
 
 /**
@@ -140,6 +182,116 @@ export class MarketProvider {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * 推送（upsert）本地 Skill 到市场：同名则更新已有私有 Skill，不同名则创建新私有 Skill。
+   * 用于 `skills publish` 命令。失败时保留 HTTP 状态码/服务端 message/校验详情，不折叠成 null。
+   */
+  async push(
+    skillMd: string,
+    files: Array<{ path: string; content: string }>,
+    version: string | undefined,
+    apiKey: string
+  ): Promise<
+    ApiResult<{
+      skillId: string;
+      name: string;
+      currentVersion: string;
+      visibility: string;
+      status: string;
+    }>
+  > {
+    const body: Record<string, unknown> = { skillMd };
+    if (files.length > 0) body.files = files;
+    if (version) body.version = version;
+
+    const result = await requestApiResult<{
+      id: string;
+      name: string;
+      currentVersion: string;
+      visibility: string;
+      status: string;
+    }>(`${this.apiBase}/api/skill/push`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify(body),
+    });
+    if (!result.ok) return result;
+
+    const { data } = result;
+    return {
+      ok: true,
+      data: {
+        skillId: data.id,
+        name: data.name,
+        currentVersion: data.currentVersion,
+        visibility: data.visibility,
+        status: data.status,
+      },
+    };
+  }
+
+  /**
+   * 将 Skill 分发到多个团队（提交团队审核）。用于 `skills publish --team` 命令。
+   */
+  async publishToTeam(
+    skillId: string,
+    teamIds: string[],
+    apiKey: string
+  ): Promise<ApiResult<null>> {
+    return requestApiResult<null>(`${this.apiBase}/api/skill/publishToTeam`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ id: skillId, teamIds }),
+    });
+  }
+
+  /**
+   * 撤回处于 PENDING 状态的公开 Skill 审核。用于 `skills withdraw` 命令。
+   * 三种撤回场景（draft 更新 / 私有发布到市场 / 首次公开创建）由服务端自动判断。
+   */
+  async withdraw(
+    skillId: string,
+    apiKey: string
+  ): Promise<ApiResult<{ status: string; visibility: string }>> {
+    const result = await requestApiResult<{ status: string; visibility: string }>(
+      `${this.apiBase}/api/skill/withdraw`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ id: skillId }),
+      }
+    );
+    return result;
+  }
+
+  /**
+   * 带鉴权的名称解析，用于 `skills withdraw <name>` 拿到目标 skillId。
+   *
+   * 【task 2.5 确认结论】skills-market 侧 `GET /api/skill/resolve`
+   * （`app/api/skill/resolve/route.ts`）当前完全不调用 `authGuard()`，会忽略请求携带的
+   * `Authorization` header；不传 `author` 参数时，服务端 `resolveSkill`/`buildNameWhere`
+   * 只按 `visibility: PUBLIC` 过滤，并不会按 Token 解出的身份自动限定为"仅查当前用户名下
+   * 的技能"。
+   *
+   * 这不影响 `withdraw` 命令的正确性：`withdraw` 只对处于 PENDING 状态的公开 Skill 生效，
+   * 而这些 Skill 在 PENDING 时 `visibility` 必然已经是 PUBLIC（三种撤回场景——draft 更新 /
+   * 私有发布到市场 / 首次公开创建——均如此），且 skills-market 的创建/发布流程对公开 Skill
+   * 强制做全局名称唯一性校验（见 `docs/claude/skill-lifecycle.md`）。因此按名称 +
+   * `visibility: PUBLIC` 足以唯一定位目标 Skill，不会解析到其他用户的同名技能；"是否确实是
+   * 当前用户自己的技能"这一权限校验，由下游 `POST /api/skill/withdraw`
+   * （`withdrawSkill` service 内部的作者/管理员校验）兜底。
+   *
+   * 因此本方法仍然携带 `Authorization` header（向前兼容：若未来服务端补上鉴权/归属过滤，
+   * 调用方不需要改动），但在当前实现下，401 只会来自后续的 `withdraw()` 调用，不会来自
+   * 本方法——命令层需要在两次调用各自的失败分支都处理 401。
+   */
+  async resolveMine(name: string, apiKey: string): Promise<ApiResult<ResolveResponse>> {
+    const params = new URLSearchParams({ name });
+    return requestApiResult<ResolveResponse>(`${this.apiBase}/api/skill/resolve?${params}`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
   }
 
   // ─── Private Helpers ───

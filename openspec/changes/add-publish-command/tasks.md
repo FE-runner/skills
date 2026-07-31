@@ -1,18 +1,20 @@
 ## 1. 鉴权基础设施
 
-- [ ] 1.1 新增 `src/auth.ts`：实现读取 `~/.blueai/secrets.json["blueai-skills-market-push.apiKey"]`、写入该键（保留其他键不变）、创建目录/文件（若不存在）的工具函数
-- [ ] 1.2 实现 API Key 解析优先级函数：`process.env.SKILLS_API_KEY` > 文件中的值，均缺失时返回 `null`
-- [ ] 1.3 新增 `skills login <api-key>` 命令路由（`src/cli.ts`），未传参数时打印用法提示并设置 `process.exitCode = 1`
-- [ ] 1.4 创建目录时设置权限 `0700`，创建文件时设置权限 `0600`；文件已存在但权限过宽时输出一次性警告，不强制修改
-- [ ] 1.5 定义 `ApiResult<T>` 判别联合类型（`{ ok: true, data } | { ok: false, status, code?, message, issues? }`），放在共享类型文件（如 `src/types.ts`）供 provider 新方法使用
+- [x] 1.1 新增 `src/auth.ts`：实现读取 `~/.blueai/secrets.json["blueai-skills-market-push.apiKey"]`、写入该键（保留其他键不变）、创建目录/文件（若不存在）的工具函数
+- [x] 1.2 实现 API Key 解析优先级函数：`process.env.SKILLS_API_KEY` > 文件中的值，均缺失时返回 `null`
+- [x] 1.3 新增 `skills login <api-key>` 命令路由（`src/cli.ts`），未传参数时打印用法提示并设置 `process.exitCode = 1`
+- [x] 1.4 创建目录时设置权限 `0700`，创建文件时设置权限 `0600`；文件已存在但权限过宽时输出一次性警告，不强制修改
+- [x] 1.5 定义 `ApiResult<T>` 判别联合类型（`{ ok: true, data } | { ok: false, status, code?, message, issues? }`），放在共享类型文件（如 `src/types.ts`）供 provider 新方法使用
 
 ## 2. Market Provider 扩展
 
-- [ ] 2.1 在 `src/providers/market.ts` 新增 `push(skillMd, files, version, apiKey): Promise<ApiResult<{ skillId: string; ... }>>` 方法，POST `/api/skill/push`，携带 `Authorization: Bearer <api-key>` 头，失败时保留 `status`/`code`/`message`/`issues`，不吞进 `null`
-- [ ] 2.2 新增 `publishToTeam(skillId, teamIds, apiKey): Promise<ApiResult<null>>` 方法，POST `/api/skill/publishToTeam`
-- [ ] 2.3 新增 `withdraw(skillId, apiKey): Promise<ApiResult<{ status: string; visibility: string }>>` 方法，POST `/api/skill/withdraw`
-- [ ] 2.4 新增 `resolveMine(name, apiKey): Promise<ApiResult<ResolveResponse>>` 方法，携带 `Authorization` header 调用 `/api/skill/resolve`，不使用现有无鉴权的 `resolve()`
-- [ ] 2.5 **确认任务（先做，阻塞 2.4 的最终实现）**：读取 skills-market 侧 `/api/skill/resolve` 路由实现，确认带 `Authorization` header 且不传 `author` 参数时，服务端是否已按当前登录身份过滤查询范围；若未过滤，记录该发现，重新评估 `withdraw` 命令的名称解析方式（详见 `specs/cli-withdraw/spec.md` "带鉴权的名称解析"requirement 的开放问题）
+- [x] 2.1 在 `src/providers/market.ts` 新增 `push(skillMd, files, version, apiKey): Promise<ApiResult<{ skillId: string; ... }>>` 方法，POST `/api/skill/push`，携带 `Authorization: Bearer <api-key>` 头，失败时保留 `status`/`code`/`message`/`issues`，不吞进 `null`
+- [x] 2.2 新增 `publishToTeam(skillId, teamIds, apiKey): Promise<ApiResult<null>>` 方法，POST `/api/skill/publishToTeam`
+- [x] 2.3 新增 `withdraw(skillId, apiKey): Promise<ApiResult<{ status: string; visibility: string }>>` 方法，POST `/api/skill/withdraw`
+- [x] 2.4 新增 `resolveMine(name, apiKey): Promise<ApiResult<ResolveResponse>>` 方法，携带 `Authorization` header 调用 `/api/skill/resolve`，不使用现有无鉴权的 `resolve()`
+- [x] 2.5 **确认任务（先做，阻塞 2.4 的最终实现）**：读取 skills-market 侧 `/api/skill/resolve` 路由实现，确认带 `Authorization` header 且不传 `author` 参数时，服务端是否已按当前登录身份过滤查询范围；若未过滤，记录该发现，重新评估 `withdraw` 命令的名称解析方式（详见 `specs/cli-withdraw/spec.md` "带鉴权的名称解析"requirement 的开放问题）
+
+  > **确认结论**：`/api/skill/resolve` 完全未调用 `authGuard()`，忽略 `Authorization` header；不传 `author` 时只按 `visibility: PUBLIC` 过滤名称，不按身份过滤。但 `withdraw` 命令的目标 Skill 在 PENDING 时必然 `visibility=PUBLIC`，且公开 Skill 名称全局唯一（应用层强制），因此按名称+PUBLIC 过滤足以唯一定位，不会误解析到他人同名技能；真正的归属校验由下游 `POST /api/skill/withdraw`（`withdrawSkill` service 的作者/管理员校验）兜底。结论：现有设计可行，不需要修改 skills-market 服务端，也不需要改为要求传入技能 ID；已在 `src/providers/market.ts` 的 `resolveMine` 方法注释中记录，且命令层需在 `resolveMine` 与 `withdraw` 两次调用各自的失败分支都处理 401（详见 4.3）。
 
 ## 3. `skills publish` 命令
 
