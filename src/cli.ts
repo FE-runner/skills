@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import { runAdd, parseAddOptions, initTelemetry } from './add.ts';
 import { runFind } from './find.ts';
 import { runLogin } from './auth.ts';
+import { runPublish } from './publish.ts';
 import { runInstallFromLock } from './install.ts';
 import { runList } from './list.ts';
 import { removeCommand, parseRemoveOptions } from './remove.ts';
@@ -816,6 +817,9 @@ async function main(): Promise<void> {
       break;
     case 'login':
       runLogin(restArgs);
+      break;
+    case 'publish':
+      await runPublish(restArgs);
       break;
     case 'experimental_install': {
       showLogo();

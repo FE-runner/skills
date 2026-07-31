@@ -18,18 +18,18 @@
 
 ## 3. `skills publish` 命令
 
-- [ ] 3.1 新增 `src/publish.ts`：实现目录遍历逻辑
+- [x] 3.1 新增 `src/publish.ts`：实现目录遍历逻辑
   - 用 `lstat` 判断类型，跳过符号链接（`isSymbolicLink()`）与非常规文件
   - 跳过以 `.` 开头的条目
   - 对每个候选文件做 `realpath` 校验，确认仍在发布根目录 realpath 范围内，越界跳过并输出警告
   - 二进制检测：以 `Buffer` 读取，检查是否含 NUL 字节或严格 UTF-8 解码失败，命中则跳过
   - 跳过 `SKILL.md` 本身（单独取出作为 `skillMd` 字段）
-- [ ] 3.2 解析命令行参数：`path`（位置参数，缺省 cwd）、`--version`、`--team`（逗号分隔解析为数组）
-- [ ] 3.3 校验目标目录下 `SKILL.md` 存在，不存在时输出错误并设置 `process.exitCode = 1`
-- [ ] 3.4 组装请求体调用 `marketProvider.push`，传入命令层读取到的 API Key
-- [ ] 3.5 push 返回 `ok: true` 且提供了 `--team` 时，调用 `marketProvider.publishToTeam`；push 失败时不触发
-- [ ] 3.6 实现错误处理：`ok: false` 时输出 `HTTP <status>: <message>`（含 `issues` 时一并输出），`status === 401` 时追加登录提示，统一设置 `process.exitCode = 1`（不使用 `process.exit()`）
-- [ ] 3.7 在 `src/cli.ts` 注册 `publish` 命令路由
+- [x] 3.2 解析命令行参数：`path`（位置参数，缺省 cwd）、`--version`、`--team`（逗号分隔解析为数组）
+- [x] 3.3 校验目标目录下 `SKILL.md` 存在，不存在时输出错误并设置 `process.exitCode = 1`
+- [x] 3.4 组装请求体调用 `marketProvider.push`，传入命令层读取到的 API Key
+- [x] 3.5 push 返回 `ok: true` 且提供了 `--team` 时，调用 `marketProvider.publishToTeam`；push 失败时不触发
+- [x] 3.6 实现错误处理：`ok: false` 时输出 `HTTP <status>: <message>`（含 `issues` 时一并输出），`status === 401` 时追加登录提示，统一设置 `process.exitCode = 1`（不使用 `process.exit()`）
+- [x] 3.7 在 `src/cli.ts` 注册 `publish` 命令路由
 
 ## 4. `skills withdraw` 命令
 
