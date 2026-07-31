@@ -18,6 +18,9 @@ This file provides guidance to AI coding agents working on the `skills` CLI code
 | `skills check`                | Check for available skill updates                   |
 | `skills update`               | Update all skills to latest versions                |
 | `skills init [name]`          | Create a new SKILL.md template                      |
+| `skills login <api-key>`      | Save your Skills Market API Key for publish/withdraw |
+| `skills publish [path]`       | Push a local Skill to the Market (upsert); `--version x.y.z`, `--team a,b` |
+| `skills withdraw <name>`      | Withdraw a public Skill stuck in PENDING review     |
 
 Aliases: `skills a` works for `add`. `skills i`, `skills install` (no args) restore from `skills-lock.json`. `skills ls` works for `list`. `skills experimental_install` restores from `skills-lock.json`. `skills experimental_sync` crawls `node_modules` for skills.
 
@@ -101,6 +104,9 @@ If reading an older lock file version, it's wiped. Users must reinstall skills t
 | `skills experimental_sync` | `src/sync.ts` - crawl node_modules                            |
 | `skills check`             | `src/cli.ts` + `fetchSkillFolderHash` in `src/skill-lock.ts`  |
 | `skills update`            | `src/cli.ts` direct hash compare + reinstall via `skills add` |
+| `skills login`             | `src/auth.ts` - read/write `~/.blueai/secrets.json`           |
+| `skills publish`           | `src/publish.ts` - directory walk + `marketProvider.push`/`publishToTeam` |
+| `skills withdraw`          | `src/withdraw.ts` - `marketProvider.resolveMine`/`withdraw`   |
 
 ## Development
 

@@ -41,14 +41,14 @@
 
 ## 5. 文档与测试
 
-- [ ] 5.1 更新 `AGENTS.md` 命令表格，补充 `login`/`publish`/`withdraw` 三行及其选项说明
-- [ ] 5.2 更新 `AGENTS.md` 中 "Key Integration Points" 表格，补充新命令对应的实现文件
-- [ ] 5.3 更新 `README.md`（若含命令列表）
-- [ ] 5.4 编写 `src/publish.test.ts`：覆盖目录遍历（隐藏文件跳过、符号链接跳过、路径穿越拒绝、二进制检测——用真实含 NUL 字节的 fixture 而非依赖"读取抛异常"）、`--version` 透传、`--team` 解析与链式调用、401/409/网络异常错误路径、`process.exitCode` 断言（不只断言输出文本）
-- [ ] 5.5 编写 `src/withdraw.test.ts`：覆盖成功撤回、name 无法解析、401 与"未找到"区分、非 PENDING 状态报错、未声明选项被拒绝
-- [ ] 5.6 编写 `src/auth.test.ts`：覆盖文件不存在时创建（并断言权限 `0700`/`0600`）、已存在时仅更新目标键、环境变量优先级、已存在文件权限过宽时的警告输出
-- [ ] 5.7 运行 `pnpm type-check` 与 `pnpm test`，确保全部通过
-- [ ] 5.8 运行 `pnpm format` 格式化新增文件
+- [x] 5.1 更新 `AGENTS.md` 命令表格，补充 `login`/`publish`/`withdraw` 三行及其选项说明
+- [x] 5.2 更新 `AGENTS.md` 中 "Key Integration Points" 表格，补充新命令对应的实现文件
+- [x] 5.3 更新 `README.md`（若含命令列表）
+- [x] 5.4 编写 `src/publish.test.ts`：覆盖目录遍历（隐藏文件跳过、符号链接跳过、路径穿越拒绝、二进制检测——用真实含 NUL 字节的 fixture 而非依赖"读取抛异常"）、`--version` 透传、`--team` 解析与链式调用、401/409/网络异常错误路径、`process.exitCode` 断言（不只断言输出文本）
+- [x] 5.5 编写 `src/withdraw.test.ts`：覆盖成功撤回、name 无法解析、401 与"未找到"区分、非 PENDING 状态报错、未声明选项被拒绝
+- [x] 5.6 编写 `src/auth.test.ts`：覆盖文件不存在时创建（并断言权限 `0700`/`0600`）、已存在时仅更新目标键、环境变量优先级、已存在文件权限过宽时的警告输出
+- [x] 5.7 运行 `pnpm type-check` 与 `pnpm test`，确保全部通过
+- [x] 5.8 运行 `pnpm format` 格式化新增文件
 
 ## 6. 显式排除（记录，不实现）
 

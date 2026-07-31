@@ -142,6 +142,9 @@ npx blueai-skills add t_<teamId>/<teamName> -a claude-code -g -y
 | `npx blueai-skills check`           | 检查可用的技能更新（默认项目级，`-g` 全局）       |
 | `npx blueai-skills update`          | 更新已安装技能到最新版本（默认项目级，`-g` 全局） |
 | `npx blueai-skills init [name]`     | 创建新的 SKILL.md 模板                            |
+| `npx blueai-skills login <api-key>` | 保存 Skills Market API Key，供 publish/withdraw 鉴权 |
+| `npx blueai-skills publish [path]`  | 将本地 Skill 推送/更新到市场（私有 upsert）       |
+| `npx blueai-skills withdraw <name>` | 撤回处于审核中（PENDING）的公开 Skill             |
 
 ### `blueai-skills list`
 
@@ -172,6 +175,28 @@ npx blueai-skills find typescript
 # 搜索时包含私有和团队技能（需传入飞书 union_id）
 npx blueai-skills find typescript --uid on_xxx
 ```
+
+### `blueai-skills login` / `blueai-skills publish` / `blueai-skills withdraw`
+
+将本地写好的 Skill 发布到 Skills Market（私有 upsert），可选分发到团队；也可撤回卡在审核中的公开 Skill。
+
+```bash
+# 保存市场 API Key（也可设置环境变量 SKILLS_API_KEY，优先级更高）
+npx blueai-skills login sk-xxxx
+
+# 推送当前目录下的 Skill（同名则更新，不同名则创建，均为私有）
+npx blueai-skills publish
+
+# 指定目录、覆盖版本号
+npx blueai-skills publish ./my-skill --version 2.0.0
+
+# 推送后分发到多个团队审核
+npx blueai-skills publish --team team-a,team-b
+
+# 撤回处于 PENDING 状态的公开 Skill
+npx blueai-skills withdraw my-skill
+```
+
 
 ### 选项
 
