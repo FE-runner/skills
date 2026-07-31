@@ -27,10 +27,20 @@ TBD - created by archiving change add-publish-command. Update Purpose after arch
 - **WHEN** 目标目录下除 `SKILL.md` 外还有其他文本文件（含子目录）
 - **THEN** 系统将这些文件按相对路径读取为文本，组装进请求体的 `files: [{ path, content }]` 数组
 
-#### Scenario: 跳过隐藏文件
+#### Scenario: 跳过 VCS/编辑器/系统噪音目录或文件
 
-- **WHEN** 目标目录下存在以 `.` 开头的文件或目录（如 `.git`）
+- **WHEN** 目标目录下存在 `.git`、`.svn`、`.hg`、`.idea`、`.vscode`、`.DS_Store` 中的任意条目
 - **THEN** 系统在遍历时跳过这些条目，不纳入 `files`
+
+#### Scenario: 跳过环境变量文件（防止误传密钥）
+
+- **WHEN** 目标目录下存在以 `.env` 开头的文件（如 `.env`、`.env.local`、`.env.production`），且文件名不是 `.env.example`
+- **THEN** 系统跳过该条目并输出警告，不纳入 `files`
+
+#### Scenario: 其余隐藏文件/目录按普通文件处理
+
+- **WHEN** 目标目录下存在其他以 `.` 开头、且不属于上述两类跳过规则的文件或目录（如 `.github/`、`.env.example`）
+- **THEN** 系统按普通文件的规则遍历/读取，符合文本文件条件的纳入 `files`
 
 #### Scenario: 跳过符号链接，不跟随
 

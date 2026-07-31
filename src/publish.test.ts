@@ -86,7 +86,7 @@ describe('publish', () => {
       expect(marketProvider.push).not.toHaveBeenCalled();
     });
 
-    it('skips hidden entries, symlinks, and binary files; includes plain text files', async () => {
+    it('skips .git, symlinks, and binary files; includes plain text files', async () => {
       writeSkillMd();
       writeFileSync(join(dir, 'notes.txt'), 'plain text content', 'utf-8');
       mkdirSync(join(dir, '.git'));
@@ -115,6 +115,46 @@ describe('publish', () => {
       ).toBe(true);
       expect(
         errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('跳过二进制文件'))
+      ).toBe(true);
+    });
+
+    it('skips .svn/.hg/.idea/.vscode/.DS_Store and .env files, but includes other hidden files', async () => {
+      writeSkillMd();
+      mkdirSync(join(dir, '.svn'));
+      writeFileSync(join(dir, '.svn', 'entries'), 'skip me', 'utf-8');
+      mkdirSync(join(dir, '.idea'));
+      writeFileSync(join(dir, '.idea', 'workspace.xml'), 'skip me', 'utf-8');
+      writeFileSync(join(dir, '.DS_Store'), 'skip me', 'utf-8');
+      writeFileSync(join(dir, '.env'), 'SECRET=xxx', 'utf-8');
+      writeFileSync(join(dir, '.env.local'), 'SECRET=xxx', 'utf-8');
+      writeFileSync(join(dir, '.env.example'), 'SECRET=', 'utf-8');
+      mkdirSync(join(dir, '.github'));
+      writeFileSync(join(dir, '.github', 'note.txt'), 'kept', 'utf-8');
+
+      vi.mocked(marketProvider.push).mockResolvedValue({
+        ok: true,
+        data: {
+          skillId: 's1',
+          name: 'my-skill',
+          currentVersion: '0.0.1',
+          visibility: 'PRIVATE',
+          status: 'APPROVED',
+        },
+      });
+
+      await runPublish([dir]);
+
+      expect(marketProvider.push).toHaveBeenCalledTimes(1);
+      const [, files] = vi.mocked(marketProvider.push).mock.calls[0]!;
+      expect(files).toEqual(
+        expect.arrayContaining([
+          { path: '.env.example', content: 'SECRET=' },
+          { path: '.github/note.txt', content: 'kept' },
+        ])
+      );
+      expect(files).toHaveLength(2);
+      expect(
+        errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('跳过环境变量文件 .env'))
       ).toBe(true);
     });
 
