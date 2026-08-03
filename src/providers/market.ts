@@ -271,23 +271,10 @@ export class MarketProvider {
   /**
    * 带鉴权的名称解析，用于 `skills withdraw <name>` 拿到目标 skillId。
    *
-   * 【task 2.5 确认结论】skills-market 侧 `GET /api/skill/resolve`
-   * （`app/api/skill/resolve/route.ts`）当前完全不调用 `authGuard()`，会忽略请求携带的
-   * `Authorization` header；不传 `author` 参数时，服务端 `resolveSkill`/`buildNameWhere`
-   * 只按 `visibility: PUBLIC` 过滤，并不会按 Token 解出的身份自动限定为"仅查当前用户名下
-   * 的技能"。
-   *
-   * 这不影响 `withdraw` 命令的正确性：`withdraw` 只对处于 PENDING 状态的公开 Skill 生效，
-   * 而这些 Skill 在 PENDING 时 `visibility` 必然已经是 PUBLIC（三种撤回场景——draft 更新 /
-   * 私有发布到市场 / 首次公开创建——均如此），且 skills-market 的创建/发布流程对公开 Skill
-   * 强制做全局名称唯一性校验（见 `docs/claude/skill-lifecycle.md`）。因此按名称 +
-   * `visibility: PUBLIC` 足以唯一定位目标 Skill，不会解析到其他用户的同名技能；"是否确实是
-   * 当前用户自己的技能"这一权限校验，由下游 `POST /api/skill/withdraw`
-   * （`withdrawSkill` service 内部的作者/管理员校验）兜底。
-   *
-   * 因此本方法仍然携带 `Authorization` header（向前兼容：若未来服务端补上鉴权/归属过滤，
-   * 调用方不需要改动），但在当前实现下，401 只会来自后续的 `withdraw()` 调用，不会来自
-   * 本方法——命令层需要在两次调用各自的失败分支都处理 401。
+   * skills-market 侧 `GET /api/skill/resolve`（`app/api/skill/resolve/route.ts`）已支持：
+   * 请求携带 `Authorization` 且未显式传 `author` 时，优先按当前登录用户的 `authorId` + `name`
+   * 精确匹配，不受 `visibility`/`currentVersion` 限制，覆盖 PENDING、无 currentVersion 的公开
+   * Skill（首次公开创建撤回场景）；查不到再回退匿名解析逻辑。因此本方法无需再传 `author`。
    */
   async resolveMine(name: string, apiKey: string): Promise<ApiResult<ResolveResponse>> {
     const params = new URLSearchParams({ name });
