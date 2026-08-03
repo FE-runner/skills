@@ -53,9 +53,22 @@ echo "一些附属说明" > /tmp/my-test-skill/notes.md
 
 ---
 
-## 2. `publish`
+## 2. `whoami`
 
-### 2.1 正常首次发布
+验证 `add-whoami-command` 变更（已归档：`openspec/changes/archive/2026-07-31-add-whoami-command/`）。`whoami` 只读查询，不修改任何本地/远端状态。
+
+| 步骤 | 命令 | 期望结果 |
+| --- | --- | --- |
+| 2.1 未登录 | `mv ~/.blueai ~/.blueai.bak3 && pnpm dev whoami` | 提示"请先运行 `skills login`..."，`$?` 为 `1`。跑完 `mv ~/.blueai.bak3 ~/.blueai` 还原 |
+| 2.2 正常查询 | `pnpm dev whoami` | 打印`名称`/`邮箱`/`角色`；邮箱未设置时显示"（未设置）" |
+| 2.3 超级管理员账号（可选，若你有） | 用超级管理员账号 `login` 后 `pnpm dev whoami` | 额外打印一行"超级管理员" |
+| 2.4 401（Key 失效） | `pnpm dev login sk-invalid-xxx && pnpm dev whoami` | 输出 `HTTP 401: ...`，并追加登录提示；跑完 `pnpm dev login <真实key>` 换回来 |
+
+---
+
+## 3. `publish`
+
+### 3.1 正常首次发布
 
 > 注意：`pnpm --dir <path>` 会把 pnpm 的工作目录切到 `<path>`（即 skills-cli 仓库根目录）再执行脚本，所以 `.` 会被解析成 skills-cli 目录本身，而不是当前 `cd` 进入的目录。要测试"传相对路径 `.`"的场景，必须直接用 `node` 调用 CLI 入口，让 shell 的 `cd` 生效：
 
@@ -69,7 +82,7 @@ node /Users/ly/codes/work/skills-cli/src/cli.ts publish .
 - `✓ 推送成功`，打印名称/版本/状态（`PRIVATE / APPROVED`）
 - 去网页 Dashboard → 我的技能，能看到 `my-test-skill`
 
-### 2.2 缺省路径 = 当前目录
+### 3.2 缺省路径 = 当前目录
 
 ```bash
 cd /tmp/my-test-skill
@@ -77,18 +90,18 @@ node /Users/ly/codes/work/skills-cli/src/cli.ts publish
 ```
 期望：等价于 `publish .`。
 
-### 2.3 二次发布 = 更新（版本自动 +1）
+### 3.3 二次发布 = 更新（版本自动 +1）
 
-不改内容再跑一次 2.1 的命令，期望版本号从 `0.0.1` 变成 `0.0.2`（服务端 patch bump）。
+不改内容再跑一次 3.1 的命令，期望版本号从 `0.0.1` 变成 `0.0.2`（服务端 patch bump）。
 
-### 2.4 `--version` 覆盖
+### 3.4 `--version` 覆盖
 
 ```bash
 pnpm --dir /Users/ly/codes/work/skills-cli dev publish /tmp/my-test-skill --version 9.9.9
 ```
 期望：状态里版本号是 `9.9.9`，不是自动递增值。
 
-### 2.5 `--team` 分发
+### 3.5 `--team` 分发
 
 先拿一个你有权限的 teamId（网页团队详情页 URL 里的 id，或 `Dashboard → 团队`）：
 
@@ -99,7 +112,7 @@ pnpm --dir /Users/ly/codes/work/skills-cli dev publish /tmp/my-test-skill --team
 ```
 期望：推送成功后额外打印"已提交团队审核: ..."；去团队页能看到该 Skill 处于待审核。
 
-### 2.6 目录遍历安全边界
+### 3.6 目录遍历安全边界
 
 ```bash
 cd /tmp/my-test-skill
@@ -124,7 +137,7 @@ node /Users/ly/codes/work/skills-cli/src/cli.ts publish .
 
 清理：`rm -rf .git .idea .github .DS_Store .env .env.example blob.bin linked.txt`。
 
-### 2.7 错误路径
+### 3.7 错误路径
 
 | 场景 | 命令 | 期望 |
 | --- | --- | --- |
@@ -134,9 +147,9 @@ node /Users/ly/codes/work/skills-cli/src/cli.ts publish .
 | 同名冲突（409，若你账号下已有同名**公开** Skill） | 用一个已知冲突的名字发布 | 输出 `HTTP 409: 同名的公开 Skill 已存在，请通过 Web 界面管理公开 Skill` |
 | 网络异常 | `SKILLS_SITE=http://127.0.0.1:9 pnpm dev publish /tmp/my-test-skill` | 输出网络错误信息，`$?` 为 `1` |
 
-### 2.8 `--public` 首次发布（对齐 skills-market 的 `skill-push-public`）
+### 3.8 `--public` 首次发布（对齐 skills-market 的 `skill-push-public`）
 
-> 需要 ADMIN/REVIEWER/DEVELOPER 角色账号（USER 角色见 2.10）。
+> 需要 ADMIN/REVIEWER/DEVELOPER 角色账号（USER 角色见 3.10）。
 
 ```bash
 cd /tmp/my-test-skill
@@ -147,9 +160,9 @@ node /Users/ly/codes/work/skills-cli/src/cli.ts publish . --public
 - `pushResult.data.status === 'PENDING'` 时打印"✓ 已提交审核"（不是"✓ 推送成功"），打印名称 + `PUBLIC / PENDING`，提示等待管理员/审核员审核
 - 去网页 Dashboard → 管理后台 → 待审核列表，能看到该 Skill
 
-### 2.9 `--public` 二次推送 = 更新
+### 3.9 `--public` 二次推送 = 更新
 
-不改内容对 2.8 的同一个 Skill 再跑一次：
+不改内容对 3.8 的同一个 Skill 再跑一次：
 
 ```bash
 cd /tmp/my-test-skill
@@ -157,12 +170,12 @@ node /Users/ly/codes/work/skills-cli/src/cli.ts publish . --public
 ```
 
 期望：
-- 若 2.8 那次尚未被审核通过（仍 PENDING）→ 命中"审核中"分支，见 2.10 的 400 场景，不会是这里的成功路径
-- 需要先在网页 Dashboard 用 ADMIN/REVIEWER 账号审核通过 2.8 的提交，使其变为 `PUBLIC / APPROVED`（此时才有 `currentVersion`，即"已发布"状态），再跑本条：
+- 若 3.8 那次尚未被审核通过（仍 PENDING）→ 命中"审核中"分支，见 3.10 的 400 场景，不会是这里的成功路径
+- 需要先在网页 Dashboard 用 ADMIN/REVIEWER 账号审核通过 3.8 的提交，使其变为 `PUBLIC / APPROVED`（此时才有 `currentVersion`，即"已发布"状态），再跑本条：
   - 期望打印"✓ 已提交审核"，本次内容写入草稿（draft），已发布版本和市场展示不受影响
   - 去 Dashboard 详情页能看到"审核中的更新"与"当前已发布版本"分别展示
 
-### 2.10 `--public` 已知错误分支（403/409/400）
+### 3.10 `--public` 已知错误分支（403/409/400）
 
 | 场景 | 命令 | 期望 |
 | --- | --- | --- |
@@ -174,56 +187,56 @@ node /Users/ly/codes/work/skills-cli/src/cli.ts publish . --public
 
 ---
 
-## 3. `withdraw`
+## 4. `withdraw`
 
 `withdraw` 只对**处于 PENDING 审核状态的公开 Skill** 生效（私有 Skill 不需要撤回）。构造一个 PENDING 场景最简单的方式：
 
 1. 用网页 Dashboard 把一个私有 Skill "发布到市场"（进入 PENDING+PUBLIC），或
 2. 用 ADMIN/REVIEWER 账号直接创建一个公开 Skill（首次创建即 PENDING）
 
-### 3.1 成功撤回
+### 4.1 成功撤回
 
 ```bash
 pnpm --dir /Users/ly/codes/work/skills-cli dev withdraw <该Skill的name>
 ```
 期望：`✓ 已撤回`，打印当前状态（应回到 `PRIVATE / APPROVED`）。去网页确认该 Skill 已变回私有。
 
-### 3.2 未提供参数
+### 4.2 未提供参数
 
 ```bash
 pnpm --dir /Users/ly/codes/work/skills-cli dev withdraw
 ```
 期望：打印用法提示，`$?` 为 `1`，不发请求。
 
-### 3.3 不支持的选项被拒绝
+### 4.3 不支持的选项被拒绝
 
 ```bash
 pnpm --dir /Users/ly/codes/work/skills-cli dev withdraw my-test-skill --team abc
 ```
 期望：报错"withdraw 命令不支持选项 --team"，`$?` 为 `1`，**不发起任何网络请求**（可用 `--team` 传一个明显无效的 teamId，确认它压根没被使用/没有副作用）。
 
-### 3.4 名称不存在
+### 4.4 名称不存在
 
 ```bash
 pnpm --dir /Users/ly/codes/work/skills-cli dev withdraw this-name-should-not-exist-xyz
 ```
 期望：提示"未找到...技能"，`$?` 为 `1`。
 
-### 3.5 状态不是 PENDING（例如已是 PRIVATE/APPROVED 或已经撤回过）
+### 4.5 状态不是 PENDING（例如已是 PRIVATE/APPROVED 或已经撤回过）
 
-对上面 3.1 的同一个 Skill 再跑一次：
+对上面 4.1 的同一个 Skill 再跑一次：
 ```bash
 pnpm --dir /Users/ly/codes/work/skills-cli dev withdraw <同一个name>
 ```
 期望：服务端返回非 PENDING 相关的错误消息，被原样转述，`$?` 为 `1`。
 
-### 3.6 401
+### 4.6 401
 
-同 2.7 的方式（换成失效 Key）跑一次 `withdraw`，期望同样追加登录提示。
+同 3.7 的方式（换成失效 Key）跑一次 `withdraw`，期望同样追加登录提示。
 
 ---
 
-## 4. 收尾清理
+## 5. 收尾清理
 
 ```bash
 rm -rf /tmp/my-test-skill /tmp/empty-dir
