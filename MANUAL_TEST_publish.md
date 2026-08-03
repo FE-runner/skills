@@ -1,6 +1,7 @@
 # 手动测试文档：`login` / `publish` / `withdraw`
 
-用于验证 `add-publish-command` 变更（已归档：`openspec/changes/archive/2026-07-31-add-publish-command/`）。
+用于验证 `add-publish-command` 变更（已归档：`openspec/changes/archive/2026-07-31-add-publish-command/`）及
+`cli-push-public` 变更（`--public` flag，`openspec/changes/cli-push-public/`）。
 
 ## 0. 准备
 
@@ -132,6 +133,44 @@ node /Users/ly/codes/work/skills-cli/src/cli.ts publish .
 | 401（Key 失效） | `pnpm dev login sk-invalid-xxx && pnpm dev publish /tmp/my-test-skill` | 输出 `HTTP 401: ...`，并追加"请运行 \`skills login\`"提示；跑完记得 `pnpm dev login <真实key>` 换回来 |
 | 同名冲突（409，若你账号下已有同名**公开** Skill） | 用一个已知冲突的名字发布 | 输出 `HTTP 409: 同名的公开 Skill 已存在，请通过 Web 界面管理公开 Skill` |
 | 网络异常 | `SKILLS_SITE=http://127.0.0.1:9 pnpm dev publish /tmp/my-test-skill` | 输出网络错误信息，`$?` 为 `1` |
+
+### 2.8 `--public` 首次发布（对齐 skills-market 的 `skill-push-public`）
+
+> 需要 ADMIN/REVIEWER/DEVELOPER 角色账号（USER 角色见 2.10）。
+
+```bash
+cd /tmp/my-test-skill
+node /Users/ly/codes/work/skills-cli/src/cli.ts publish . --public
+```
+
+期望：
+- `pushResult.data.status === 'PENDING'` 时打印"✓ 已提交审核"（不是"✓ 推送成功"），打印名称 + `PUBLIC / PENDING`，提示等待管理员/审核员审核
+- 去网页 Dashboard → 管理后台 → 待审核列表，能看到该 Skill
+
+### 2.9 `--public` 二次推送 = 更新
+
+不改内容对 2.8 的同一个 Skill 再跑一次：
+
+```bash
+cd /tmp/my-test-skill
+node /Users/ly/codes/work/skills-cli/src/cli.ts publish . --public
+```
+
+期望：
+- 若 2.8 那次尚未被审核通过（仍 PENDING）→ 命中"审核中"分支，见 2.10 的 400 场景，不会是这里的成功路径
+- 需要先在网页 Dashboard 用 ADMIN/REVIEWER 账号审核通过 2.8 的提交，使其变为 `PUBLIC / APPROVED`（此时才有 `currentVersion`，即"已发布"状态），再跑本条：
+  - 期望打印"✓ 已提交审核"，本次内容写入草稿（draft），已发布版本和市场展示不受影响
+  - 去 Dashboard 详情页能看到"审核中的更新"与"当前已发布版本"分别展示
+
+### 2.10 `--public` 已知错误分支（403/409/400）
+
+| 场景 | 命令 | 期望 |
+| --- | --- | --- |
+| USER 角色无权限（403） | 用 USER 角色账号 `login` 后 `publish . --public` | 输出 `HTTP 403: ...`，并追加"提示: 当前账号角色无权发布公开 Skill" |
+| 同名冲突（409） | 用一个已被占用的名字（自己名下已有同名 PRIVATE，或别人已有同名 PUBLIC）`publish . --public` | 输出 `HTTP 409: ...`，并追加"提示: 名称冲突——可能是你名下已有同名私有 Skill（需改走 Web 发布流程转公开），也可能是名称已被其他作者占用（需更换名称）" |
+| 审核中（400） | 对一个当前 `status=PENDING` 的公开 Skill 再次 `publish . --public` | 输出 `HTTP 400: ...`，并追加"提示: 该 Skill 可能正在审核中，可执行 \`skills withdraw <name>\` 撤回后重试" |
+
+`--public --team <id>` 可叠加：push 成功（含 PENDING）后仍会链式调用 `publishToTeam`，两者互不依赖，若 team 分发失败不影响已成功的 push 结果本身。
 
 ---
 
