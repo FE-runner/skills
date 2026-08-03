@@ -119,13 +119,15 @@ export interface PublishOptions {
   path: string;
   version?: string;
   teamIds?: string[];
+  public?: boolean;
 }
 
-/** 解析 `publish` 命令参数：`path`（位置参数，缺省 cwd）、`--version`、`--team` */
+/** 解析 `publish` 命令参数：`path`（位置参数，缺省 cwd）、`--version`、`--team`、`--public` */
 export function parsePublishOptions(args: string[]): PublishOptions {
   let path: string | undefined;
   let version: string | undefined;
   let teamIds: string[] | undefined;
+  let isPublic: boolean | undefined;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -139,21 +141,23 @@ export function parsePublishOptions(args: string[]): PublishOptions {
             .map((id) => id.trim())
             .filter(Boolean)
         : undefined;
+    } else if (arg === '--public') {
+      isPublic = true;
     } else if (arg && !arg.startsWith('--')) {
       path = arg;
     }
   }
 
-  return { path: resolve(path ?? process.cwd()), version, teamIds };
+  return { path: resolve(path ?? process.cwd()), version, teamIds, public: isPublic };
 }
 
 /**
- * `skills publish [path] [--version x.y.z] [--team a,b]` 命令：
- * 读取本地 SKILL.md + 附属文本文件，调用 `/api/skill/push` upsert 到私有 Skill；
- * 提供 `--team` 且 push 成功后，链式调用 `/api/skill/publishToTeam` 分发到多个团队。
+ * `skills publish [path] [--version x.y.z] [--team a,b] [--public]` 命令：
+ * 读取本地 SKILL.md + 附属文本文件，调用 `/api/skill/push` upsert 到私有（默认）或公开（`--public`）Skill；
+ * 提供 `--team` 且 push 成功后，链式调用 `/api/skill/publishToTeam` 分发到多个团队（与 `--public` 可叠加，互不影响）。
  */
 export async function runPublish(args: string[]): Promise<void> {
-  const { path: targetDir, version, teamIds } = parsePublishOptions(args);
+  const { path: targetDir, version, teamIds, public: isPublic } = parsePublishOptions(args);
 
   const skillMdPath = join(targetDir, SKILL_MD_FILENAME);
   if (!existsSync(skillMdPath)) {
@@ -181,17 +185,43 @@ export async function runPublish(args: string[]): Promise<void> {
     console.log(`附属文件: ${files.map((f) => f.path).join(', ')}`);
   }
 
-  const pushResult = await marketProvider.push(skillMd, files, version, apiKey);
+  const pushResult = await marketProvider.push(
+    skillMd,
+    files,
+    version,
+    apiKey,
+    isPublic ? 'PUBLIC' : undefined
+  );
   if (!pushResult.ok) {
     reportApiFailure(pushResult);
+    if (isPublic) {
+      if (pushResult.status === 403) {
+        console.error('提示: 当前账号角色无权发布公开 Skill');
+      } else if (pushResult.status === 409) {
+        console.error(
+          '提示: 名称冲突——可能是你名下已有同名私有 Skill（需改走 Web 发布流程转公开），也可能是名称已被其他作者占用（需更换名称）'
+        );
+      } else if (pushResult.status === 400) {
+        console.error(
+          `提示: 该 Skill 可能正在审核中，可执行 \`${BIN_NAME} withdraw <name>\` 撤回后重试`
+        );
+      }
+    }
     return;
   }
 
   const { data } = pushResult;
-  console.log(`✓ 推送成功`);
-  console.log(`  名称: ${data.name}`);
-  console.log(`  版本: ${data.currentVersion}`);
-  console.log(`  状态: ${data.visibility} / ${data.status}`);
+  if (isPublic && data.status === 'PENDING') {
+    console.log(`✓ 已提交审核`);
+    console.log(`  名称: ${data.name}`);
+    console.log(`  状态: ${data.visibility} / ${data.status}`);
+    console.log(`  等待管理员/审核员审核后生效，非立即生效`);
+  } else {
+    console.log(`✓ 推送成功`);
+    console.log(`  名称: ${data.name}`);
+    console.log(`  版本: ${data.currentVersion}`);
+    console.log(`  状态: ${data.visibility} / ${data.status}`);
+  }
 
   if (teamIds && teamIds.length > 0) {
     const teamResult = await marketProvider.publishToTeam(data.skillId, teamIds, apiKey);

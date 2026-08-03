@@ -77,6 +77,22 @@ describe('publish', () => {
       const opts = parsePublishOptions(['--team', 'team-a,team-b']);
       expect(opts.teamIds).toEqual(['team-a', 'team-b']);
     });
+
+    it('does not set public by default', () => {
+      const opts = parsePublishOptions([]);
+      expect(opts.public).toBeUndefined();
+    });
+
+    it('parses --public flag', () => {
+      const opts = parsePublishOptions(['--public']);
+      expect(opts.public).toBe(true);
+    });
+
+    it('parses --public together with --team', () => {
+      const opts = parsePublishOptions(['--public', '--team', 'team-a']);
+      expect(opts.public).toBe(true);
+      expect(opts.teamIds).toEqual(['team-a']);
+    });
   });
 
   describe('directory traversal', () => {
@@ -295,6 +311,185 @@ describe('publish', () => {
 
       expect(process.exitCode).toBe(1);
       expect(marketProvider.push).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('--public', () => {
+    beforeEach(() => writeSkillMd());
+
+    it('passes visibility: PUBLIC through to marketProvider.push', async () => {
+      vi.mocked(marketProvider.push).mockResolvedValue({
+        ok: true,
+        data: {
+          skillId: 's1',
+          name: 'my-skill',
+          currentVersion: '',
+          visibility: 'PUBLIC',
+          status: 'PENDING',
+        },
+      });
+
+      await runPublish([dir, '--public']);
+
+      const [, , , , visibility] = vi.mocked(marketProvider.push).mock.calls[0]!;
+      expect(visibility).toBe('PUBLIC');
+    });
+
+    it('does not pass visibility when --public is omitted', async () => {
+      vi.mocked(marketProvider.push).mockResolvedValue({
+        ok: true,
+        data: {
+          skillId: 's1',
+          name: 'my-skill',
+          currentVersion: '0.0.1',
+          visibility: 'PRIVATE',
+          status: 'APPROVED',
+        },
+      });
+
+      await runPublish([dir]);
+
+      const [, , , , visibility] = vi.mocked(marketProvider.push).mock.calls[0]!;
+      expect(visibility).toBeUndefined();
+    });
+
+    it('shows "已提交审核" instead of "推送成功" when PUBLIC push is pending', async () => {
+      vi.mocked(marketProvider.push).mockResolvedValue({
+        ok: true,
+        data: {
+          skillId: 's1',
+          name: 'my-skill',
+          currentVersion: '',
+          visibility: 'PUBLIC',
+          status: 'PENDING',
+        },
+      });
+
+      await runPublish([dir, '--public']);
+
+      expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('已提交审核'))).toBe(
+        true
+      );
+      expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('推送成功'))).toBe(
+        false
+      );
+    });
+
+    it('keeps "推送成功" output unchanged when --public is omitted', async () => {
+      vi.mocked(marketProvider.push).mockResolvedValue({
+        ok: true,
+        data: {
+          skillId: 's1',
+          name: 'my-skill',
+          currentVersion: '0.0.1',
+          visibility: 'PRIVATE',
+          status: 'APPROVED',
+        },
+      });
+
+      await runPublish([dir]);
+
+      expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('推送成功'))).toBe(
+        true
+      );
+    });
+
+    it('still shows "推送成功" (not "已提交审核") when --public is omitted even if status happens to be PENDING', async () => {
+      vi.mocked(marketProvider.push).mockResolvedValue({
+        ok: true,
+        data: {
+          skillId: 's1',
+          name: 'my-skill',
+          currentVersion: '0.0.1',
+          visibility: 'PRIVATE',
+          status: 'PENDING',
+        },
+      });
+
+      await runPublish([dir]);
+
+      expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('推送成功'))).toBe(
+        true
+      );
+      expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('已提交审核'))).toBe(
+        false
+      );
+    });
+
+    it('adds a role-permission hint on a 403 failure under --public', async () => {
+      vi.mocked(marketProvider.push).mockResolvedValue({
+        ok: false,
+        status: 403,
+        message: '无权限',
+      });
+
+      await runPublish([dir, '--public']);
+
+      expect(
+        errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('无权发布公开 Skill'))
+      ).toBe(true);
+    });
+
+    it('adds a name-conflict hint on a 409 failure under --public', async () => {
+      vi.mocked(marketProvider.push).mockResolvedValue({
+        ok: false,
+        status: 409,
+        message: '同名的公开 Skill 已存在',
+      });
+
+      await runPublish([dir, '--public']);
+
+      expect(errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('名称冲突'))).toBe(
+        true
+      );
+    });
+
+    it('adds a withdraw hint on a 400 failure under --public', async () => {
+      vi.mocked(marketProvider.push).mockResolvedValue({
+        ok: false,
+        status: 400,
+        message: 'Skill 正在审核中，无法更新',
+      });
+
+      await runPublish([dir, '--public']);
+
+      expect(errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('withdraw'))).toBe(
+        true
+      );
+    });
+
+    it('does not add PUBLIC-specific hints when --public is omitted', async () => {
+      vi.mocked(marketProvider.push).mockResolvedValue({
+        ok: false,
+        status: 409,
+        message: '同名的公开 Skill 已存在',
+      });
+
+      await runPublish([dir]);
+
+      expect(errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('名称冲突'))).toBe(
+        false
+      );
+    });
+
+    it('calls publishToTeam after a successful --public push (not mutually exclusive)', async () => {
+      vi.mocked(marketProvider.push).mockResolvedValue({
+        ok: true,
+        data: {
+          skillId: 's1',
+          name: 'my-skill',
+          currentVersion: '',
+          visibility: 'PUBLIC',
+          status: 'PENDING',
+        },
+      });
+      vi.mocked(marketProvider.publishToTeam).mockResolvedValue({ ok: true, data: null });
+
+      await runPublish([dir, '--public', '--team', 'team-a']);
+
+      const [, , , , visibility] = vi.mocked(marketProvider.push).mock.calls[0]!;
+      expect(visibility).toBe('PUBLIC');
+      expect(marketProvider.publishToTeam).toHaveBeenCalledWith('s1', ['team-a'], 'sk-test');
     });
   });
 });

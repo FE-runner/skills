@@ -146,6 +146,7 @@ ${BOLD}Publishing:${RESET}
   publish [path]           Push a local Skill to the Market (upsert)
                            --version <x.y.z>   Override the version number
                            --team <id1,id2>    Distribute to team(s) after push
+                           --public            Push as a PUBLIC Skill (goes to PENDING review)
   withdraw <name>          Withdraw a public Skill stuck in PENDING review
 
 ${BOLD}Add Options:${RESET}

@@ -192,7 +192,8 @@ export class MarketProvider {
     skillMd: string,
     files: Array<{ path: string; content: string }>,
     version: string | undefined,
-    apiKey: string
+    apiKey: string,
+    visibility?: 'PRIVATE' | 'PUBLIC'
   ): Promise<
     ApiResult<{
       skillId: string;
@@ -205,6 +206,7 @@ export class MarketProvider {
     const body: Record<string, unknown> = { skillMd };
     if (files.length > 0) body.files = files;
     if (version) body.version = version;
+    if (visibility) body.visibility = visibility;
 
     const result = await requestApiResult<{
       id: string;

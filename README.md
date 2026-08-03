@@ -144,7 +144,7 @@ npx blueai-skills add t_<teamId>/<teamName> -a claude-code -g -y
 | `npx blueai-skills init [name]`     | 创建新的 SKILL.md 模板                            |
 | `npx blueai-skills login <api-key>` | 保存 Skills Market API Key，供 publish/withdraw/whoami 鉴权 |
 | `npx blueai-skills whoami`          | 查看当前保存的 API Key 对应的登录用户             |
-| `npx blueai-skills publish [path]`  | 将本地 Skill 推送/更新到市场（私有 upsert）       |
+| `npx blueai-skills publish [path]`  | 将本地 Skill 推送/更新到市场（私有 upsert，或 `--public` 推送为公开 Skill） |
 | `npx blueai-skills withdraw <name>` | 撤回处于审核中（PENDING）的公开 Skill             |
 
 ### `blueai-skills list`
@@ -196,6 +196,9 @@ npx blueai-skills publish ./my-skill --version 2.0.0
 
 # 推送后分发到多个团队审核
 npx blueai-skills publish --team team-a,team-b
+
+# 推送为公开 Skill（新建/更新均走审核，非立即生效；--public 与 --team 可叠加）
+npx blueai-skills publish --public
 
 # 撤回处于 PENDING 状态的公开 Skill
 npx blueai-skills withdraw my-skill
