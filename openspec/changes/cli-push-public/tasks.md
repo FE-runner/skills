@@ -31,7 +31,7 @@
 - [x] 6.1 `pnpm format` && `pnpm type-check` && `pnpm test`（`pnpm type-check` 存在与本次变更无关的既有报错，见下方说明）
 - [x] 6.2 `src/cli.ts` 帮助文本（`publish [path]` 条目附近，约第 146 行）补一行 `--public` 说明，与 `--version`/`--team` 并列
 - [x] 6.3 README/CLAUDE.md 补充 `skills publish --public` 用法说明
-- [ ] 6.4 待 skills-market 的 `skill-push-public` 部署后，手动跑一遍真实新建/更新/403/409/400 场景验证
+- [x] 6.4 待 skills-market 的 `skill-push-public` 部署后，手动跑一遍真实新建/更新/403/409/400 场景验证（已人工验证通过）
 
 ### 备注：6.1 的 type-check 既有报错
 
