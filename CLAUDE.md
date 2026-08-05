@@ -1,78 +1,141 @@
 # blueai-skills CLI
 
+变更记录见根目录 [CHANGELOG.md](./CHANGELOG.md)。
+
 `blueai-skills` 是 `vercel-labs/skills` 的**定制化 fork**，经改造后供内部使用。
 
 - **包名**: `blueai-skills`（上游: `skills`）
-- **版本**: 1.4.3-bmc1.1.x
+- **版本**: 1.4.7-bmc1.6.0
 - **构建工具**: obuild
 - **包管理器**: pnpm
 
 ## BMC Fork 定制内容
 
-| 领域            | 上游                | BMC Fork                      |
-| --------------- | ------------------- | ----------------------------- |
-| 包名            | `skills`            | `blueai-skills`               |
-| Market API      | `https://skills.sh` | `http://localhost:3000`       |
-| 遥测            | 默认开启            | 默认**关闭**                  |
-| COS Provider    | 无                  | 新增（`providers/cos.ts`）    |
-| Market Provider | 无                  | 新增（`providers/market.ts`） |
+| 领域            | 上游                | BMC Fork                                                              |
+| --------------- | ------------------- | ---------------------------------------------------------------------- |
+| 包名            | `skills`            | `blueai-skills`                                                       |
+| Market API      | `https://skills.sh` | `https://blueai-skills-market.bluemediagroup.cn`（`SKILLS_SITE`，可用 `SKILLS_SITE` 环境变量覆盖） |
+| 遥测            | 默认开启            | 默认**关闭**                                                          |
+| COS Provider    | 无                  | 新增（`providers/cos.ts`）                                            |
+| Market Provider | 无                  | 新增（`providers/market.ts`），并扩展为发布/审核/登录能力              |
+| 发布/审核相关命令 | 无                | 新增 `login`/`publish`/`withdraw`/`whoami`（`auth.ts`/`publish.ts`/`withdraw.ts`/`whoami.ts`/`api-error.ts`） |
 
-**重要**: 从上游同步代码时，务必保留 `branding.ts`、`providers/cos.ts`、`providers/market.ts` 和 `telemetry.ts` 中的定制内容。
+**重要**: 从上游同步代码时，务必保留 `branding.ts`、`providers/cos.ts`、`providers/market.ts`、`telemetry.ts`、`auth.ts`、`publish.ts`、`withdraw.ts`、`whoami.ts`、`api-error.ts` 中的定制内容。
 
 ## 命令
 
-| 命令                          | 说明                                  |
-| ----------------------------- | ------------------------------------- |
-| `skills`                      | 显示 banner 和可用命令                |
-| `skills add <pkg>`            | 从 Git 仓库、URL 或本地路径安装技能   |
-| `skills experimental_install` | 从 skills-lock.json 恢复技能          |
-| `skills experimental_sync`    | 从 node_modules 同步技能到 agent 目录 |
-| `skills list`                 | 列出已安装的技能（别名: `ls`）        |
-| `skills check`                | 检查可用的技能更新                    |
-| `skills update`               | 将所有技能更新到最新版本              |
-| `skills init [name]`          | 创建新的 SKILL.md 模板                |
+| 命令                          | 说明                                            |
+| ----------------------------- | ----------------------------------------------- |
+| `skills`                      | 显示 banner 和可用命令                          |
+| `skills add <pkg>`            | 从 Git 仓库、URL 或本地路径安装技能             |
+| `skills experimental_install` | 从 skills-lock.json 恢复技能                    |
+| `skills experimental_sync`    | 从 node_modules 同步技能到 agent 目录           |
+| `skills list`                 | 列出已安装的技能（别名: `ls`）                  |
+| `skills check`                | 检查可用的技能更新                              |
+| `skills update`               | 将所有技能更新到最新版本                        |
+| `skills init [name]`          | 创建新的 SKILL.md 模板                          |
+| `skills find [query]`         | 搜索 Market 上的技能并交互式安装（别名: `search`/`f`/`s`） |
+| `skills remove [name...]`     | 卸载已安装技能（别名: `rm`/`r`）                |
+| `skills login <api-key>`      | 保存 Skills Market API Key（供 publish/withdraw 使用），写入 `~/.blueai/secrets.json` |
+| `skills whoami`               | 查询当前 API Key 对应的用户身份                 |
+| `skills publish [path]`       | 将本地 Skill 推送到 Market（upsert，支持 `--version`、`--team <id1,id2>`） |
+| `skills withdraw <name>`      | 撤回处于 PENDING 审核状态的公开 Skill           |
 
 别名: `skills a` 等同于 `add`。`skills i`、`skills install`（无参数）从 `skills-lock.json` 恢复。`skills ls` 等同于 `list`。`skills experimental_install` 从 `skills-lock.json` 恢复。`skills experimental_sync` 扫描 `node_modules` 中的技能。
+
+## 模块结构图
+
+```mermaid
+graph TD
+    A["(根) blueai-skills"] --> B["src"];
+    B --> C["providers"];
+    B --> D["prompts"];
+    A --> E["scripts"];
+    A --> F["tests"];
+    A --> G["openspec"];
+
+    click C "./src/providers/CLAUDE.md" "查看 providers 模块文档"
+```
+
+> `src/prompts`（自定义交互式提示，1 个文件）、`scripts`（发布/校验脚本）、`tests`（集成测试）、`openspec`（规格驱动开发文档）当前未拆出独立 `CLAUDE.md`，其职责说明见下方模块索引与"架构"一节。
+
+## 模块索引
+
+| 模块路径         | 职责                                                                 | 文档                                    |
+| ---------------- | -------------------------------------------------------------------- | --------------------------------------- |
+| `src/`（根模块） | CLI 命令入口、技能发现/安装/更新/发布全部核心逻辑                    | 本文件                                  |
+| `src/providers/` | 远程技能来源抽象（`HostProvider` 接口）：well-known、COS、Market     | [src/providers/CLAUDE.md](./src/providers/CLAUDE.md) |
+| `scripts/`       | 构建期辅助脚本：生成第三方许可证、校验/同步 agent 列表、执行测试、发布 | 无独立文档，见下方"开发/发布"章节        |
+| `tests/`         | 跨命令集成测试（路径穿越、跨平台路径、市场推送等）                    | 无独立文档，见"测试策略"                |
+| `openspec/`      | 规格驱动开发（Spec-Driven Development）变更提案与已归档 spec         | 无独立文档，见仓库内 `openspec/config.yaml` |
 
 ## 架构
 
 ```
 src/
-├── cli.ts           # 主入口，命令路由，init/check/update
-├── cli.test.ts      # CLI 测试
-├── add.ts           # 核心 add 命令逻辑
-├── add.test.ts      # Add 命令测试
-├── list.ts          # 列出已安装技能命令
-├── list.test.ts     # List 命令测试
-├── agents.ts        # Agent 定义和检测
-├── installer.ts     # 技能安装逻辑（symlink/copy）+ listInstalledSkills
-├── skills.ts        # 技能发现和解析
-├── skill-lock.ts    # 全局 lock 文件管理（~/.agents/.skill-lock.json）
-├── local-lock.ts    # 本地 lock 文件管理（skills-lock.json，需提交到版本控制）
-├── sync.ts          # Sync 命令 - 扫描 node_modules 中的技能
-├── source-parser.ts # 解析 Git URL、GitHub 简写、本地路径
-├── git.ts           # Git clone 操作
-├── telemetry.ts     # 匿名使用统计
-├── types.ts         # TypeScript 类型定义
-├── mintlify.ts      # Mintlify 技能获取（旧版）
-├── providers/       # 远程技能提供者（GitHub, HuggingFace, Mintlify）
+├── cli.ts               # 主入口，命令路由（switch）、banner/help、init/check/update 实现
+├── cli.test.ts          # CLI 测试
+├── add.ts               # 核心 add 命令逻辑（解析来源、探测 agent、拉取技能、安装）
+├── add.test.ts / add-prompt.test.ts
+├── list.ts              # 列出已安装技能命令
+├── list.test.ts
+├── find.ts              # find/search 命令：调用 Market 搜索 API + 交互式多选安装
+├── remove.ts / remove.test.ts   # 卸载已安装技能
+├── install.ts           # experimental_install：从 skills-lock.json 恢复
+├── sync.ts / sync.test.ts       # experimental_sync：扫描 node_modules 同步技能
+├── agents.ts            # Agent 定义和检测（40+ agent 类型，含 OpenClaw/Clawdbot/Moltbot 探测）
+├── installer.ts         # 技能安装逻辑（symlink/copy）+ listInstalledSkills + 路径安全校验
+├── plugin-manifest.ts   # 插件清单发现/分组
+├── skills.ts            # 本地技能发现和解析
+├── skill-lock.ts        # 全局 lock 文件管理（~/.agents/.skill-lock.json，v3 格式）
+├── local-lock.ts        # 本地 lock 文件管理（skills-lock.json，需提交到版本控制）
+├── update-source.ts     # 由 lock 条目重建可安装 source 字符串（供 update 命令复用）
+├── source-parser.ts     # 解析 Git URL、GitHub 简写、本地路径
+├── git.ts                # Git clone 操作（GitCloneError、超时与临时目录清理）
+├── auth.ts               # login 命令：API Key 读写（~/.blueai/secrets.json，权限 0600/0700）
+├── publish.ts             # publish 命令：收集 SKILL.md + 附属文件并推送到 Market（跳过二进制/.env/敏感文件）
+├── withdraw.ts            # withdraw 命令：撤回 PENDING 状态的公开 Skill 审核
+├── whoami.ts              # whoami 命令：查询当前 API Key 对应用户身份
+├── api-error.ts           # 统一处理 Market API 失败响应（401 提示重新登录等）
+├── telemetry.ts          # 匿名使用统计（默认关闭）
+├── branding.ts            # 品牌常量：包名/bin 名/Market 站点 URL/遥测与审计 URL
+├── constants.ts           # 共享常量
+├── types.ts               # TypeScript 类型定义（Skill/RemoteSkill/AgentType/ApiResult 等）
+├── mintlify.ts             # Mintlify 技能获取（旧版，独立于 providers/wellknown.ts）
+├── prompts/
+│   └── search-multiselect.ts   # 自定义 @clack/prompts 搜索型多选交互
+├── providers/             # 远程技能提供者抽象（详见 src/providers/CLAUDE.md）
 │   ├── index.ts
-│   ├── registry.ts
-│   ├── types.ts
-│   ├── huggingface.ts
-│   └── mintlify.ts
-├── init.test.ts     # Init 命令测试
-└── test-utils.ts    # 测试工具
+│   ├── types.ts            # HostProvider / RemoteSkill / ProviderMatch 接口
+│   ├── wellknown.ts         # well-known 注册表（Mintlify 等）
+│   ├── cos.ts               # 腾讯云 COS（BMC 定制）
+│   └── market.ts            # Skills Market 平台（BMC 定制，含发布/审核/登录 API）
+├── init.test.ts
+└── test-utils.ts           # 测试工具
 
-tests/
-├── sanitize-name.test.ts     # sanitizeName 测试（路径遍历防护）
-├── skill-matching.test.ts    # filterSkills 测试（多词技能名匹配）
-├── source-parser.test.ts     # URL/路径解析测试
-├── installer-symlink.test.ts # symlink 安装测试
-├── list-installed.test.ts    # 列出已安装技能测试
-├── skill-path.test.ts        # 技能路径处理测试
-├── wellknown-provider.test.ts # well-known provider 测试
-└── dist.test.ts              # 构建产物测试
+tests/                        # 顶层集成测试（比 src/*.test.ts 更偏跨模块/跨平台场景）
+├── sanitize-name.test.ts       # sanitizeName 测试（路径遍历防护）
+├── skill-matching.test.ts      # filterSkills 测试（多词技能名匹配）
+├── source-parser.test.ts       # URL/路径解析测试
+├── installer-symlink.test.ts   # symlink 安装测试
+├── list-installed.test.ts      # 列出已安装技能测试
+├── skill-path.test.ts          # 技能路径处理测试
+├── wellknown-provider.test.ts  # well-known provider 测试
+├── dist.test.ts                # 构建产物测试
+├── plugin-grouping.test.ts / plugin-manifest-discovery.test.ts
+├── cross-platform-paths.test.ts / xdg-config-paths.test.ts / openclaw-paths.test.ts
+├── remove-canonical.test.ts
+├── full-depth-discovery.test.ts
+├── subpath-traversal.test.ts
+├── local-lock.test.ts
+└── market-push.test.ts         # publish/市场推送相关集成测试
+
+scripts/
+├── execute-tests.ts     # `pnpm exec:test` 执行入口
+├── sync-agents.ts       # 根据 src/agents.ts 同步 README.md 中的 agent 列表
+├── generate-licenses.ts # 生成 ThirdPartyNoticeText.txt（构建前置步骤）
+├── validate-agents.ts   # 校验 agents.ts 中 AgentConfig 定义的合法性
+└── release.sh           # `pnpm release[:patch|:minor|:major]` 发布脚本
 ```
 
 ## 更新检查系统
@@ -107,12 +170,18 @@ Lock 文件格式为 v3。关键字段: `skillFolderHash`（技能文件夹的 G
 
 ## 关键集成点
 
-| 功能                       | 实现                                 |
-| -------------------------- | ------------------------------------ |
-| `skills add`               | `src/add.ts` - 完整实现              |
-| `skills experimental_sync` | `src/sync.ts` - 扫描 node_modules    |
-| `skills check`             | `POST /check-updates` API            |
-| `skills update`            | `POST /check-updates` + 逐个重新安装 |
+| 功能                       | 实现                                                       |
+| -------------------------- | ------------------------------------------------------------ |
+| `skills add`               | `src/add.ts` - 完整实现                                      |
+| `skills experimental_sync` | `src/sync.ts` - 扫描 node_modules                             |
+| `skills check`             | `POST /check-updates` API                                    |
+| `skills update`            | `POST /check-updates` + 逐个重新安装（`src/update-source.ts` 重建 source） |
+| `skills find`              | `src/find.ts` - 调用 Market 搜索 API + 交互式多选安装         |
+| `skills login`             | `src/auth.ts` - API Key 持久化到 `~/.blueai/secrets.json`（0600），也支持 `SKILLS_API_KEY` 环境变量 |
+| `skills whoami`            | `src/whoami.ts` - `marketProvider.whoami()`                  |
+| `skills publish`           | `src/publish.ts` - 收集 SKILL.md + 附属文件（跳过二进制/.env/VCS 噪音），调用 `marketProvider` 推送 |
+| `skills withdraw`          | `src/withdraw.ts` - `resolveMine` 鉴权解析 + `marketProvider.withdraw()` |
+| Market API 失败统一处理     | `src/api-error.ts` - `reportApiFailure()`，401 时提示重新登录  |
 
 ## 开发
 
@@ -129,6 +198,9 @@ pnpm dev experimental_sync
 pnpm dev check
 pnpm dev update
 pnpm dev init my-skill
+pnpm dev login sk-xxxx
+pnpm dev whoami
+pnpm dev publish ./my-skill
 
 # 运行所有测试
 pnpm test
@@ -143,6 +215,15 @@ pnpm type-check
 # 格式化代码
 pnpm format
 ```
+
+## 测试策略
+
+- 测试运行器：vitest（`pnpm test`）
+- 两套测试目录：
+  - `src/*.test.ts` — 与实现文件同目录的单元测试（如 `add.test.ts`、`auth.test.ts`、`publish.test.ts`、`withdraw.test.ts`、`whoami.test.ts`、`update-source.test.ts`）
+  - `tests/*.test.ts` — 跨模块/跨平台集成测试（路径穿越防护、symlink 安装、市场推送等）
+- 安全相关测试重点：`sanitize-name.test.ts`（路径遍历）、`subpath-traversal.test.ts`、`market-push.test.ts`（发布时的敏感文件跳过与路径校验）
+- 构建产物测试：`tests/dist.test.ts` 校验 `pnpm build` 输出可用
 
 ## 代码风格
 
@@ -167,6 +248,8 @@ pnpm build
 # 3. 发布
 npm publish
 ```
+
+也可使用 `pnpm release[:patch|:minor|:major]`（`scripts/release.sh`）自动完成版本号变更与发布流程。
 
 ## 添加新 Agent
 
@@ -195,6 +278,7 @@ skills-market (全栈 Web 平台)        skills-cli (npm CLI 工具)
 │ - API: /api/skills/*    │          │ - 多 agent 支持            │
 │ - API: /api/reviews/*   │          │ - skills-lock.json 管理   │
 │ - COS 文件存储           │          │ - 检查更新/同步            │
+│                          │          │ - 发布/撤回/登录 (publish/withdraw/login) │
 └─────────────────────────┘          └──────────────────────────┘
 ```
 
@@ -220,7 +304,8 @@ skills-market (全栈 Web 平台)        skills-cli (npm CLI 工具)
 - **搜索 API**: `GET /api/search?q=<query>&limit=10`
   - 返回: `{ skills: [{ id, name, installs, source }] }`
   - CLI 中在 `src/find.ts` 的 `searchSkillsAPI()` 函数调用
-  - API 基地址: `SEARCH_API_BASE`（默认 `https://skills.sh`）
+  - API 基地址: `SKILLS_SITE`（`src/branding.ts`，默认 `https://blueai-skills-market.bluemediagroup.cn`，可用 `SKILLS_SITE` 环境变量覆盖）
+- **发布/撤回/身份 API**: 由 `src/providers/market.ts` 的 `MarketProvider` 统一封装，鉴权头携带 `login` 命令保存的 API Key
 
 ### Market 数据模型
 
@@ -248,12 +333,12 @@ Review   → id, skillId, reviewerId, action(APPROVE/REJECT), comment
 ### 共享概念对照
 
 | 概念         | skills-market                  | skills-cli                            |
-| ------------ | ------------------------------ | ------------------------------------- |
+| ------------ | ------------------------------- | ------------------------------------- |
 | 技能数据结构 | Prisma Skill 模型              | `src/types.ts` Skill/RemoteSkill 接口 |
 | 技能内容     | COS 存储 + fileTree JSON       | SKILL.md 文件 + 附属文件              |
 | Agent 类型   | 无（平台无关）                 | `src/types.ts` AgentType              |
-| 搜索         | `/api/search` 或 `/api/skills` | `src/find.ts` 调用 SEARCH_API_BASE    |
-| 品牌/URL     | 部署在 skills.sh               | `src/branding.ts` 中 SKILLS_SITE      |
+| 搜索         | `/api/search` 或 `/api/skills` | `src/find.ts` 调用 SKILLS_SITE        |
+| 品牌/URL     | 部署在 blueai-skills-market.bluemediagroup.cn | `src/branding.ts` 中 SKILLS_SITE |
 
 ### 开发注意事项
 
@@ -261,6 +346,7 @@ Review   → id, skillId, reviewerId, action(APPROVE/REJECT), comment
 2. **修改 Skill/RemoteSkill 类型时**: 需检查 market 的 Prisma 模型和 `lib/types.ts` 是否需同步
 3. **修改 branding.ts 中的 URL 时**: 确保 market 端的对应路由存在
 4. **修改安装文件结构时**: market 端的技能文件存储格式（COS + fileTree）需保持一致
+5. **修改 publish/withdraw/whoami 时**: 需确认 market 端 `/api/skills`、`/api/skills/[id]/publish` 等路由及鉴权中间件（API Key）是否同步变更
 
 <!-- GSD:project-start source:PROJECT.md -->
 ## Project
@@ -317,6 +403,8 @@ Review   → id, skillId, reviewerId, action(APPROVE/REJECT), comment
 - `GITHUB_TOKEN` - GitHub API 认证（从环境或 `gh` CLI 读取，`src/skill-lock.ts`）
 - `GH_TOKEN` - 替代 GitHub 令牌
 - `DISABLE_TELEMETRY` - 禁用遥测（当前遥测默认关闭）
+- `SKILLS_API_KEY` - Market API Key（优先级高于 `~/.blueai/secrets.json`，`src/auth.ts`）
+- `SKILLS_SITE` - 覆盖 Market 站点/API 基地址（`src/branding.ts`）
 - `CI` 环境变量用于检测 CI 环境
 - 目标: ESNext
 - Module resolution: bundler
@@ -336,7 +424,7 @@ Review   → id, skillId, reviewerId, action(APPROVE/REJECT), comment
 - Git 和 GitHub 配置（技能克隆）
 ## 二进制输出
 - 包名: `blueai-skills`
-- 版本: 1.4.3-bmc1.1.12
+- 版本: 1.4.7-bmc1.6.0
 - Bin 命令: `blueai-skills`
 - 发布文件: `dist/`, `bin/`, `README.md`, `ThirdPartyNoticeText.txt`
 <!-- GSD:stack-end -->
@@ -441,7 +529,7 @@ Review   → id, skillId, reviewerId, action(APPROVE/REJECT), comment
 - Depends on: All command modules
 - Used by: Entry point, shell execution
 - Purpose: Implement individual CLI commands
-- Location: `src/add.ts`, `src/list.ts`, `src/remove.ts`, `src/find.ts`, `src/install.ts`, `src/sync.ts`
+- Location: `src/add.ts`, `src/list.ts`, `src/remove.ts`, `src/find.ts`, `src/install.ts`, `src/sync.ts`, `src/auth.ts`, `src/publish.ts`, `src/withdraw.ts`, `src/whoami.ts`
 - Contains: Command-specific logic, user prompts, validation
 - Depends on: Installer, Provider, Lock files, Agents
 - Used by: CLI dispatcher
@@ -470,6 +558,11 @@ Review   → id, skillId, reviewerId, action(APPROVE/REJECT), comment
 - Contains: Lock file read/write, hash computation, GitHub hash fetching
 - Depends on: Git operations, Types
 - Used by: Add command, Check/Update commands, List command
+- Purpose: Market 发布/审核/身份能力（BMC 新增）
+- Location: `src/auth.ts`, `src/publish.ts`, `src/withdraw.ts`, `src/whoami.ts`, `src/api-error.ts`
+- Contains: API Key 持久化、SKILL.md 打包上传、PENDING 审核撤回、身份查询、统一失败响应处理
+- Depends on: `src/providers/market.ts`
+- Used by: CLI dispatcher (`login`/`publish`/`withdraw`/`whoami`)
 - Purpose: Cross-cutting concerns
 - Location: `src/branding.ts`, `src/telemetry.ts`, `src/prompts/search-multiselect.ts`, `src/constants.ts`
 - Contains: Branded URLs, telemetry tracking, custom prompts, shared constants
@@ -497,22 +590,35 @@ Review   → id, skillId, reviewerId, action(APPROVE/REJECT), comment
 - Purpose: Strategy for putting skills where agents can find them
 - Examples: `'symlink'` (default, saves space) or `'copy'` (for Windows/sandboxed agents)
 - Pattern: Symlink attempted first, falls back to copy on Windows or if symlink fails
+- Purpose: 统一 Market API 结果类型，区分成功/失败分支
+- Examples: `src/types.ts` `ApiResult<T>`，`src/api-error.ts` `reportApiFailure()`
+- Pattern: `{ ok: true, data: T } | { ok: false, status, code?, message, issues? }`
+- Used by: `login`/`publish`/`withdraw`/`whoami` 命令统一处理 401/网络异常/校验错误
 ## Entry Points
-- Location: `src/cli.ts` line 629, function `main()`
+- Location: `src/cli.ts` line 798, function `main()`
 - Triggers: `blueai-skills <command> [args]` shell invocation
 - Responsibilities: Parse command, route to handler, show banner/help
 - Location: `bin/cli.mjs` (generated by obuild from `src/cli.ts`)
 - Triggers: `npm install -g blueai-skills` installs to PATH
 - Responsibilities: Shebang + require/import of compiled CLI
-- Location: `src/add.ts` line 157+, function `runAdd(source, options)`
+- Location: `src/add.ts`, function `runAdd(source, options)`
 - Triggered by: `skills add <package> [options]`
 - Responsibilities: Parse source, detect agents, fetch skills, prompt user, install
-- Location: `src/find.ts` line 220+, function `runFind(args)`
+- Location: `src/find.ts`, function `runFind(args)`
 - Triggered by: `skills find [query]`
 - Responsibilities: Search API, interactive picker, install selected
-- Location: `src/cli.ts` lines 690-694 (check/update)
+- Location: `src/cli.ts` (check/update branches in `main()`)
 - Functions: `runCheck()`, `runUpdate()`
 - Responsibilities: Read locks, fetch updates, display results
+- Location: `src/publish.ts`, function `runPublish(args)`
+- Triggered by: `skills publish [path]`
+- Responsibilities: Collect SKILL.md + attachments (skip binary/.env/VCS noise), push to Market
+- Location: `src/withdraw.ts`, function `runWithdraw(args)`
+- Triggered by: `skills withdraw <name>`
+- Responsibilities: Resolve skillId with auth, call Market withdraw API
+- Location: `src/whoami.ts`, function `runWhoami()`
+- Triggered by: `skills whoami`
+- Responsibilities: Query current API Key identity
 ## Error Handling
 - **Symlink fallback** (`src/installer.ts` lines 149-240): If symlink fails (Windows, permissions), automatically try copy mode
 - **Git clone errors** (`src/git.ts`): Wrap git errors in `GitCloneError`, cleanup temp directories
@@ -520,6 +626,8 @@ Review   → id, skillId, reviewerId, action(APPROVE/REJECT), comment
 - **Provider mismatches** (`src/providers/index.ts`): If URL doesn't match any provider, default to GitHub
 - **Audit data missing** (`src/add.ts` lines 109-151): Gracefully degrade if security audit unavailable, show `--` placeholders
 - **Path traversal** (`src/installer.ts` lines 45-60): `sanitizeName()` removes `../`, leading dots, special chars before filesystem operations
+- **Market API failures** (`src/api-error.ts`): `reportApiFailure()` uniformly logs `HTTP <status>: <message>` (+ issues), prompts re-login on 401, sets `process.exitCode = 1` (no hard `process.exit()`)
+- **Sensitive file exclusion** (`src/publish.ts`): Skips `.env*` (except `.env.example`), VCS/editor noise dirs, symlinks, and validates realpath to reject path traversal during publish
 ## Cross-Cutting Concerns
 <!-- GSD:architecture-end -->
 
