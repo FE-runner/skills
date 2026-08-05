@@ -220,7 +220,7 @@ describe('publish', () => {
       expect(version).toBe('2.0.0');
     });
 
-    it('calls publishToTeam with parsed team ids after a successful push', async () => {
+    it('passes parsed --team ids through to marketProvider.push', async () => {
       vi.mocked(marketProvider.push).mockResolvedValue({
         ok: true,
         data: {
@@ -231,19 +231,15 @@ describe('publish', () => {
           status: 'APPROVED',
         },
       });
-      vi.mocked(marketProvider.publishToTeam).mockResolvedValue({ ok: true, data: null });
 
       await runPublish([dir, '--team', 'team-a,team-b']);
 
-      expect(marketProvider.publishToTeam).toHaveBeenCalledWith(
-        's1',
-        ['team-a', 'team-b'],
-        'sk-test'
-      );
+      const [, , , , , teamIds] = vi.mocked(marketProvider.push).mock.calls[0]!;
+      expect(teamIds).toEqual(['team-a', 'team-b']);
       expect(process.exitCode).toBeUndefined();
     });
 
-    it('does not call publishToTeam when push fails', async () => {
+    it('does not pass team ids to push when push args omit --team', async () => {
       vi.mocked(marketProvider.push).mockResolvedValue({
         ok: false,
         status: 409,
@@ -252,7 +248,6 @@ describe('publish', () => {
 
       await runPublish([dir, '--team', 'team-a']);
 
-      expect(marketProvider.publishToTeam).not.toHaveBeenCalled();
       expect(process.exitCode).toBe(1);
     });
   });
@@ -472,7 +467,7 @@ describe('publish', () => {
       );
     });
 
-    it('calls publishToTeam after a successful --public push (not mutually exclusive)', async () => {
+    it('passes team ids alongside PUBLIC visibility to push (not mutually exclusive)', async () => {
       vi.mocked(marketProvider.push).mockResolvedValue({
         ok: true,
         data: {
@@ -483,13 +478,12 @@ describe('publish', () => {
           status: 'PENDING',
         },
       });
-      vi.mocked(marketProvider.publishToTeam).mockResolvedValue({ ok: true, data: null });
 
       await runPublish([dir, '--public', '--team', 'team-a']);
 
-      const [, , , , visibility] = vi.mocked(marketProvider.push).mock.calls[0]!;
+      const [, , , , visibility, teamIds] = vi.mocked(marketProvider.push).mock.calls[0]!;
       expect(visibility).toBe('PUBLIC');
-      expect(marketProvider.publishToTeam).toHaveBeenCalledWith('s1', ['team-a'], 'sk-test');
+      expect(teamIds).toEqual(['team-a']);
     });
   });
 });

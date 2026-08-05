@@ -154,7 +154,7 @@ export function parsePublishOptions(args: string[]): PublishOptions {
 /**
  * `skills publish [path] [--version x.y.z] [--team a,b] [--public]` 命令：
  * 读取本地 SKILL.md + 附属文本文件，调用 `/api/skill/push` upsert 到私有（默认）或公开（`--public`）Skill；
- * 提供 `--team` 且 push 成功后，链式调用 `/api/skill/publishToTeam` 分发到多个团队（与 `--public` 可叠加，互不影响）。
+ * 提供 `--team` 时随 push 请求一起发布到多个团队（服务端同请求内完成，与 `--public` 可叠加，互不影响）。
  */
 export async function runPublish(args: string[]): Promise<void> {
   const { path: targetDir, version, teamIds, public: isPublic } = parsePublishOptions(args);
@@ -190,7 +190,8 @@ export async function runPublish(args: string[]): Promise<void> {
     files,
     version,
     apiKey,
-    isPublic ? 'PUBLIC' : undefined
+    isPublic ? 'PUBLIC' : undefined,
+    teamIds
   );
   if (!pushResult.ok) {
     reportApiFailure(pushResult);
@@ -224,11 +225,6 @@ export async function runPublish(args: string[]): Promise<void> {
   }
 
   if (teamIds && teamIds.length > 0) {
-    const teamResult = await marketProvider.publishToTeam(data.skillId, teamIds, apiKey);
-    if (!teamResult.ok) {
-      reportApiFailure(teamResult);
-      return;
-    }
     console.log(`✓ 已提交团队审核: ${teamIds.join(', ')}`);
   }
 }
