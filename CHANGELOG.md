@@ -2,6 +2,12 @@
 
 > 本 CHANGELOG 仅记录 BMC 内部 Fork（`-bmc` 标签）自身的改动，不包含上游 `blueai-skills` 原始项目的版本历史。
 
+## [Unreleased]
+
+### 改进
+
+- `publish --team` 改为随 push 请求一次性发出（服务端 `/api/skill/push` 支持 `teamIds`），不再链式调用 `publishToTeam`
+
 ## [1.4.7-bmc1.6.0] - 2026-08-04
 
 ### 新功能
