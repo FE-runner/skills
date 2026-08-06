@@ -2,7 +2,7 @@
 
 > 本 CHANGELOG 仅记录 BMC 内部 Fork（`-bmc` 标签）自身的改动，不包含上游 `blueai-skills` 原始项目的版本历史。
 
-## [Unreleased]
+## [1.4.7-bmc1.6.1] - 2026-08-06
 
 ### 改进
 
