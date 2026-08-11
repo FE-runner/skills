@@ -1,6 +1,6 @@
 import { join } from 'path';
 import { describe, it, expect } from 'vitest';
-import { getOpenClawGlobalSkillsDir, isUniversalAgent, getUniversalAgents } from '../src/agents.ts';
+import { getOpenClawGlobalSkillsDir } from '../src/agents.ts';
 
 describe('openclaw global path resolution', () => {
   const home = '/tmp/home';
@@ -26,12 +26,5 @@ describe('openclaw global path resolution', () => {
 
   it('defaults to ~/.openclaw when no known path exists', () => {
     expect(getOpenClawGlobalSkillsDir(home, () => false)).toBe(join(home, '.openclaw/skills'));
-  });
-});
-
-describe('openclaw project-level skillsDir', () => {
-  it('uses the universal .agents/skills directory', () => {
-    expect(isUniversalAgent('openclaw')).toBe(true);
-    expect(getUniversalAgents()).toContain('openclaw');
   });
 });

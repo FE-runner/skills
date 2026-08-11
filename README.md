@@ -306,7 +306,7 @@ Agent 技能是可复用的指令集，用于扩展编程 Agent 的能力。它�
 | Augment | `augment` | `.augment/skills/` | `~/.augment/skills/` |
 | IBM Bob | `bob` | `.bob/skills/` | `~/.bob/skills/` |
 | Claude Code | `claude-code` | `.claude/skills/` | `~/.claude/skills/` |
-| OpenClaw | `openclaw` | `.agents/skills/` | `~/.openclaw/skills/` |
+| OpenClaw | `openclaw` | `skills/` | `~/.openclaw/skills/` |
 | Hermes | `hermes` | `skills/` | `~/.hermes/skills/` |
 | Cline, Warp | `cline`, `warp` | `.agents/skills/` | `~/.agents/skills/` |
 | CodeBuddy | `codebuddy` | `.codebuddy/skills/` | `~/.codebuddy/skills/` |
