@@ -2,13 +2,13 @@
 
 ## 1. 命令层
 
-- [ ] 1.1 在 `src/cli.ts` 命令路由新增 `obs` 分支（`skills obs …`），接入 `runObs()`；`--help` 补 obs 用法
-- [ ] 1.2 新建 `src/obs.ts`：解析子命令（add 语义/create / list / refresh），校验 `--agent` 枚举（hermes|openclaw 与 `agentName` 必填；`--note` 可选）；**`agentName` 保留字检测**（add/list/refresh 取为 agentName 时本地报错退出）
+- [x] 1.1 在 `src/cli.ts` 命令路由新增 `obs` 分支（`skills obs …`），接入 `runObs()`；`--help` 补 obs 用法
+- [x] 1.2 新建 `src/obs.ts`：解析子命令（add 语义/create / list / refresh），校验 `--agent` 枚举（hermes|openclaw 与 `agentName` 必填；`--note` 可选）；**`agentName` 保留字检测**（add/list/refresh 取为 agentName 时本地报错退出）
 
 ## 2. Provider 与鉴权
 
-- [ ] 2.1 在 `src/providers/market.ts` 新增 `createObservability` / `listObservability` / `renewObservability(agentId)`（renewToken 走 POST + JSON body `{ agentId }`），复用 `requestApiResult` + Bearer API Key
-- [ ] 2.2 命令入口先 `getApiKey()`，缺失时提示 `skills login <api-key>` 并退出 1；失败路径复用 `reportApiFailure`
+- [x] 2.1 在 `src/providers/market.ts` 新增 `createObservability` / `listObservability` / `renewObservability(agentId)`（renewToken 走 POST + JSON body `{ agentId }`），复用 `requestApiResult` + Bearer API Key
+- [x] 2.2 命令入口先 `getApiKey()`，缺失时提示 `skills login <api-key>` 并退出 1；失败路径复用 `reportApiFailure`
 
 ## 3. 测试
 

@@ -101,6 +101,38 @@ interface CheckResponse {
 }
 
 /**
+ * 观测 Agent 类型（v1 仅 hermes / openclaw，与市场侧模板枚举一致）。
+ * AgentLoop 侧对 OpenClaw 用 openclaw 类型,服务端据此查模板渲染安装命令。
+ */
+export type ObservabilityAgentType = 'hermes' | 'openclaw';
+
+/** 观测接入记录（`obs list` 返回的每一条）,含 `id`（agentId）供 `obs refresh` 引用 */
+export interface ObservabilityRecord {
+  id: number;
+  agentType: string;
+  agentName: string;
+  note?: string | null;
+  serviceName: string;
+  createdAt: string;
+}
+
+/** `/api/observability/create` 返回: 创建后记录 + 一次性安装命令 */
+export interface CreateObservabilityResponse {
+  id: number;
+  agentType: string;
+  agentName: string;
+  serviceName: string;
+  installCommand: string;
+  note?: string | null;
+}
+
+/** `/api/observability/renewToken` 返回：换发后的安装命令 */
+export interface RenewObservabilityResponse {
+  serviceName: string;
+  installCommand: string;
+}
+
+/**
  * Skills Market provider.
  *
  * Install flow: resolve by name → install by ID
@@ -303,6 +335,62 @@ export class MarketProvider {
     }>(`${this.apiBase}/api/auth/me`, {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
+  }
+
+  /**
+   * 创建观测接入记录。用于 `skills obs <agentName> --agent <type> [--note ……]` 命令。
+   * `POST /api/observability/create`，请求体 `{ agentType, agentName, note? }`；
+   * 返回该记录的 serviceName 与一次性安装命令（与市场网页共用同一张表）。
+   */
+  async createObservability(
+    payload: { agentType: string; agentName: string; note?: string },
+    apiKey: string
+  ): Promise<ApiResult<CreateObservabilityResponse>> {
+    const body: Record<string, string> = {
+      agentType: payload.agentType,
+      agentName: payload.agentName,
+    };
+    if (payload.note) body.note = payload.note;
+
+    return requestApiResult<CreateObservabilityResponse>(
+      `${this.apiBase}/api/observability/create`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify(body),
+      }
+    );
+  }
+
+  /**
+   * 列出当前用户的观测接入清单。用于 `skills obs list` 命令。
+   * `GET /api/observability/list`，响应每一项含 `id`（agentId），
+   * 供 `skills obs refresh <agentId>` 引用。
+   */
+  async listObservability(apiKey: string): Promise<ApiResult<ObservabilityRecord[]>> {
+    return requestApiResult<ObservabilityRecord[]>(`${this.apiBase}/api/observability/list`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+  }
+
+  /**
+   * 换发接入记录的安装凭证（旧 token 立即作废）。用于 `skills obs refresh <agentId>` 命令。
+   * `POST /api/observability/renewToken`：请求体 `{ agentId }`（RPC-over-HTTP POST + JSON body 惯例），
+   * 返回带新 installToken 的安装命令。
+   */
+  async renewObservability(
+    agentId: number | string,
+    apiKey: string
+  ): Promise<ApiResult<RenewObservabilityResponse>> {
+    return requestApiResult<RenewObservabilityResponse>(
+      `${this.apiBase}/api/observability/renewToken`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ agentId }),
+      }
+    );
   }
 
   // ─── Private Helpers ───

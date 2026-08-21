@@ -11,6 +11,7 @@ import { runLogin } from './auth.ts';
 import { runPublish } from './publish.ts';
 import { runWithdraw } from './withdraw.ts';
 import { runWhoami } from './whoami.ts';
+import { runObs } from './obs.ts';
 import { runInstallFromLock } from './install.ts';
 import { runList } from './list.ts';
 import { removeCommand, parseRemoveOptions } from './remove.ts';
@@ -140,6 +141,12 @@ ${BOLD}Project:${RESET}
   init [name]          Initialize a skill (creates <name>/SKILL.md or ./SKILL.md)
   experimental_sync    Sync skills from node_modules into agent directories
 
+${BOLD}Observability:${RESET}
+  obs <agentName>          Create an obs record and print its install command
+      --agent <type>       Agent type (hermes | openclaw), required for create
+      --note <note>        Optional note for the record
+  obs list                 List your obs records (each row shows agentId)
+  obs refresh <agentId>    Re-issue the install token (old one invalidated)
 ${BOLD}Publishing:${RESET}
   login <api-key>          Save your Skills Market API Key for publish/withdraw
   whoami                   Show the user your API Key is currently logged in as
@@ -208,7 +215,12 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ${BIN_NAME} publish                        ${DIM}# push cwd Skill to the Market${RESET}
   ${DIM}$${RESET} ${BIN_NAME} publish ./my-skill --version 2.0.0
   ${DIM}$${RESET} ${BIN_NAME} publish --team team-a,team-b
+
   ${DIM}$${RESET} ${BIN_NAME} withdraw my-skill              ${DIM}# withdraw pending review${RESET}
+
+  ${DIM}$${RESET} ${BIN_NAME} obs 公司机 --agent hermes      ${DIM}# create an obs record and print its install command${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} obs list                          ${DIM}# list your records (each row shows agentId)${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} obs refresh 42                  ${DIM}# re-issue the token; old one invalidated${RESET}
 
 Discover more skills at ${TEXT}${SKILLS_SITE}/${RESET}
 `);
@@ -831,6 +843,9 @@ async function main(): Promise<void> {
       break;
     case 'whoami':
       await runWhoami();
+      break;
+    case 'obs':
+      await runObs(restArgs);
       break;
     case 'experimental_install': {
       showLogo();
