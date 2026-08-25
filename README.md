@@ -204,6 +204,44 @@ npx blueai-skills publish --public
 npx blueai-skills withdraw my-skill
 ```
 
+### Agent 可观测（obs）
+
+管理 Agent 可观测接入（与市场平台网页共用同一份接入记录）：创建接入、查看清单、换发安装凭证。
+
+前置：先 `npx blueai-skills login <api-key>` 登录（API Key 在市场平台「头像 → API Keys」页生成）。
+
+```bash
+# 创建接入记录并打印安装命令（--agent 必填：hermes / openclaw；--note 可选）
+npx blueai-skills obs 公司机 --agent hermes
+
+# "add" 是 create 的别名，等价写法
+npx blueai-skills obs add 公司机 --agent openclaw --note "办公机"
+
+# 列出接入清单（每行含 agentId，供 obs refresh 使用）
+npx blueai-skills obs list
+
+# 按 agentId 换发安装凭证（旧凭证立即失效；新凭证 5 分钟内有效且仅能用一次）
+npx blueai-skills obs refresh 42
+
+# 换发凭证并立即在本机执行安装（执行前二次确认；探针默认装本机）
+npx blueai-skills obs install 42
+
+# 查看 obs 帮助
+npx blueai-skills obs --help
+```
+
+本地联调：默认连生产平台，可用 `SKILLS_SITE` 指向本地服务（如本地平台跑在 3001）：
+
+```bash
+SKILLS_SITE=http://localhost:3001 npx blueai-skills obs list
+```
+
+安装命令示例（平台随记录生成的一次性凭证，5 分钟有效、用完即废、404 属预期）：
+
+```bash
+curl -fsSL "http://localhost:3001/api/observability/install?token=<token>&type=hermes" | bash
+```
+
 
 ### 选项
 

@@ -10,7 +10,17 @@ vi.mock('./providers/market.ts', () => ({
 vi.mock('./auth.ts', () => ({
   getApiKey: vi.fn(),
 }));
+vi.mock('@clack/prompts', () => ({
+  confirm: vi.fn(),
+  isCancel: (v: unknown) => v === Symbol.for('clack:cancel'),
+}));
+vi.mock('child_process', () => ({
+  spawn: vi.fn(),
+}));
 
+import { EventEmitter } from 'events';
+import * as p from '@clack/prompts';
+import { spawn } from 'child_process';
 import { marketProvider } from './providers/market.ts';
 import { getApiKey } from './auth.ts';
 import { runObs, parseObsOptions } from './obs.ts';
@@ -72,11 +82,26 @@ describe('obs', () => {
       expect(parseObsOptions(['refresh', 'abc']).error).toContain('必须是数字');
     });
 
+    it('parses install with a numeric agentId', () => {
+      expect(parseObsOptions(['install', '7'])).toEqual({
+        help: false,
+        subcommand: 'install',
+        agentId: '7',
+      });
+    });
+
+    it('rejects install without / non-numeric agentId', () => {
+      expect(parseObsOptions(['install']).error).toContain('agentId');
+      expect(parseObsOptions(['install', 'abc']).error).toContain('必须是数字');
+    });
+
     it('rejects reserved subcommand keywords used as agentName', () => {
       // "list" 是子命令，不能创建名为 list 的接入记录
       expect(parseObsOptions(['list', '--agent', 'hermes']).error).toContain('list');
       // "refresh" 同理
       expect(parseObsOptions(['add', 'refresh', '--agent', 'hermes']).error).toContain('refresh');
+      // "install" 同理
+      expect(parseObsOptions(['add', 'install', '--agent', 'hermes']).error).toContain('install');
     });
   });
 
@@ -206,6 +231,68 @@ describe('obs', () => {
       expect(errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('记录不存在'))).toBe(
         true
       );
+    });
+
+    it('runs the install command after confirm', async () => {
+      vi.mocked(marketProvider.renewObservability).mockResolvedValue({
+        ok: true,
+        data: {
+          serviceName: 'BSM-hermes-7',
+          installCommand: 'curl -fsSL "…?token=t9&type=hermes" | bash',
+        },
+      });
+      vi.mocked(p.confirm).mockResolvedValue(true);
+      const child = new EventEmitter();
+      vi.mocked(spawn).mockReturnValue(child as never);
+      setImmediate(() => child.emit('exit', 0));
+
+      await runObs(['install', '7']);
+
+      expect(marketProvider.renewObservability).toHaveBeenCalledWith(7, 'sk-test');
+      expect(spawn).toHaveBeenCalledWith(
+        '/bin/sh',
+        ['-c', 'curl -fsSL "…?token=t9&type=hermes" | bash'],
+        { stdio: 'inherit' }
+      );
+      expect(process.exitCode).toBeUndefined();
+      expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('执行完成'))).toBe(
+        true
+      );
+    });
+
+    it('skips execution when the user cancels', async () => {
+      vi.mocked(marketProvider.renewObservability).mockResolvedValue({
+        ok: true,
+        data: {
+          serviceName: 'BSM-hermes-7',
+          installCommand: 'curl -fsSL "…?token=t9&type=hermes" | bash',
+        },
+      });
+      vi.mocked(p.confirm).mockResolvedValue(false);
+
+      await runObs(['install', '7']);
+
+      expect(spawn).not.toHaveBeenCalled();
+      expect(process.exitCode).toBeUndefined();
+      expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('已取消'))).toBe(true);
+    });
+
+    it('sets exit code 1 when the install command fails', async () => {
+      vi.mocked(marketProvider.renewObservability).mockResolvedValue({
+        ok: true,
+        data: {
+          serviceName: 'BSM-hermes-7',
+          installCommand: 'curl -fsSL "…?token=t9&type=hermes" | bash',
+        },
+      });
+      vi.mocked(p.confirm).mockResolvedValue(true);
+      const child = new EventEmitter();
+      vi.mocked(spawn).mockReturnValue(child as never);
+      setImmediate(() => child.emit('exit', 1));
+
+      await runObs(['install', '7']);
+
+      expect(process.exitCode).toBe(1);
     });
   });
 });

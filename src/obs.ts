@@ -1,3 +1,5 @@
+import { spawn } from 'child_process';
+import * as p from '@clack/prompts';
 import { marketProvider } from './providers/market.ts';
 import type { ObservabilityAgentType } from './providers/market.ts';
 import { getApiKey } from './auth.ts';
@@ -14,9 +16,9 @@ const OBSERVABILITY_AGENT_TYPES: ObservabilityAgentType[] = ['hermes', 'openclaw
  * `obs add <name>` 与 `obs <name>` 等价（add 为 create 语义的别名），
  * 因此这些关键字不能再被当作接入名（agentName）。
  */
-const RESERVED_OBS_KEYWORDS = new Set(['add', 'list', 'refresh']);
+const RESERVED_OBS_KEYWORDS = new Set(['add', 'list', 'refresh', 'install']);
 
-export type ObsSubcommand = 'create' | 'list' | 'refresh';
+export type ObsSubcommand = 'create' | 'list' | 'refresh' | 'install';
 
 export interface ObsOptions {
   subcommand?: ObsSubcommand;
@@ -79,18 +81,19 @@ export function parseObsOptions(args: string[]): ObsOptions {
     return { help, subcommand: 'list' };
   }
 
-  if (first === 'refresh') {
+  if (first === 'refresh' || first === 'install') {
+    const subcommand = first;
     if (positionals.length < 2) {
-      return { help, error: '缺少 agentId。用法: obs refresh <agentId>' };
+      return { help, error: `缺少 agentId。用法: obs ${subcommand} <agentId>` };
     }
     if (positionals.length > 2 || agentType || note) {
-      return { help, error: 'refresh 只接受一个 agentId 位置参数' };
+      return { help, error: `${subcommand} 只接受一个 agentId 位置参数` };
     }
     const agentId = positionals[1];
     if (!agentId || !/^\d+$/.test(agentId)) {
       return { help, error: `agentId 必须是数字，收到 "${agentId}"` };
     }
-    return { help, subcommand: 'refresh', agentId };
+    return { help, subcommand, agentId };
   }
 
   // create 语义（`add` 为可选别名，跳过取下一个位置参数为 agentName）
@@ -142,6 +145,7 @@ Commands:
                            Same as above (add is an alias)
   obs list                 List your observability records (each row shows agentId)
   obs refresh <agentId>    Generate a new install token (old one is invalidated immediately)
+  obs install <agentId>    Generate a new install token AND run it on this machine
 
 Options:
   --agent <type>   Agent type, required for create (hermes | openclaw)
@@ -231,6 +235,36 @@ export async function runObs(args: string[]): Promise<void> {
     return;
   }
 
+  if (opts.subcommand === 'install') {
+    // 复用换发链路拿新凭证，随后确认后在本机执行（安装对象默认就是本机）
+    const result = await marketProvider.renewObservability(Number(opts.agentId), apiKey);
+    if (!result.ok) {
+      reportApiFailure(result);
+      if (result.status === 404) {
+        console.error('提示: 接入记录不存在，或该记录相关凭证已失效');
+      }
+      return;
+    }
+    console.log(`  serviceName: ${result.data.serviceName}`);
+    console.log(`  安装命令: ${result.data.installCommand}`);
+    const confirmed = await p.confirm({
+      message: '立即在本机执行上面的安装命令？（凭证一次性、5 分钟有效）',
+    });
+    if (p.isCancel(confirmed) || !confirmed) {
+      console.log('已取消；命令 5 分钟内仍可手动执行');
+      return;
+    }
+    console.log('开始执行安装…（脚本输出见下方）');
+    try {
+      await runInstallCommand(result.data.installCommand);
+      console.log('✓ 安装命令执行完成');
+    } catch (err) {
+      console.error(`安装失败: ${err instanceof Error ? err.message : String(err)}`);
+      process.exitCode = 1;
+    }
+    return;
+  }
+
   // create
   const result = await marketProvider.createObservability(
     { agentType: opts.agentType!, agentName: opts.agentName!, note: opts.note },
@@ -250,4 +284,19 @@ export async function runObs(args: string[]): Promise<void> {
   console.log(
     `  凭证: 5 分钟内有效且仅能使用一次；过期或已使用后请 ${BIN_NAME} obs refresh ${data.id}`
   );
+}
+
+/**
+ * 在本机执行平台生成的包壳安装命令（curl … | bash），继承 stdio 展示探针安装输出。
+ * 安装凭证为一次性、5 分钟有效：命令执行一次后即作废，不可重复使用。
+ */
+export function runInstallCommand(command: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('/bin/sh', ['-c', command], { stdio: 'inherit' });
+    child.once('error', (err) => reject(err));
+    child.once('exit', (code, signal) => {
+      if (code === 0) resolve();
+      else reject(new Error(`安装命令执行失败 (exit ${code ?? signal})`));
+    });
+  });
 }
