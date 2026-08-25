@@ -215,7 +215,8 @@ export async function runObs(args: string[]): Promise<void> {
   }
 
   if (opts.subcommand === 'refresh') {
-    const result = await marketProvider.renewObservability(opts.agentId!, apiKey);
+    // agentId 经 parse 校验为数字字符串，转 number 匹配市场侧 z.number() 契约
+    const result = await marketProvider.renewObservability(Number(opts.agentId), apiKey);
     if (!result.ok) {
       reportApiFailure(result);
       if (result.status === 404) {

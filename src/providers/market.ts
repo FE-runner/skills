@@ -380,7 +380,7 @@ export class MarketProvider {
    * 返回带新 installToken 的安装命令。
    */
   async renewObservability(
-    agentId: number | string,
+    agentId: number,
     apiKey: string
   ): Promise<ApiResult<RenewObservabilityResponse>> {
     return requestApiResult<RenewObservabilityResponse>(

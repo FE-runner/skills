@@ -149,7 +149,7 @@ describe('obs', () => {
 
       await runObs(['refresh', '7']);
 
-      expect(marketProvider.renewObservability).toHaveBeenCalledWith('7', 'sk-test');
+      expect(marketProvider.renewObservability).toHaveBeenCalledWith(7, 'sk-test');
       expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('new'))).toBe(true);
     });
 
