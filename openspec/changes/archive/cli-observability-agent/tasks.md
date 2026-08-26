@@ -12,11 +12,11 @@
 
 ## 3. 测试
 
-- [ ] 3.1 为 `runObs` 补单元测试：agent 枚举非法本地拒绝、refresh 缺 agentId 用法报错、**agentName 保留字拒绝**
-- [ ] 3.2 补 provider mock 测试：create/list/renew 三方法请求路径（renew 断言 POST body `{ agentId }`）、鉴权头、响应 envelope 解析、**list 输出含 agentId 字段断言**
-- [ ] 3.3 全量 `pnpm test`、`pnpm tsc --noEmit` 通过
+- [x] 3.1 为 `runObs` 补单元测试：agent 枚举非法本地拒绝、refresh 缺 agentId 用法报错、**agentName 保留字拒绝**
+- [x] 3.2 补 provider mock 测试：create/list/renew 三方法请求路径（renew 断言 POST body `{ agentId }`）、鉴权头、响应 envelope 解析、**list 输出含 agentId 字段断言**
+- [x] 3.3 全量 `pnpm test`、`pnpm tsc --noEmit` 通过
 
 ## 4. 文档
 
-- [ ] 4.1 更新 `README.md` 命令表补 `obs` 三命令；`CHANGELOG.md` 补条目
-- [ ] 4.2 与市场侧联调冒烟验证（create → list（含 agentId）→ refresh <agentId> 顺序全通过）后发布
+- [x] 4.1 更新 `README.md` 命令表补 `obs` 三命令；`CHANGELOG.md` 补条目
+- [x] 4.2 与市场侧联调冒烟验证（create → list（含 agentId）→ refresh <agentId> 顺序全通过）后发布
