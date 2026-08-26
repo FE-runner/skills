@@ -1,6 +1,6 @@
 ## Purpose
 
-为 `skills` CLI 用户提供 Agent 可观测接入的终端操作：创建接入记录、列出接入清单、按 agentId 换发安装 token。与市场网页共用同一套 API 与数据表。
+为 `skills` CLI 用户提供 Agent 可观测接入的终端操作：创建接入记录、列出接入清单、按 agentId 换发安装 token、在本机一键安装探针。与市场网页共用同一套 API 与数据表。
 
 ## ADDED Requirements
 
@@ -38,5 +38,20 @@
 - **THEN** CLI 提示用法错误并不发起请求
 
 #### Scenario: agentName 为保留字拒绝
-- **WHEN** 用户意图创建名为 `list`/`refresh`/`add` 的接入记录（如 `skills obs list --agent hermes`），而该位置参数已被子命令语义占用
+- **WHEN** 用户意图创建名为 `list`/`refresh`/`add`/`install` 的接入记录（如 `skills obs list --agent hermes`），而该位置参数已被子命令语义占用
 - **THEN** CLI 提示保留字冲突并退出非零，不发起创建请求
+
+### Requirement: 在本机一键安装（install）
+`skills obs install <agentId>` 命令 SHALL 换发该记录的 installToken（与 refresh 相同契约），随后**二次确认后在本机执行**平台返回的包壳安装命令（`curl …/install?token=…&type=… | bash`），探针装到运行命令的机器。用户取消确认时 SHALL 不执行并提示命令仍可手动执行；执行非零退出码 SHALL 置为非零退出且不抛出副作用。
+
+#### Scenario: 确认后安装
+- **WHEN** 用户运行 `skills obs install 42` 并确认执行
+- **THEN** CLI 调用 renewToken API，将返回的安装命令交给本机 shell 执行，探针安装在当前机器
+
+#### Scenario: 取消安装
+- **WHEN** 用户运行 `skills obs install 42` 但取消确认
+- **THEN** CLI 不执行任何安装命令，提示凭证 5 分钟内仍可手动执行，退出码为 0
+
+#### Scenario: 安装命令执行失败
+- **WHEN** 安装命令在 shell 中非零退出（如网络/凭证失效）
+- **THEN** CLI 打印失败信息并置退出码为非零
