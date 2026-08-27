@@ -102,7 +102,7 @@ describe('publish', () => {
       expect(marketProvider.push).not.toHaveBeenCalled();
     });
 
-    it('skips .git, symlinks, and binary files; includes plain text files', async () => {
+    it('keeps symlink/binary skipping (security), collects plain text files; .git no longer skipped locally', async () => {
       writeSkillMd();
       writeFileSync(join(dir, 'notes.txt'), 'plain text content', 'utf-8');
       mkdirSync(join(dir, '.git'));
@@ -125,7 +125,15 @@ describe('publish', () => {
 
       expect(marketProvider.push).toHaveBeenCalledTimes(1);
       const [, files] = vi.mocked(marketProvider.push).mock.calls[0]!;
-      expect(files).toEqual([{ path: 'notes.txt', content: 'plain text content' }]);
+      // .git 内容不再被本地跳过（服务端收口），二进制/符号链接仍跳过
+      expect(files).toEqual(
+        expect.arrayContaining([
+          { path: 'notes.txt', content: 'plain text content' },
+          { path: '.git/config', content: 'should be skipped' },
+        ])
+      );
+      expect(files.some((f) => f.path === 'binary.dat')).toBe(false);
+      expect(files.some((f) => f.path === 'link.txt')).toBe(false);
       expect(
         errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('跳过符号链接'))
       ).toBe(true);
@@ -134,16 +142,16 @@ describe('publish', () => {
       ).toBe(true);
     });
 
-    it('skips .svn/.hg/.idea/.vscode/.DS_Store and .env files, but includes other hidden files', async () => {
+    it('no longer filters user files: .gitignore/.env*/.github/.git all collected; only sys-noise not skipped locally', async () => {
       writeSkillMd();
-      mkdirSync(join(dir, '.svn'));
-      writeFileSync(join(dir, '.svn', 'entries'), 'skip me', 'utf-8');
-      mkdirSync(join(dir, '.idea'));
-      writeFileSync(join(dir, '.idea', 'workspace.xml'), 'skip me', 'utf-8');
-      writeFileSync(join(dir, '.DS_Store'), 'skip me', 'utf-8');
+      // 用户文件一律收集（含密钥文件/env/.gitignore 等），过滤已交由服务端收口
+      mkdirSync(join(dir, '.git'));
+      writeFileSync(join(dir, '.git', 'config'), 'collected too', 'utf-8');
+      writeFileSync(join(dir, '.DS_Store'), 'collected too', 'utf-8');
       writeFileSync(join(dir, '.env'), 'SECRET=xxx', 'utf-8');
       writeFileSync(join(dir, '.env.local'), 'SECRET=xxx', 'utf-8');
       writeFileSync(join(dir, '.env.example'), 'SECRET=', 'utf-8');
+      writeFileSync(join(dir, '.gitignore'), 'node_modules', 'utf-8');
       mkdirSync(join(dir, '.github'));
       writeFileSync(join(dir, '.github', 'note.txt'), 'kept', 'utf-8');
 
@@ -165,13 +173,14 @@ describe('publish', () => {
       expect(files).toEqual(
         expect.arrayContaining([
           { path: '.env.example', content: 'SECRET=' },
+          { path: '.env', content: 'SECRET=xxx' },
+          { path: '.env.local', content: 'SECRET=xxx' },
+          { path: '.gitignore', content: 'node_modules' },
           { path: '.github/note.txt', content: 'kept' },
+          { path: '.git/config', content: 'collected too' },
+          { path: '.DS_Store', content: 'collected too' },
         ])
       );
-      expect(files).toHaveLength(2);
-      expect(
-        errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('跳过环境变量文件 .env'))
-      ).toBe(true);
     });
 
     it('rejects files whose real path escapes the publish root (TOCTOU)', async () => {
