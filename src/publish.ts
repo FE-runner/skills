@@ -8,8 +8,6 @@ import { BIN_NAME } from './branding.ts';
 const SKILL_MD_FILENAME = 'SKILL.md';
 /** 二进制检测采样字节数，参考 Git 的检测量级 */
 const BINARY_SNIFF_BYTES = 8000;
-/** 无条件跳过的 VCS/编辑器/系统噪音目录或文件名 */
-const SKIP_ENTRY_NAMES = new Set(['.git', '.svn', '.hg', '.idea', '.vscode', '.DS_Store']);
 
 interface CollectedFile {
   /** 相对发布根目录的路径（正斜杠分隔） */
@@ -36,10 +34,9 @@ function isBinary(buf: Buffer): boolean {
 
 /**
  * 遍历发布根目录，收集 SKILL.md 与附属文本文件。
- * 安全边界：跳过 VCS/编辑器/系统噪音目录（.git、.svn、.hg、.idea、.vscode、.DS_Store）、
- * 环境变量文件（.env*，.env.example 除外，防止误传密钥）、符号链接（不跟随）、
- * 非常规文件（FIFO/socket 等），并对每个候选文件做 realpath 校验，拒绝越出发布根目录的路径穿越。
- * 其余隐藏文件/目录（如 .github）不再特殊跳过，按普通文件走二进制/文本判断。
+ * 用户文件（含 .gitignore/.env.example/.github 等隐藏文件、.env* 密钥文件）一律收集，不做内容过滤，
+ * 系统噪音（macOS 缓存、VCS 元数据）的剔除统一由服务端（skills-market 的 validateZip）收口。
+ * 本地仅保留安全防线：符号链接（不跟随）、非常规文件（FIFO/socket 等）、realpath 越界（路径穿越）、二进制文件。
  */
 function collectFiles(rootDir: string): CollectResult {
   const rootReal = realpathSync(rootDir);
@@ -48,14 +45,6 @@ function collectFiles(rootDir: string): CollectResult {
 
   function walk(dir: string, relBase: string): void {
     for (const entry of readdirSync(dir)) {
-      if (SKIP_ENTRY_NAMES.has(entry)) continue;
-      if (entry.startsWith('.env') && entry !== '.env.example') {
-        console.error(
-          `警告: 跳过环境变量文件 ${relBase ? `${relBase}/${entry}` : entry}（可能含密钥）`
-        );
-        continue;
-      }
-
       const fullPath = join(dir, entry);
       const relPath = relBase ? `${relBase}/${entry}` : entry;
 
