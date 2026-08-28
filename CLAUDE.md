@@ -241,15 +241,45 @@ CI 在代码格式不规范时会失败。
 
 ## 发布
 
+npm 包发布到 **npmjs.org 官方 registry**，由 GitHub Actions 自动完成（本地不手动 `npm publish`）。
+
+### Git remote 结构（重要）
+
+本仓库有两个主要 remote，**发版时两个都要 push**，否则 GitHub Actions 不会触发：
+
+| remote | 仓库 | 用途 |
+| ------ | ---- | ---- |
+| `origin` | `git@git.domob-inc.cn:bmc/skills/bmc_skills_cli.git`（内网 gitlab） | 日常开发 push |
+| `old-origin` | `git@github.com:FE-runner/skills.git`（GitHub） | **发布触发，GitHub Actions 所在仓库** |
+| `upstream` | `https://github.com/vercel-labs/skills.git` | 上游同步 |
+
+> ⚠️ 常见翻车点:上次发版"没生效"就是因为只 push 了内网 `origin`，tag 没到 GitHub，`Publish` workflow（`on: push: tags: ['v*']`）没触发。
+
+### 发布流程（CI 自动发布）
+
 ```bash
-# 1. 修改 package.json 中的版本号
-# 2. 构建
+# 1. 版本号 bump（自动打 tag 并生成 commit）
+npm version patch   # 或 minor / major
+
+# 2. 构建、类型检查确保能过
 pnpm build
-# 3. 发布
-npm publish
+pnpm type-check
+
+# 3. 推送（两个远程都要推！）
+git push origin master --follow-tags      # 内网
+git push old-origin master --follow-tags  # GitHub，触发 Publish workflow
+
+# 4. 验证
+gh run list --limit 5            # 查看 workflow 运行状态
+npm view blueai-skills version   # 确认新版本上线
 ```
 
-也可使用 `pnpm release[:patch|:minor|:major]`（`scripts/release.sh`）自动完成版本号变更与发布流程。
+也可使用 `pnpm release[:patch|:minor|:major]`（`scripts/release.sh`）自动完成版本号变更；但发布动作依旧由 CI 承担。
+
+### 前置条件
+
+- GitHub 仓库 `FE-runner/skills` 的 Actions Secret 已配置 `NPM_TOKEN`（npmjs 的 automation token）
+- 相关 workflow 文件：`.github/workflows/publish.yml`（`push: tags: ['v*']` 触发，含 `--provenance`）、`.github/workflows/ci.yml`（`push: branches: [master]` 触发）
 
 ## 添加新 Agent
 
