@@ -23,7 +23,13 @@ import * as p from '@clack/prompts';
 import { spawn } from 'child_process';
 import { marketProvider } from './providers/market.ts';
 import { getApiKey } from './auth.ts';
-import { runObs, parseObsOptions } from './obs.ts';
+import { runObs, parseObsOptions, detectHostPlatform, pickPlatformCommand } from './obs.ts';
+
+const CMD = {
+  unix: 'curl -fsSL "…/install?token=t1&os=unix" | bash',
+  windows:
+    'Invoke-WebRequest -Uri "…/install?token=t1&os=windows" -OutFile "$env:TEMP\\skills-obs.ps1" -UseBasicParsing; powershell -ExecutionPolicy Bypass -File "$env:TEMP\\skills-obs.ps1"',
+};
 
 describe('obs', () => {
   let errorSpy: ReturnType<typeof vi.spyOn>;
@@ -44,34 +50,28 @@ describe('obs', () => {
   });
 
   describe('parseObsOptions', () => {
-    it('parses a create command with agent type and optional note', () => {
-      expect(parseObsOptions(['公司机', '--agent', 'hermes', '--note', '主力开发机'])).toEqual({
+    it('parses a create command with optional note (no --agent)', () => {
+      expect(parseObsOptions(['公司机', '--note', '主力开发机'])).toEqual({
         help: false,
         subcommand: 'create',
         agentName: '公司机',
-        agentType: 'hermes',
         note: '主力开发机',
       });
     });
 
     it('accepts "add" as an alias for create', () => {
-      expect(parseObsOptions(['add', 'nas-01', '--agent', 'openclaw'])).toEqual({
+      expect(parseObsOptions(['add', 'nas-01'])).toEqual({
         help: false,
         subcommand: 'create',
         agentName: 'nas-01',
-        agentType: 'openclaw',
         note: undefined,
       });
     });
 
-    it('rejects an unsupported --agent enum locally', () => {
-      const opts = parseObsOptions(['foo', '--agent', 'nope']);
+    it('rejects a now-removed --agent option locally', () => {
+      const opts = parseObsOptions(['foo', '--agent', 'hermes']);
       expect(opts.subcommand).toBeUndefined();
-      expect(opts.error).toContain('不支持的 Agent 类型');
-    });
-
-    it('rejects create without a required --agent', () => {
-      expect(parseObsOptions(['foo']).error).toContain('--agent');
+      expect(opts.error).toContain('不支持的选项');
     });
 
     it('returns a usage error for refresh without agentId', () => {
@@ -97,52 +97,52 @@ describe('obs', () => {
 
     it('rejects reserved subcommand keywords used as agentName', () => {
       // "list" 是子命令，不能创建名为 list 的接入记录
-      expect(parseObsOptions(['list', '--agent', 'hermes']).error).toContain('list');
-      // "refresh" 同理
-      expect(parseObsOptions(['add', 'refresh', '--agent', 'hermes']).error).toContain('refresh');
+      expect(parseObsOptions(['list', '--note', 'x']).error).toContain('list');
+      // "refresh" 同理（add 别名下，refresh 不能作为接入名）
+      expect(parseObsOptions(['add', 'refresh']).error).toContain('refresh');
       // "install" 同理
-      expect(parseObsOptions(['add', 'install', '--agent', 'hermes']).error).toContain('install');
+      expect(parseObsOptions(['add', 'install']).error).toContain('install');
     });
   });
 
   describe('runObs', () => {
-    it('creates a record and prints serviceName + install command', async () => {
+    it('creates a record and prints serviceName + dual install commands', async () => {
       vi.mocked(marketProvider.createObservability).mockResolvedValue({
         ok: true,
         data: {
           id: 7,
-          agentType: 'hermes',
           agentName: '公司机',
-          serviceName: 'BSM-hermes-7',
-          installCommand: 'curl -fsSL "…/install?token=t1&type=hermes" | bash',
+          serviceName: 'BSM-11111111-2222-3333-4444-555555555555',
+          installCommand: CMD,
+          installScript: CMD,
         },
       });
 
-      await runObs(['公司机', '--agent', 'hermes']);
+      await runObs(['公司机']);
 
       expect(marketProvider.createObservability).toHaveBeenCalledWith(
-        { agentType: 'hermes', agentName: '公司机', note: undefined },
+        { agentName: '公司机', note: undefined },
         'sk-test'
       );
       expect(process.exitCode).toBeUndefined();
-      expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('BSM-hermes-7'))).toBe(
+      expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('BSM-11111111'))).toBe(
         true
       );
-      expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('curl -fsSL'))).toBe(
+      expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('os=unix'))).toBe(true);
+      expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('os=windows'))).toBe(
         true
       );
     });
 
-    it('lists records and prints agentId on every row', async () => {
+    it('lists records and prints agentId on every row (no Agent 类型列)', async () => {
       vi.mocked(marketProvider.listObservability).mockResolvedValue({
         ok: true,
         data: [
           {
             id: 42,
-            agentType: 'openclaw',
             agentName: 'nas-01',
             note: null,
-            serviceName: 'BSM-openclaw-42',
+            serviceName: 'BSM-22222222-2222-3333-4444-555555555555',
             createdAt: '2026-08-21T10:00:00Z',
           },
         ],
@@ -152,9 +152,14 @@ describe('obs', () => {
 
       expect(marketProvider.listObservability).toHaveBeenCalledWith('sk-test');
       expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('#42'))).toBe(true);
-      expect(
-        logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('BSM-openclaw-42'))
-      ).toBe(true);
+      expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('BSM-22222222'))).toBe(
+        true
+      );
+      // 接入为单一 loongsuite：不打印 agentType
+      expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('hermes'))).toBe(false);
+      expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('openclaw'))).toBe(
+        false
+      );
     });
 
     it('prints an empty-list hint with exit code 0', async () => {
@@ -166,20 +171,23 @@ describe('obs', () => {
       expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('暂无'))).toBe(true);
     });
 
-    it('refreshes a token by agentId', async () => {
+    it('refreshes a token by agentId and prints dual commands', async () => {
       vi.mocked(marketProvider.renewObservability).mockResolvedValue({
         ok: true,
-        data: { serviceName: 'BSM-hermes-7', installCommand: 'curl -fsSL …?token=new | bash' },
+        data: { serviceName: 'BSM-11111111-2222-3333-4444-555555555555', installCommand: CMD },
       });
 
       await runObs(['refresh', '7']);
 
       expect(marketProvider.renewObservability).toHaveBeenCalledWith(7, 'sk-test');
-      expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('new'))).toBe(true);
+      expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('os=unix'))).toBe(true);
+      expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('os=windows'))).toBe(
+        true
+      );
     });
 
     it('rejects a reserved-keyword agentName locally without any network call', async () => {
-      await runObs(['list', '--agent', 'hermes']);
+      await runObs(['list', '--note', 'x']);
 
       expect(process.exitCode).toBe(1);
       expect(marketProvider.createObservability).not.toHaveBeenCalled();
@@ -197,7 +205,7 @@ describe('obs', () => {
     it('hints at login and exits 1 when no API key is configured', async () => {
       vi.mocked(getApiKey).mockReturnValue(null);
 
-      await runObs(['公司机', '--agent', 'hermes']);
+      await runObs(['公司机']);
 
       expect(process.exitCode).toBe(1);
       expect(marketProvider.createObservability).not.toHaveBeenCalled();
@@ -211,7 +219,7 @@ describe('obs', () => {
         message: '未登录',
       });
 
-      await runObs(['公司机', '--agent', 'hermes']);
+      await runObs(['公司机']);
 
       expect(process.exitCode).toBe(1);
       expect(errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('401'))).toBe(true);
@@ -233,13 +241,11 @@ describe('obs', () => {
       );
     });
 
-    it('runs the install command after confirm', async () => {
+    it('runs the platform install command after confirm (unix host → /bin/sh)', async () => {
+      // process.platform 非 win32（测试机即如此）→ detectHostPlatform 返回 'unix'
       vi.mocked(marketProvider.renewObservability).mockResolvedValue({
         ok: true,
-        data: {
-          serviceName: 'BSM-hermes-7',
-          installCommand: 'curl -fsSL "…?token=t9&type=hermes" | bash',
-        },
+        data: { serviceName: 'BSM-11111111-2222-3333-4444-555555555555', installCommand: CMD },
       });
       vi.mocked(p.confirm).mockResolvedValue(true);
       const child = new EventEmitter();
@@ -249,11 +255,7 @@ describe('obs', () => {
       await runObs(['install', '7']);
 
       expect(marketProvider.renewObservability).toHaveBeenCalledWith(7, 'sk-test');
-      expect(spawn).toHaveBeenCalledWith(
-        '/bin/sh',
-        ['-c', 'curl -fsSL "…?token=t9&type=hermes" | bash'],
-        { stdio: 'inherit' }
-      );
+      expect(spawn).toHaveBeenCalledWith('/bin/sh', ['-c', CMD.unix], { stdio: 'inherit' });
       expect(process.exitCode).toBeUndefined();
       expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('执行完成'))).toBe(
         true
@@ -263,10 +265,7 @@ describe('obs', () => {
     it('skips execution when the user cancels', async () => {
       vi.mocked(marketProvider.renewObservability).mockResolvedValue({
         ok: true,
-        data: {
-          serviceName: 'BSM-hermes-7',
-          installCommand: 'curl -fsSL "…?token=t9&type=hermes" | bash',
-        },
+        data: { serviceName: 'BSM-11111111-2222-3333-4444-555555555555', installCommand: CMD },
       });
       vi.mocked(p.confirm).mockResolvedValue(false);
 
@@ -280,10 +279,7 @@ describe('obs', () => {
     it('sets exit code 1 when the install command fails', async () => {
       vi.mocked(marketProvider.renewObservability).mockResolvedValue({
         ok: true,
-        data: {
-          serviceName: 'BSM-hermes-7',
-          installCommand: 'curl -fsSL "…?token=t9&type=hermes" | bash',
-        },
+        data: { serviceName: 'BSM-11111111-2222-3333-4444-555555555555', installCommand: CMD },
       });
       vi.mocked(p.confirm).mockResolvedValue(true);
       const child = new EventEmitter();
@@ -293,6 +289,17 @@ describe('obs', () => {
       await runObs(['install', '7']);
 
       expect(process.exitCode).toBe(1);
+    });
+  });
+
+  describe('detectHostPlatform / pickPlatformCommand', () => {
+    it('detectHostPlatform 返回 "unix"（测试机非 win32）', () => {
+      // 兜底：即便测试机未来迁移到 Windows CI，也保证 unix 分支有断言
+      expect(detectHostPlatform()).toBe('unix');
+    });
+
+    it('pickPlatformCommand 按 unix 检测结果返回 cmd.unix（显式断言，防平台漂移）', () => {
+      expect(pickPlatformCommand(CMD)).toBe(CMD.unix);
     });
   });
 });

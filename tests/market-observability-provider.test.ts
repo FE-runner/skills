@@ -2,6 +2,12 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { MarketProvider } from '../src/providers/market.ts';
 import { SKILLS_SITE } from '../src/branding.ts';
 
+const CMD = {
+  unix: 'curl -fsSL "…/install?token=t1&os=unix" | bash',
+  windows:
+    'Invoke-WebRequest -Uri "…/install?token=t1&os=windows" -OutFile "$env:TEMP\\skills-obs.ps1" -UseBasicParsing; powershell -ExecutionPolicy Bypass -File "$env:TEMP\\skills-obs.ps1"',
+};
+
 describe('MarketProvider observability methods', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -17,32 +23,29 @@ describe('MarketProvider observability methods', () => {
     return fetchMock;
   }
 
-  it('createObservability POSTs to /api/observability/create with bearer token and exact body', async () => {
+  it('createObservability POSTs to /api/observability/create with bearer token and exact body (no agentType)', async () => {
     const fetchMock = mockFetchOnce({
       code: 'SUCCESS',
       data: {
         id: 7,
-        agentType: 'hermes',
         agentName: '公司机',
-        serviceName: 'BSM-hermes-7',
-        installCommand: 'curl -fsSL "…/install?token=t1&type=hermes" | bash',
+        serviceName: 'BSM-11111111-2222-3333-4444-555555555555',
+        installCommand: CMD,
+        installScript: CMD,
       },
     });
     const provider = new MarketProvider();
 
-    const result = await provider.createObservability(
-      { agentType: 'hermes', agentName: '公司机' },
-      'sk-test'
-    );
+    const result = await provider.createObservability({ agentName: '公司机' }, 'sk-test');
 
     expect(result).toEqual({
       ok: true,
       data: {
         id: 7,
-        agentType: 'hermes',
         agentName: '公司机',
-        serviceName: 'BSM-hermes-7',
-        installCommand: 'curl -fsSL "…/install?token=t1&type=hermes" | bash',
+        serviceName: 'BSM-11111111-2222-3333-4444-555555555555',
+        installCommand: CMD,
+        installScript: CMD,
       },
     });
 
@@ -51,7 +54,6 @@ describe('MarketProvider observability methods', () => {
     expect(init.method).toBe('POST');
     expect(init.headers).toMatchObject({ Authorization: 'Bearer sk-test' });
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({
-      agentType: 'hermes',
       agentName: '公司机',
     });
   });
@@ -61,18 +63,15 @@ describe('MarketProvider observability methods', () => {
       code: 'SUCCESS',
       data: {
         id: 8,
-        agentType: 'openclaw',
         agentName: 'nas-01',
-        serviceName: 'BSM-openclaw-8',
-        installCommand: 'curl …',
+        serviceName: 'BSM-33333333-2222-3333-4444-555555555555',
+        installCommand: CMD,
+        installScript: CMD,
       },
     });
     const provider = new MarketProvider();
 
-    await provider.createObservability(
-      { agentType: 'openclaw', agentName: 'nas-01', note: '主力机' },
-      'sk-test'
-    );
+    await provider.createObservability({ agentName: 'nas-01', note: '主力机' }, 'sk-test');
 
     const [_, init] = fetchMock.mock.calls[0]!;
     const sentBody = JSON.parse((init as RequestInit).body as string);
@@ -85,10 +84,9 @@ describe('MarketProvider observability methods', () => {
       data: [
         {
           id: 42,
-          agentType: 'openclaw',
           agentName: 'nas-01',
           note: null,
-          serviceName: 'BSM-openclaw-42',
+          serviceName: 'BSM-33333333-2222-3333-4444-555555555555',
           createdAt: '2026-08-21T10:00:00Z',
         },
       ],
@@ -108,7 +106,7 @@ describe('MarketProvider observability methods', () => {
   it('renewObservability POSTs { agentId } to /api/observability/renewToken', async () => {
     const fetchMock = mockFetchOnce({
       code: 'SUCCESS',
-      data: { serviceName: 'BSM-hermes-7', installCommand: 'curl …?token=new | bash' },
+      data: { serviceName: 'BSM-11111111-2222-3333-4444-555555555555', installCommand: CMD },
     });
     const provider = new MarketProvider();
 

@@ -6,11 +6,15 @@
 
 ### 新功能
 
+- **`obs` 命令对齐 LoongSuite Pilot（替换 hermes/openclaw 双探针）**：
+  - 删除 `--agent <hermes|openclaw>`：创建改为 `obs <agentName> [--note …]`（`add` 仍为 create 别名），create 请求体不再携带 `agentType`
+  - 双平台命令消费：create/renewToken 响应字段改为 `installCommand: { unix, windows }`，`obs refresh` 打印两条命令，`obs install` 按宿主平台（`process.platform`）选择对应命令执行（unix 走 `/bin/sh -c`，Windows 走 `powershell.exe -ExecutionPolicy Bypass`）
+  - 清单打印不再含 Agent 类型列（单一 loongsuite 方案）
 - **`obs` 命令**：管理 Agent 可观测接入（与市场平台网页共用同一份接入记录）
-  - `obs <agentName> --agent <hermes|openclaw> [--note …]`（`add` 为 create 别名）：创建接入记录并打印一次性安装命令
+  - `obs <agentName> [--note …]`（`add` 为 create 别名）：创建接入记录并打印 macOS/Linux 与 Windows 双平台安装命令
   - `obs list`：列出接入清单（每行含 agentId，供 refresh/install 引用）
-  - `obs refresh <agentId>`：换发安装凭证（旧凭证立即失效；新凭证一次性、5 分钟有效）
-  - `obs install <agentId>`：换发凭证并二次确认后本机执行安装（探针默认装运行命令的机器）
+  - `obs refresh <agentId>`：换发安装凭证并打印双平台命令（旧凭证立即失效；新凭证一次性、5 分钟有效）
+  - `obs install <agentId>`：换发凭证并二次确认后在本机执行对应宿主平台的安装命令（探针装运行命令的机器）
 
 ## [1.4.7-bmc1.6.2] - 2026-08-11
 

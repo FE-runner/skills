@@ -101,35 +101,37 @@ interface CheckResponse {
 }
 
 /**
- * 观测 Agent 类型（v1 仅 hermes / openclaw，与市场侧模板枚举一致）。
- * AgentLoop 侧对 OpenClaw 用 openclaw 类型,服务端据此查模板渲染安装命令。
+ * 观测接入记录（`obs list` 返回的每一条），含 `id`（agentId）供 `obs refresh` 引用。
+ * 接入为单一 loongsuite 方案（无 agentType）。
  */
-export type ObservabilityAgentType = 'hermes' | 'openclaw';
-
-/** 观测接入记录（`obs list` 返回的每一条）,含 `id`（agentId）供 `obs refresh` 引用 */
 export interface ObservabilityRecord {
   id: number;
-  agentType: string;
   agentName: string;
   note?: string | null;
   serviceName: string;
   createdAt: string;
 }
 
-/** `/api/observability/create` 返回: 创建后记录 + 一次性安装命令 */
+/** 双平台安装命令契约（与市场侧 create/renewToken 响应一致） */
+export interface ObservabilityInstallCommand {
+  unix: string;
+  windows: string;
+}
+
+/** `/api/observability/create` 返回: 创建后记录 + 双平台安装命令/脚本 */
 export interface CreateObservabilityResponse {
   id: number;
-  agentType: string;
   agentName: string;
   serviceName: string;
-  installCommand: string;
+  installCommand: ObservabilityInstallCommand;
+  installScript: ObservabilityInstallCommand;
   note?: string | null;
 }
 
-/** `/api/observability/renewToken` 返回：换发后的安装命令 */
+/** `/api/observability/renewToken` 返回：换发后的双平台安装命令 */
 export interface RenewObservabilityResponse {
   serviceName: string;
-  installCommand: string;
+  installCommand: ObservabilityInstallCommand;
 }
 
 /**
@@ -343,11 +345,10 @@ export class MarketProvider {
    * 返回该记录的 serviceName 与一次性安装命令（与市场网页共用同一张表）。
    */
   async createObservability(
-    payload: { agentType: string; agentName: string; note?: string },
+    payload: { agentName: string; note?: string },
     apiKey: string
   ): Promise<ApiResult<CreateObservabilityResponse>> {
     const body: Record<string, string> = {
-      agentType: payload.agentType,
       agentName: payload.agentName,
     };
     if (payload.note) body.note = payload.note;
