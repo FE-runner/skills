@@ -206,25 +206,25 @@ npx blueai-skills withdraw my-skill
 
 ### Agent 可观测（obs）
 
-管理 Agent 可观测接入（与市场平台网页共用同一份接入记录）：创建接入、查看清单、换发安装凭证。
+管理 Agent 可观测接入（与市场平台网页共用同一份接入记录）：创建接入、查看清单、换发安装凭证。接入为单一 loongsuite 方案（LoongSuite Pilot 自动发现本机全部 Agent），**创建不再需要 `--agent`**。
 
 前置：先 `npx blueai-skills login <api-key>` 登录（API Key 在市场平台「头像 → API Keys」页生成）。
 
 ```bash
-# 创建接入记录并打印安装命令（--agent 必填：hermes / openclaw；--note 可选）
-npx blueai-skills obs 公司机 --agent hermes
+# 创建接入记录并打印 macOS/Linux + Windows 双平台安装命令（--note 可选）
+npx blueai-skills obs 公司机
 
 # "add" 是 create 的别名，等价写法
-npx blueai-skills obs add 公司机 --agent openclaw --note "办公机"
+npx blueai-skills obs add 公司机 --note "办公机"
 
-# 列出接入清单（每行含 agentId，供 obs refresh 使用）
+# 列出接入清单（每行含 agentId〔UUID〕，供 obs refresh 使用）
 npx blueai-skills obs list
 
 # 按 agentId 换发安装凭证（旧凭证立即失效；新凭证 5 分钟内有效且仅能用一次）
-npx blueai-skills obs refresh 42
+npx blueai-skills obs refresh 7a5123d3-caae-4801-8078-c806baf43b69
 
-# 换发凭证并立即在本机执行安装（执行前二次确认；探针默认装本机）
-npx blueai-skills obs install 42
+# 换发凭证并立即在本机执行安装（执行前二次确认；探针默认装本机，按宿主平台选命令）
+npx blueai-skills obs install 7a5123d3-caae-4801-8078-c806baf43b69
 
 # 查看 obs 帮助
 npx blueai-skills obs --help
@@ -236,10 +236,14 @@ npx blueai-skills obs --help
 SKILLS_SITE=http://localhost:3001 npx blueai-skills obs list
 ```
 
-安装命令示例（平台随记录生成的一次性凭证，5 分钟有效、用完即废、404 属预期）：
+安装命令示例（平台随记录生成的一次性凭证，5 分钟有效、用完即废、404 属预期；`os=unix|windows` 决定渲染 bash / PowerShell 脚本）：
 
 ```bash
-curl -fsSL "http://localhost:3001/api/observability/install?token=<token>&type=hermes" | bash
+# macOS/Linux
+curl -fsSL "http://localhost:3001/api/observability/install?token=<token>&os=unix" | bash
+
+# Windows（PowerShell）
+Invoke-WebRequest -Uri "http://localhost:3001/api/observability/install?token=<token>&os=windows" -OutFile "$env:TEMP\skills-obs.ps1" -UseBasicParsing; powershell -ExecutionPolicy Bypass -File "$env:TEMP\skills-obs.ps1"
 ```
 
 
