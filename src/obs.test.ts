@@ -78,21 +78,22 @@ describe('obs', () => {
       expect(parseObsOptions(['refresh']).error).toContain('agentId');
     });
 
-    it('requires a numeric agentId for refresh', () => {
-      expect(parseObsOptions(['refresh', 'abc']).error).toContain('必须是数字');
+    it('requires a UUID agentId for refresh', () => {
+      expect(parseObsOptions(['refresh', 'abc']).error).toContain('UUID');
+      expect(parseObsOptions(['refresh', '123']).error).toContain('UUID');
     });
 
-    it('parses install with a numeric agentId', () => {
-      expect(parseObsOptions(['install', '7'])).toEqual({
+    it('parses install with a UUID agentId', () => {
+      expect(parseObsOptions(['install', '11111111-2222-4333-8444-555555555555'])).toEqual({
         help: false,
         subcommand: 'install',
-        agentId: '7',
+        agentId: '11111111-2222-4333-8444-555555555555',
       });
     });
 
-    it('rejects install without / non-numeric agentId', () => {
+    it('rejects install without / non-UUID agentId', () => {
       expect(parseObsOptions(['install']).error).toContain('agentId');
-      expect(parseObsOptions(['install', 'abc']).error).toContain('必须是数字');
+      expect(parseObsOptions(['install', 'abc']).error).toContain('UUID');
     });
 
     it('rejects reserved subcommand keywords used as agentName', () => {
@@ -110,7 +111,7 @@ describe('obs', () => {
       vi.mocked(marketProvider.createObservability).mockResolvedValue({
         ok: true,
         data: {
-          id: 7,
+          id: '11111111-2222-4333-8444-555555555555',
           agentName: '公司机',
           serviceName: 'BSM-11111111-2222-3333-4444-555555555555',
           installCommand: CMD,
@@ -139,7 +140,7 @@ describe('obs', () => {
         ok: true,
         data: [
           {
-            id: 42,
+            id: '33333333-4444-4555-4666-477777777777',
             agentName: 'nas-01',
             note: null,
             serviceName: 'BSM-22222222-2222-3333-4444-555555555555',
@@ -151,7 +152,9 @@ describe('obs', () => {
       await runObs(['list']);
 
       expect(marketProvider.listObservability).toHaveBeenCalledWith('sk-test');
-      expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('#42'))).toBe(true);
+      expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('#33333333'))).toBe(
+        true
+      );
       expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('BSM-22222222'))).toBe(
         true
       );
@@ -177,9 +180,12 @@ describe('obs', () => {
         data: { serviceName: 'BSM-11111111-2222-3333-4444-555555555555', installCommand: CMD },
       });
 
-      await runObs(['refresh', '7']);
+      await runObs(['refresh', '11111111-2222-4333-8444-555555555555']);
 
-      expect(marketProvider.renewObservability).toHaveBeenCalledWith(7, 'sk-test');
+      expect(marketProvider.renewObservability).toHaveBeenCalledWith(
+        '11111111-2222-4333-8444-555555555555',
+        'sk-test'
+      );
       expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('os=unix'))).toBe(true);
       expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('os=windows'))).toBe(
         true
@@ -233,7 +239,7 @@ describe('obs', () => {
         message: '记录不存在',
       });
 
-      await runObs(['refresh', '999']);
+      await runObs(['refresh', '11111111-2222-4333-8444-555555555555']);
 
       expect(process.exitCode).toBe(1);
       expect(errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('记录不存在'))).toBe(
@@ -252,9 +258,12 @@ describe('obs', () => {
       vi.mocked(spawn).mockReturnValue(child as never);
       setImmediate(() => child.emit('exit', 0));
 
-      await runObs(['install', '7']);
+      await runObs(['install', '11111111-2222-4333-8444-555555555555']);
 
-      expect(marketProvider.renewObservability).toHaveBeenCalledWith(7, 'sk-test');
+      expect(marketProvider.renewObservability).toHaveBeenCalledWith(
+        '11111111-2222-4333-8444-555555555555',
+        'sk-test'
+      );
       expect(spawn).toHaveBeenCalledWith('/bin/sh', ['-c', CMD.unix], { stdio: 'inherit' });
       expect(process.exitCode).toBeUndefined();
       expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('执行完成'))).toBe(
@@ -269,7 +278,7 @@ describe('obs', () => {
       });
       vi.mocked(p.confirm).mockResolvedValue(false);
 
-      await runObs(['install', '7']);
+      await runObs(['install', '11111111-2222-4333-8444-555555555555']);
 
       expect(spawn).not.toHaveBeenCalled();
       expect(process.exitCode).toBeUndefined();
@@ -286,7 +295,7 @@ describe('obs', () => {
       vi.mocked(spawn).mockReturnValue(child as never);
       setImmediate(() => child.emit('exit', 1));
 
-      await runObs(['install', '7']);
+      await runObs(['install', '11111111-2222-4333-8444-555555555555']);
 
       expect(process.exitCode).toBe(1);
     });

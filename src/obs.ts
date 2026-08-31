@@ -34,7 +34,7 @@ export interface ObsOptions {
  *
  * - `obs <agentName> [--note …]`（`add` 作为 create 别名可跳过）→ create（无 `--agent`）
  * - `obs list`　→ list（仅接受该关键字，带 `--agent`/`--note` 时视为把 list 当接入名，报保留字冲突）
- * - `obs refresh <agentId>` → refresh（agentId 强制数字，`--agent`/`--note` 不适用）
+ * - `obs refresh <agentId>` → refresh（agentId 必填，UUID（与 serviceName 同源），`--agent`/`--note` 不适用）
  * - 位置参数缺失、位置参数命中保留字、未知选项时返回 `error`（本地拒绝）
  */
 export function parseObsOptions(args: string[]): ObsOptions {
@@ -81,8 +81,11 @@ export function parseObsOptions(args: string[]): ObsOptions {
       return { help, error: `${subcommand} 只接受一个 agentId 位置参数` };
     }
     const agentId = positionals[1];
-    if (!agentId || !/^\d+$/.test(agentId)) {
-      return { help, error: `agentId 必须是数字，收到 "${agentId}"` };
+    if (!agentId || !/^[0-9a-fA-F-]{36}$/.test(agentId)) {
+      return {
+        help,
+        error: `agentId 必须是 UUID（36 位，与 serviceName 同源），收到 "${agentId}"`,
+      };
     }
     return { help, subcommand, agentId };
   }
@@ -141,7 +144,7 @@ Options:
  */
 function printObservabilityList(
   records: Array<{
-    id: number;
+    id: string;
     agentName: string;
     note?: string | null;
     serviceName: string;
@@ -229,7 +232,7 @@ export async function runObs(args: string[]): Promise<void> {
   }
 
   if (opts.subcommand === 'refresh') {
-    const result = await marketProvider.renewObservability(Number(opts.agentId), apiKey);
+    const result = await marketProvider.renewObservability(opts.agentId!, apiKey);
     if (!result.ok) {
       reportApiFailure(result);
       if (result.status === 404) {
@@ -249,7 +252,7 @@ export async function runObs(args: string[]): Promise<void> {
 
   if (opts.subcommand === 'install') {
     // 复用换发链路拿新凭证，随后确认后在本机执行（安装对象默认就是本机，按宿主平台选命令）
-    const result = await marketProvider.renewObservability(Number(opts.agentId), apiKey);
+    const result = await marketProvider.renewObservability(opts.agentId!, apiKey);
     if (!result.ok) {
       reportApiFailure(result);
       if (result.status === 404) {

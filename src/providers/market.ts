@@ -105,7 +105,7 @@ interface CheckResponse {
  * 接入为单一 loongsuite 方案（无 agentType）。
  */
 export interface ObservabilityRecord {
-  id: number;
+  id: string;
   agentName: string;
   note?: string | null;
   serviceName: string;
@@ -120,7 +120,7 @@ export interface ObservabilityInstallCommand {
 
 /** `/api/observability/create` 返回: 创建后记录 + 双平台安装命令/脚本 */
 export interface CreateObservabilityResponse {
-  id: number;
+  id: string;
   agentName: string;
   serviceName: string;
   installCommand: ObservabilityInstallCommand;
@@ -381,7 +381,7 @@ export class MarketProvider {
    * 返回带新 installToken 的安装命令。
    */
   async renewObservability(
-    agentId: number,
+    agentId: string,
     apiKey: string
   ): Promise<ApiResult<RenewObservabilityResponse>> {
     return requestApiResult<RenewObservabilityResponse>(
