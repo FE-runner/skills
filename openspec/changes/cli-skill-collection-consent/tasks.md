@@ -12,9 +12,9 @@
 ## 3. add 首问流程
 
 - [ ] 3.1 `src/add.ts` 安装主链路：查 `collectConsent`——true 直接装监测版 / false 直接装原版 / 缺失走首次询问
-- [ ] 3.2 首次：`fetchById(report=true)`；无 collect → 装原版不写字段
-- [ ] 3.3 有 collect → `p.confirm` 询问；同意 → 用 collect.files 落盘 + 写 lock true；拒绝 → 再 `fetchById(report=false)` 拿原样落盘 + 写 lock false
-- [ ] 3.4 非交互（`-y`/`--all`/update 重装/非 TTY）有 collect → 不询问、默认拒绝：装原版 + 写 lock false + 提示可 `track on` 开启
+- [ ] 3.2 首次：`fetchById(report=true)`；无有效 collect（无 collect 或 collect 仅含 reason 降级）→ 装原版不写字段
+- [ ] 3.3 有有效 collect → `p.confirm` 询问；同意 → 直接用本次 `report=true` 返回的 files 落盘（**服务端已将改造版替换进顶层 files**，无 collect.files 子字段）+ 写 lock true；拒绝 → 再 `fetchById(report=false)` 拿原样落盘 + 写 lock false
+- [ ] 3.4 非交互（`-y`/`--all`/update 重装/非 TTY）有有效 collect → 不询问、默认拒绝：**再 `fetchById(report=false)` 拿原样落盘** + 写 lock false + 提示可 `track on` 开启
 
 ## 4. track 命令组
 

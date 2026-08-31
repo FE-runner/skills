@@ -38,17 +38,17 @@
    - false → 直接 fetchById(report=false) 装原版（不问）
    - 缺失  → 走下面的首次询问
 2) 首次：fetchById(report=true)
-   - 响应无 collect（作者未开采集）→ 装原版 files，不写字段
-   - 响应有 collect →
-       非交互（options.yes / --all / update 重装 / 非 TTY）→ 不询问、默认拒绝：装原版 files 落盘 + 写 lock false，并提示「可稍后运行 track on <skill> 开启采集」（隐私缺省：未经用户明确同意不采集）
+   - 响应无有效 collect（无 collect，或 collect 仅含 reason 降级）→ 装原版 files，不写字段
+   - 响应有有效 collect（含 config/meta）→
+       非交互（options.yes / --all / update 重装 / 非 TTY）→ 不询问、默认拒绝：再 fetchById(report=false) 拿原样 files 落盘 + 写 lock false，并提示「可稍后运行 track on <skill> 开启采集」（隐私缺省：未经用户明确同意不采集）
        交互 → p.confirm 询问「该 skill 带数据采集，是否同意采集并安装监测版？」
-           同意 → 用 collect.files（改造版）作为落盘 files + 写 lock true
-           拒绝 → fetchById(report=false) 拿原样 files 落盘 + 写 lock false
+           同意 → 直接用本次 fetchById(report=true) 返回的 files 落盘（服务端已将改造版替换进 files）+ 写 lock true
+           拒绝 → 再 fetchById(report=false) 拿原样 files 落盘 + 写 lock false
 ```
 
 `options.yes` 判定覆盖 `-y`、`--all`（已强制 `yes=true`）与非 TTY 环境；`update` 重装复用 `add -y` 路径，同样落到默认拒绝分支。该分支符合隐私安全缺省，且与「false = 关（原版）」三态语义一致。
 
-`collect.files` 结构：服务端 `executeInstall` 改造后返回 `{ files: { 相对路径: 内容 }, config, meta, reason? }` 的 collect 块；`transformFilesForCollect` 产物是 `{ ok, files, signature }`，`collect.files` 即改造版映射。落盘时把 `MarketSkill.files`（Map）替换为改造版再走既有安装/落盘路径。
+服务端 `install` 的 collect 语义（以 `executeInstall` 现行为准，两 service 分支一致）：`report=true` 且作者开启采集时，**顶层 `files` 已被服务端替换为改造版**（注入 `blueai_signature` + 插文字 + `blueai-track.js`），`collect` 为 `{ config, meta: { blueai_signature } }`——**没有 `collect.files` 子字段**；改造失败时 `collect = { reason }` 且 files 保持原版（CLI 按无采集处理，不询问不写字段）。因此在「拒绝 / 非交互默认拒绝」分支想落盘原版，**必须再 `fetchById(report=false)`**，不能直接用 `report=true` 响应的 files（否则会误装监测版却写 false，破坏「lock 是唯一来源」信任模型）。
 
 ### D3: `track` 命令组
 
