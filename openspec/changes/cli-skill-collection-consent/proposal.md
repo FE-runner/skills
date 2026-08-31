@@ -12,11 +12,13 @@
   - `fetchById` 携带 `report=true`，消费响应 `collect`
   - 无 `collect`（作者未开采集）→ 装原版，**不写**字段
   - 有 `collect` → 交互环境询问「是否同意采集、安装监测版」；同意 → 装监测版 + 写 `true`；拒绝 → 装原版 + 写 `false`。**非交互环境（`-y`/`--all`/update 重装/非 TTY）默认拒绝**：装原版 + 写 `false` 并提示可 `track on` 开启（未经明确同意不采集）。该 skill 永不再问，per-skill 永久记忆
-- **统一为 `track` 命令组**：
-  - `track list`：按本机已装 skill 列 `on`（collectConsent=true）/ `off`（false）/ `未装` 状态
-  - `track on <skillName>`：`fetchById(report=true)` 拉监测版覆盖落盘 + 写 `true`
-  - `track off <skillName>`：`fetchById(report=false)` 拉原版覆盖落盘 + 写 `false`（= 从监测退回原样）
+- **团队批量安装（`add t_<teamId>/<name>`）一次询问覆盖全团队**：全局安装时若团队含带采集 skill，安装前以一次询问代替每 skill 逐个询问（同意 → 全队带采集 skill 装监测版 + 写 `true`；拒绝 → 装原版 + 写 `false`，可 `track on` 补开）；无带采集 skill 则不询问
+- **统一为 `track` 命令组**（**仅全局 scope**：track 只读/写全局 `.agents/.skill-lock.json`；项目级安装不进全局 lock，不提示、不记录，`track list` 不展示）：
+  - `track list`：按全局已装 skill 列 `on`（collectConsent=true）/ `off`（false）/ `未定夺`（缺字段）状态
+  - `track on <skillName>`：按 `skillPath`（= lock 中存的 market skillId）`fetchById(report=true)` 拉监测版覆盖全局落盘 + 写 `true`
+  - `track off <skillName>`：按 `skillPath` `fetchById(report=false)` 拉原版覆盖全局落盘 + 写 `false`（= 从监测退回原样）
 - **market provider**：`fetchById` 增加 `report` 参数并透传 `collect`；`InstallResponse` / `MarketSkill` 增加 `collect` 字段
+- **不做**：项目级（非 `--global`）安装的采集同意/记录（仅全局 scope）
 - **不新建文件**：复用 `.agents/.skill-lock.json` 与既有 `addSkillToLock` 写入流
 
 ## Capabilities
@@ -26,7 +28,7 @@
 
 ## Impact
 
-- **代码**：`src/add.ts`（首问 + report=true 消费 collect）、`src/providers/market.ts`（fetchById report/collect）、新增 `src/track.ts`（track 命令组 + lock.collectConsent 读写）、`src/cli.ts`（注册 track 子命令）
+- **代码**：`src/add.ts`（首问 + report=true 消费 collect + 团队批量一次询问）、`src/providers/market.ts`（fetchById report/collect）、新增 `src/track.ts`（track 命令组 + lock.collectConsent 读写）、`src/cli.ts`（注册 track 子命令）
 - **lock**：`lock.skills[<skillName>].collectConsent` 三态字段（复用既有写流）
 - **测试**：`src/add.test.ts` / `src/track.test.ts` / `tests/market-observability-provider.test.ts` 同步
 - **文档**：`README.md`（obs 旁新增 track 说明）、CHANGELOG

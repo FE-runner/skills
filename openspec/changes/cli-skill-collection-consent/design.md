@@ -13,7 +13,8 @@
 - 复用 `.agents/.skill-lock.json` 既有写流，不新建文件；服务端零改动
 
 **Non-Goals**
-- 不做全局级同意（per-skill 永久记忆，不跨 skill）
+- 不做全局级同意（per-skill 永久记忆，不跨 skill）；**例外**：团队批量安装（`add t_<teamId>/<name>`）一次询问覆盖该团队全部 skill（见 D5）
+- 项目级安装（非 `--global`）不询问、不记录采集（仅全局 scope）
 - 不追溯已采集历史数据（`track off` 反悔仅对新采集生效）
 - 不处理「作者关了又开」时 false 的重问（false 永不再问，缺失才问）
 
@@ -55,14 +56,34 @@
 新增 `src/track.ts`，在 `cli.ts` 注册 `track` 子命令（与 `obs` 同级分派）：
 
 ```
-track list            读 getAllLockedSkills → 每 skill 列 on(collectConsent===true)/ off(false)/ 未定夺(无字段/未装)
-track on  <skill>     fetchById(report=true) 拉监测版覆盖落盘 + addSkillToLock 补 collectConsent=true
-track off <skill>     fetchById(report=false) 拉原版覆盖落盘 + addSkillToLock 补 collectConsent=false（=退回原样）
+track list            读 getAllLockedSkills → 每 skill 列 on(collectConsent===true)/ off(false)/ 未定夺(缺字段)
+track on  <skill>     读 lock entry 的 skillPath(=market skillId)；fetchById(skillPath, report=true) 拉监测版覆盖全局落盘 + addSkillToLock 补 collectConsent=true
+track off <skill>     读 lock entry 的 skillPath；fetchById(skillPath, report=false) 拉原版覆盖全局落盘 + addSkillToLock 补 collectConsent=false（=退回原样）
 ```
+
+`add` 落全局 lock 时已把 market skillId 存入 `skillPath`、`authorId` 存入 `authorId`（`handleMarketSkill` 的 `addSkillToLock(skill.installName, { ..., skillPath: skill.skillId, authorId: resolved.authorId, ... })`），`track on/off` 直接复用：`fetchById(entry.skillPath, entry.version, entry.authorId, undefined, report)`，无需新增 resolve 链路。
+
+**仅全局 scope**：`track list` 只遍历全局 `.agents/.skill-lock.json`（`getAllLockedSkills`），项目级 `skills-lock.json` 的技能不展示、`track on/off` 不管理。项目级安装（非 `--global`）不询问、不写 `collectConsent`（沿用现状装原版、只写本地 lock 现有字段）。因此存在「同一 skill 全局开采集、某项目里装的是原版」的合法并存状态——按需求接受，文档中说明。
 
 `addSkillToLock` 已支持 `Omit<SkillLockEntry,'installedAt'|'updatedAt'>` 传入，新增字段通过给 `SkillLockEntry` 加 `collectConsent?` 后自然透传（现有调用点补传可选字段即可，不破坏既有安装流）。
 
 `track on/off` 的落盘：复用 `add` 的安装函数（按来源重新 fetch + write），或最小实现为「fetchById 后把返回 files 写回该 skill 的已装目录」——为控制改动面，建议复用 `add` 的 `installSkillFiles` / canonical path 逻辑（`getCanonicalPath(skillName, {global})`），覆盖该 skill 目录。
+
+### D5: 团队批量安装的收集同意
+
+`handleTeamInstall`（`add t_<teamId>/<name>`）场景：循环前强制 `yes: true`，若套用「非交互默认拒绝」会让带采集 skill 全部静默装原版，失去团队场景的征求机会。定为：**团队安装前一次询问覆盖该团队全部 skill**（团队管理员预授权语义）。
+
+```
+进入 handleTeamInstall 后，若已选择了 global scope（installGlobally 为 true）且存在非交互因素（-y/--all/非 TTY）：
+  - 先统计该团队带采集 skill（首个 skill 的 fetchById 或团队预检），若 > 0 → p.confirm 一次询问「本团队 X 个 skill 带数据采集，是否同意采集并安装监测版？」
+      同意 → 该团队每个带采集 skill 装监测版 + collectConsent=true（跳过逐个询问）
+      拒绝 → 该团队每个带采集 skill 装原版 + collectConsent=false，并提示可后续 track on 补开
+  - 若团队无带采集 skill → 无询问，全部装原版，不写字段
+```
+
+- 该询问发生在**团队整体层面**（对 `yes` 语义的覆盖：团队安装的 `yes: true` 仅跳过 agent/scope/installMode 的逐个交互，不跳过采集同意这一个团队级询问）
+- 一次性询问只影响**该团队**本次安装；`collectConsent` 仍按每个 skill 独立写入（per-skill 记忆），后续单 skill `add`/`track` 依旧遵循各自 lock 状态
+- **项目级团队安装**（`installGlobally=false`）按 D3 边界不询问、不记录（装原版）
 
 ### D4: market provider 透传
 
