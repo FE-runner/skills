@@ -51,10 +51,11 @@ import {
   cosProvider,
   type CosSkill,
 } from './providers/index.ts';
-import { marketProvider } from './providers/market.ts';
+import { marketProvider, type MarketSkill } from './providers/market.ts';
 import {
   addSkillToLock,
   fetchSkillFolderHash,
+  getSkillFromLock,
   getGitHubToken,
   isPromptDismissed,
   dismissPrompt,
@@ -424,6 +425,8 @@ export interface AddOptions {
   all?: boolean;
   fullDepth?: boolean;
   copy?: boolean;
+  /** 采集知情同意：true=同意监测版 / false=拒绝（原版）。仅首次询问、团队询问后带有；已定夺走 lock 不设 */
+  collectConsent?: boolean;
 }
 
 /**
@@ -1509,6 +1512,13 @@ async function handleTeamInstall(
     yes: true, // agent + scope + installMode 已选定，跳过每个 skill 的重复交互
   };
 
+  // 团队批量采集同意（D5）：全局安装且既有已定夺之外，对团队带采集 skill 做一次覆盖全队的询问。
+  //   collectConsent 沿用 options（per-skill 独立写入，后续单 skill add/track 遵循各自 lock）。
+  if (installGlobally && options.collectConsent === undefined) {
+    const consented = await promptTeamCollectConsent(teamData.skills, options);
+    if (consented !== undefined) sharedOptions.collectConsent = consented;
+  }
+
   p.log.info(`Installing ${teamData.skills.length} skills from team "${resolvedTeamName}"...`);
 
   // 依次安装每个 skill，复用 handleMarketSkill 的单 skill 安装逻辑
@@ -1538,6 +1548,76 @@ async function handleTeamInstall(
  * 1. Token-based install: URL contains /install/<token>
  * 2. Name-based install: bare skill name resolved via /api/skill/resolve
  */
+/**
+ * 解析全局 lock 中某 skill 的采集定夺状态（D1）：
+ * @returns true = 已同意（监测版）；false = 已拒绝（原版）；'missing' = 首次未定夺
+ */
+async function getSkillConsent(skillName: string): Promise<boolean | 'missing'> {
+  try {
+    const entry = await getSkillFromLock(skillName);
+    if (entry?.collectConsent === true) return true;
+    if (entry?.collectConsent === false) return false;
+    return 'missing';
+  } catch {
+    return 'missing';
+  }
+}
+
+/**
+ * 判断响应中的 collect 是否为「有效采集配置」（D2）：
+ * 服务端改造失败时会返回 collect 仅含 reason 键，视为无采集（装原版不写字段），非有效 collect。
+ */
+function hasValidCollect(skill: MarketSkill): boolean {
+  if (skill.collect === undefined || skill.collect === null) return false;
+  if (typeof skill.collect === 'object') {
+    const c = skill.collect as Record<string, unknown>;
+    // 仅含 reason 键 = 服务端改造失败降级（config 缺失）→ 按无采集处理
+    return c.config !== undefined && c.meta !== undefined;
+  }
+  return false;
+}
+
+/**
+ * 团队批量安装的采集一次询问（D5）：预探测团队中各 skill 是否带有效采集配置，
+ * 命中有效 collect 的个数 > 0 时做一次覆盖全队的确认；仅全局安装触发。
+ * @returns true=同意监测版 / false=拒绝（原版）/ undefined=团队无带采集 skill 或无需询问
+ */
+async function promptTeamCollectConsent(
+  skills: TeamInstallSkill[],
+  options: AddOptions
+): Promise<boolean | undefined> {
+  // 非交互（-y/--all/非 TTY）：团队场景不静默决定，仍由调用方按默认拒绝/同意策略处理；
+  // 这里仅在交互环境询问。非交互由 handleMarketSkill 的 options.yes 分支兜底（默认拒绝）。
+  if (options.yes || !process.stdin.isTTY) return undefined;
+
+  let collectCount = 0;
+  for (const s of skills) {
+    try {
+      const skill = await marketProvider.fetchById(
+        s.id,
+        s.currentVersion ?? undefined,
+        s.visibility === 'PRIVATE' ? s.authorId : undefined,
+        undefined,
+        true
+      );
+      if (skill && hasValidCollect(skill)) collectCount++;
+    } catch {
+      // 单个 skill 探测失败忽略，不阻断安装
+    }
+  }
+
+  if (collectCount === 0) return undefined;
+
+  const confirmed = await p.confirm({
+    message: `本团队有 ${collectCount} 个 skill 带数据采集，是否同意采集并安装监测版？（拒绝则全部装原版，可稍后单独 track on）`,
+  });
+  if (p.isCancel(confirmed)) {
+    p.cancel('Installation cancelled');
+    process.exit(0);
+  }
+  return confirmed;
+}
+
 async function handleMarketSkill(
   source: string,
   parsed: ParsedSource,
@@ -1567,6 +1647,8 @@ async function handleMarketSkill(
   spinner.stop(`Found: ${pc.cyan(resolved.name)} ${pc.dim(`v${resolved.currentVersion}`)}`);
 
   spinner.start('Downloading skill files...');
+  // 采集知情同意（D2）：现用「原版先行」策略——先以 report=false 拿原版（确定性），
+  //   若命中规则（已定夺 true / 首次询问同意 / 团队同意）再以 report=true 拉监测版替换。
   const skill = await marketProvider.fetchById(resolved.id, version, author, resolved.teamId);
 
   if (!skill) {
@@ -1712,6 +1794,58 @@ async function handleMarketSkill(
 
   const cwd = process.cwd();
 
+  // 采集知情同意（D2）在 scope/mode 确定后执行：
+  //   原版先行已拿 original files；命中监测版规则则用 report=true 拉改造版替换落盘。
+  let writeCollectConsent: boolean | undefined;
+  const validCollect = hasValidCollect(skill);
+  let useCollect = false;
+
+  if (installGlobally) {
+    const locked = await getSkillConsent(skill.installName);
+    if (locked === true) {
+      useCollect = true; // 已同意：装监测版
+    } else if (locked === false) {
+      useCollect = false; // 已拒绝：装原版
+    } else if (options.collectConsent !== undefined) {
+      // 团队一次询问结果（D5）
+      useCollect = options.collectConsent;
+      writeCollectConsent = options.collectConsent;
+    } else if (validCollect) {
+      if (options.yes /* 非交互：-y/--all/update/非 TTY */) {
+        useCollect = false; // 默认拒绝（隐私缺省）
+        writeCollectConsent = false;
+        p.log.message(
+          pc.dim(
+            `「${skill.installName}」带数据采集，非交互安装默认不采集；可稍后运行 ${pc.cyan('track on ' + skill.installName)} 开启。`
+          )
+        );
+      } else {
+        const confirmed = await p.confirm({
+          message: `「${skill.installName}」带数据采集，是否同意采集并安装监测版？(同意=采集上报，拒绝=原版，可稍后 track 切换)`,
+        });
+        useCollect = !p.isCancel(confirmed) && !!confirmed;
+        writeCollectConsent = useCollect;
+      }
+    }
+  }
+  // 项目级安装（!installGlobally）：不询问、不记录（scope 约束，task 1.3）
+
+  if (useCollect) {
+    const monitored = await marketProvider.fetchById(
+      resolved.id,
+      version,
+      author,
+      resolved.teamId,
+      true
+    );
+    if (monitored) {
+      skill.files = monitored.files;
+      skill.content = monitored.content;
+      skill.skillFolderHash = monitored.skillFolderHash;
+      skill.collect = monitored.collect;
+    }
+  }
+
   // Build installation summary
   const canonicalPath = getCanonicalPath(skill.installName, { global: installGlobally });
   const shortCanonical = shortenPath(canonicalPath, cwd);
@@ -1790,6 +1924,7 @@ async function handleMarketSkill(
         skillPath: skill.skillId,
         version: skill.version,
         authorId: resolved.authorId,
+        ...(writeCollectConsent !== undefined ? { collectConsent: writeCollectConsent } : {}),
       });
     } catch {
       // Don't fail installation if lock file update fails

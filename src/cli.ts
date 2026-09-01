@@ -12,6 +12,7 @@ import { runPublish } from './publish.ts';
 import { runWithdraw } from './withdraw.ts';
 import { runWhoami } from './whoami.ts';
 import { runObs } from './obs.ts';
+import { runTrack } from './track.ts';
 import { runInstallFromLock } from './install.ts';
 import { runList } from './list.ts';
 import { removeCommand, parseRemoveOptions } from './remove.ts';
@@ -147,6 +148,10 @@ ${BOLD}Observability:${RESET}
   obs list                 List your obs records (each row shows agentId)
   obs refresh <agentId>    Re-issue the install token (old one invalidated)
   obs install <agentId>    Re-issue the token and run the install on this machine
+${BOLD}Collection Consent:${RESET}
+  track list               List global skills and their collection-consent status (on/off/未定夺)
+  track on <skill>         Install the monitored build for a global skill (consent=true)
+  track off <skill>        Revert to the original build for a global skill (consent=false)
 ${BOLD}Publishing:${RESET}
   login <api-key>          Save your Skills Market API Key for publish/withdraw
   whoami                   Show the user your API Key is currently logged in as
@@ -186,6 +191,11 @@ ${BOLD}Options:${RESET}
   --help, -h        Show this help message
   --version, -v     Show version number
 
+${BOLD}Track Options:${RESET}
+  track list               List global skills and their collection consent status
+  track on <skill>         Install the monitored build (consent=true)
+  track off <skill>        Revert to the original build (consent=false)
+
 ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ${BIN_NAME} add ${EXAMPLE_REPO}
   ${DIM}$${RESET} ${BIN_NAME} add ${EXAMPLE_REPO} -g
@@ -221,6 +231,10 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ${BIN_NAME} obs 公司机                 ${DIM}# create an obs record and print its install commands${RESET}
   ${DIM}$${RESET} ${BIN_NAME} obs list                          ${DIM}# list your records (each row shows agentId)${RESET}
   ${DIM}$${RESET} ${BIN_NAME} obs refresh 42                  ${DIM}# re-issue the token; old one invalidated${RESET}
+
+  ${DIM}$${RESET} ${BIN_NAME} track list                       ${DIM}# list collection consent for global skills${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} track on my-skill                ${DIM}# switch to monitored build + consent=true${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} track off my-skill               ${DIM}# revert to original build + consent=false${RESET}
 
 Discover more skills at ${TEXT}${SKILLS_SITE}/${RESET}
 `);
@@ -846,6 +860,9 @@ async function main(): Promise<void> {
       break;
     case 'obs':
       await runObs(restArgs);
+      break;
+    case 'track':
+      await runTrack(restArgs);
       break;
     case 'experimental_install': {
       showLogo();

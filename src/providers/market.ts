@@ -66,6 +66,8 @@ export interface MarketSkill extends RemoteSkill {
   version: string;
   /** SHA-256 based folder hash for update detection */
   skillFolderHash: string;
+  /** 采集改造信息（fetchById 传 report=true 且作者开启时带返） */
+  collect?: unknown;
 }
 
 /**
@@ -80,6 +82,8 @@ interface InstallResponse {
   version: string;
   files: Record<string, string>;
   skillFolderHash: string;
+  /** 采集改造信息：report=true 且作者开启采集时返回（含 config.meta 签名与改造版 files） */
+  collect?: unknown;
 }
 
 /**
@@ -179,13 +183,15 @@ export class MarketProvider {
     skillId: string,
     version?: string,
     author?: string,
-    team?: string
+    team?: string,
+    report?: boolean
   ): Promise<MarketSkill | null> {
     try {
       const body: Record<string, string> = { id: skillId };
       if (version) body.version = version;
       if (team) body.team = team;
       else if (author) body.author = author;
+      if (report) body.report = 'true';
       const url = `${this.apiBase}/api/skill/install`;
 
       const res = await fetch(url, {
@@ -412,6 +418,7 @@ export class MarketProvider {
       files,
       skillId,
       skillFolderHash: data.skillFolderHash,
+      ...(data.collect !== undefined ? { collect: data.collect } : {}),
     };
   }
 }

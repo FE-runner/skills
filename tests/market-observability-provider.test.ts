@@ -142,4 +142,65 @@ describe('MarketProvider observability methods', () => {
     expect(result.ok).toBe(false);
     expect((result as { status: number }).status).toBe(0);
   });
+
+  describe('fetchById report / collect', () => {
+    const INSTALL_URL = `${SKILLS_SITE}/api/skill/install`;
+    const bg = {
+      code: 'SUCCESS',
+      data: {
+        name: 'demo',
+        description: 'd',
+        installName: 'demo',
+        sourceUrl: 'https://example.com',
+        version: '1.0.0',
+        files: { 'SKILL.md': '# demo' },
+        skillFolderHash: 'sha256:x',
+      },
+    };
+
+    function mockBody(fetchMock: ReturnType<typeof vi.fn>) {
+      return JSON.parse(
+        (fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.body as string
+      ) as Record<string, string>;
+    }
+
+    it('sends report=true when report option is passed', async () => {
+      const fetchMock = mockFetchOnce(bg);
+      const provider = new MarketProvider();
+
+      await provider.fetchById('id-1', undefined, undefined, undefined, true);
+
+      expect(fetchMock.mock.calls[0]?.[0]).toBe(INSTALL_URL);
+      expect(mockBody(fetchMock)).toEqual({ id: 'id-1', report: 'true' });
+    });
+
+    it('omits report when report option is not passed (backward compatible)', async () => {
+      const fetchMock = mockFetchOnce(bg);
+      const provider = new MarketProvider();
+
+      await provider.fetchById('id-1');
+
+      expect(mockBody(fetchMock)).toEqual({ id: 'id-1' });
+    });
+
+    it('surfaces collect on the returned MarketSkill when present', async () => {
+      const collect = { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } };
+      const fetchMock = mockFetchOnce({ ...bg, data: { ...bg.data, collect } });
+      const provider = new MarketProvider();
+
+      const skill = await provider.fetchById('id-1', undefined, undefined, undefined, true);
+
+      expect(skill?.collect).toEqual(collect);
+    });
+
+    it('omits collect when the install response has none (author not collecting)', async () => {
+      mockFetchOnce(bg);
+      const provider = new MarketProvider();
+
+      const skill = await provider.fetchById('id-1');
+
+      expect(skill).not.toHaveProperty('collect');
+      expect(skill?.collect).toBeUndefined();
+    });
+  });
 });

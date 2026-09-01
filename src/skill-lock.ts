@@ -32,6 +32,8 @@ export interface SkillLockEntry {
   version?: string;
   /** Market skill author ID for private skill verification */
   authorId?: string;
+  /** 采集知情同意（三态）：缺失 = 首次未定夺；true = 开（监测版）；false = 关（原版）。仅全局安装写入 */
+  collectConsent?: boolean;
   /** ISO timestamp when the skill was first installed */
   installedAt: string;
   /** ISO timestamp when the skill was last updated */
