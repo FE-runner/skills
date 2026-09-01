@@ -35,11 +35,12 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Upgrade npm for Trusted Publisher (OIDC) support
+        run: npm install -g npm@latest
+
       - name: Publish to npm
         id: publish
         run: npm publish --provenance --access public --tag latest
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
         if: steps.publish.outcome == 'success'
