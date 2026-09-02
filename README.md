@@ -206,7 +206,9 @@ npx blueai-skills withdraw my-skill
 
 ### Agent 可观测（obs）
 
-管理 Agent 可观测接入（与市场平台网页共用同一份接入记录）：创建接入、查看清单、换发安装凭证。接入为单一 loongsuite 方案（LoongSuite Pilot 自动发现本机全部 Agent），**创建不再需要 `--agent`**。
+管理 Agent 可观测接入（与市场平台网页共用同一份接入记录）：创建接入、查看清单、换发安装凭证、本机安装/卸载 LoongSuite Pilot。接入为单一 loongsuite 方案（LoongSuite Pilot 自动发现本机全部 Agent），**创建不再需要 `--agent`**。
+
+命令组内置**本机安装状态分层检测**（纯文件信号，不执行任何插件命令）：`config.json` 的 serviceNamePrefix（配置）+ `current`/`bin`/`versions` 程序文件痕迹（二进制）+ pid 文件进程探测（运行中）。`obs list` 据此给本机已装的接入打 `✓ 本机已安装` 标记（卸载残留的配置不会误标）；`obs install` 在本机已有完整安装时二次确认；`obs add`/`obs` 创建结果附带下一步安装指引。
 
 前置：先 `npx blueai-skills login <api-key>` 登录（API Key 在市场平台「头像 → API Keys」页生成）。
 
@@ -217,14 +219,17 @@ npx blueai-skills obs 公司机
 # "add" 是 create 的别名，等价写法
 npx blueai-skills obs add 公司机 --note "办公机"
 
-# 列出接入清单（每行含 agentId〔UUID〕，供 obs refresh 使用）
+# 列出接入清单（每行含 agentId〔UUID〕，供 obs refresh 使用；本机已装的接入带 ✓ 标记）
 npx blueai-skills obs list
 
 # 按 agentId 换发安装凭证（旧凭证立即失效；新凭证 5 分钟内有效且仅能用一次）
 npx blueai-skills obs refresh 7a5123d3-caae-4801-8078-c806baf43b69
 
-# 换发凭证并立即在本机执行安装（执行前二次确认；探针默认装本机，按宿主平台选命令）
+# 换发凭证并立即在本机执行安装（已有完整安装时二次确认；探针默认装本机，按宿主平台选命令）
 npx blueai-skills obs install 7a5123d3-caae-4801-8078-c806baf43b69
+
+# 本机卸载 LoongSuite Pilot（--purge 连同 ~/.loongsuite-pilot 本地数据一起删除）
+npx blueai-skills obs uninstall [--purge]
 
 # 查看 obs 帮助
 npx blueai-skills obs --help
