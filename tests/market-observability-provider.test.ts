@@ -171,7 +171,8 @@ describe('MarketProvider observability methods', () => {
       await provider.fetchById('id-1', undefined, undefined, undefined, true);
 
       expect(fetchMock.mock.calls[0]?.[0]).toBe(INSTALL_URL);
-      expect(mockBody(fetchMock)).toEqual({ id: 'id-1', report: 'true' });
+      // Market 契约 report 为 boolean（install route 用 `body.report === true` 判定）
+      expect(mockBody(fetchMock)).toEqual({ id: 'id-1', report: true });
     });
 
     it('omits report when report option is not passed (backward compatible)', async () => {

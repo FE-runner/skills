@@ -187,11 +187,13 @@ export class MarketProvider {
     report?: boolean
   ): Promise<MarketSkill | null> {
     try {
-      const body: Record<string, string> = { id: skillId };
+      const body: Record<string, string | boolean> = { id: skillId };
       if (version) body.version = version;
       if (team) body.team = team;
       else if (author) body.author = author;
-      if (report) body.report = 'true';
+      // Market 契约（SkillInstallBody）report 为 boolean；发字符串 'true' 会被
+      // 路由的 `body.report === true` 判 false，导致采集配置永不下发
+      if (report) body.report = true;
       const url = `${this.apiBase}/api/skill/install`;
 
       const res = await fetch(url, {
