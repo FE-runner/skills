@@ -17,13 +17,28 @@ vi.mock('@clack/prompts', () => ({
 vi.mock('child_process', () => ({
   spawn: vi.fn(),
 }));
+// 允许用例将 homedir 指向临时目录，以覆盖本地 LoongSuite Pilot 配置的读取路径
+const mockHome = { current: '' as string };
+vi.mock('node:os', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:os')>();
+  return { ...actual, homedir: () => mockHome.current || actual.homedir() };
+});
 
 import { EventEmitter } from 'events';
 import * as p from '@clack/prompts';
 import { spawn } from 'child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { marketProvider } from './providers/market.ts';
 import { getApiKey } from './auth.ts';
-import { runObs, parseObsOptions, detectHostPlatform, pickPlatformCommand } from './obs.ts';
+import {
+  runObs,
+  parseObsOptions,
+  detectHostPlatform,
+  pickPlatformCommand,
+  readLocalPilotServiceName,
+} from './obs.ts';
 
 const CMD = {
   unix: 'curl -fsSL "…/install?token=t1&os=unix" | bash',
@@ -37,6 +52,7 @@ describe('obs', () => {
 
   beforeEach(() => {
     process.exitCode = undefined;
+    mockHome.current = '';
     vi.mocked(getApiKey).mockReturnValue('sk-test');
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -44,6 +60,7 @@ describe('obs', () => {
 
   afterEach(() => {
     process.exitCode = undefined;
+    mockHome.current = '';
     vi.clearAllMocks();
     errorSpy.mockRestore();
     logSpy.mockRestore();
@@ -108,6 +125,7 @@ describe('obs', () => {
 
   describe('runObs', () => {
     it('creates a record and prints serviceName + dual install commands', async () => {
+      const home = useEmptyHome();
       vi.mocked(marketProvider.createObservability).mockResolvedValue({
         ok: true,
         data: {
@@ -133,6 +151,37 @@ describe('obs', () => {
       expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('os=windows'))).toBe(
         true
       );
+      // 本机未安装时提示可直接在本机安装
+      const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
+      expect(output).toContain('未检测到 LoongSuite Pilot');
+      expect(output).toContain('obs install 11111111-2222-4333-8444-555555555555');
+      rmSync(home, { recursive: true, force: true });
+    });
+
+    it('prints a local-install hint on create when Pilot is already installed', async () => {
+      const home = useEmptyHome();
+      mkdirSync(join(home, '.loongsuite-pilot'));
+      writeFileSync(
+        join(home, '.loongsuite-pilot', 'config.json'),
+        JSON.stringify({ serviceNamePrefix: 'BSM-99999999-2222-3333-4444-555555555555' })
+      );
+      vi.mocked(marketProvider.createObservability).mockResolvedValue({
+        ok: true,
+        data: {
+          id: '11111111-2222-4333-8444-555555555555',
+          agentName: '公司机',
+          serviceName: 'BSM-11111111-2222-3333-4444-555555555555',
+          installCommand: CMD,
+          installScript: CMD,
+        },
+      });
+
+      await runObs(['add', '公司机']);
+
+      const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
+      expect(output).toContain('本机检测: 已安装 LoongSuite Pilot');
+      expect(output).toContain('obs install 11111111-2222-4333-8444-555555555555');
+      rmSync(home, { recursive: true, force: true });
     });
 
     it('lists records and prints agentId on every row (no Agent 类型列)', async () => {
@@ -247,8 +296,16 @@ describe('obs', () => {
       );
     });
 
+    /** 将 homedir 指向一个空的临时目录（无 ~/.loongsuite-pilot），保证 install 用例封闭 */
+    function useEmptyHome(): string {
+      const home = mkdtempSync(join(tmpdir(), 'home-'));
+      mockHome.current = home;
+      return home;
+    }
+
     it('runs the platform install command after confirm (unix host → /bin/sh)', async () => {
       // process.platform 非 win32（测试机即如此）→ detectHostPlatform 返回 'unix'
+      const home = useEmptyHome();
       vi.mocked(marketProvider.renewObservability).mockResolvedValue({
         ok: true,
         data: { serviceName: 'BSM-11111111-2222-3333-4444-555555555555', installCommand: CMD },
@@ -269,9 +326,15 @@ describe('obs', () => {
       expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('执行完成'))).toBe(
         true
       );
+      // 本机未安装时不出现二次确认文案
+      expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('本机检测'))).toBe(
+        false
+      );
+      rmSync(home, { recursive: true, force: true });
     });
 
     it('skips execution when the user cancels', async () => {
+      const home = useEmptyHome();
       vi.mocked(marketProvider.renewObservability).mockResolvedValue({
         ok: true,
         data: { serviceName: 'BSM-11111111-2222-3333-4444-555555555555', installCommand: CMD },
@@ -283,9 +346,11 @@ describe('obs', () => {
       expect(spawn).not.toHaveBeenCalled();
       expect(process.exitCode).toBeUndefined();
       expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('已取消'))).toBe(true);
+      rmSync(home, { recursive: true, force: true });
     });
 
     it('sets exit code 1 when the install command fails', async () => {
+      const home = useEmptyHome();
       vi.mocked(marketProvider.renewObservability).mockResolvedValue({
         ok: true,
         data: { serviceName: 'BSM-11111111-2222-3333-4444-555555555555', installCommand: CMD },
@@ -298,6 +363,138 @@ describe('obs', () => {
       await runObs(['install', '11111111-2222-4333-8444-555555555555']);
 
       expect(process.exitCode).toBe(1);
+      rmSync(home, { recursive: true, force: true });
+    });
+
+    it('double-confirms with a local-install warning before reinstalling (same serviceName)', async () => {
+      const home = useEmptyHome();
+      mkdirSync(join(home, '.loongsuite-pilot'));
+      const localServiceName = 'BSM-11111111-2222-3333-4444-555555555555';
+      writeFileSync(
+        join(home, '.loongsuite-pilot', 'config.json'),
+        JSON.stringify({ serviceNamePrefix: localServiceName })
+      );
+      vi.mocked(marketProvider.renewObservability).mockResolvedValue({
+        ok: true,
+        data: { serviceName: localServiceName, installCommand: CMD },
+      });
+      vi.mocked(p.confirm).mockResolvedValue(false);
+
+      await runObs(['install', '11111111-2222-4333-8444-555555555555']);
+
+      const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
+      expect(output).toContain('本机检测: 已安装 LoongSuite Pilot');
+      expect(output).toContain('重装并覆盖本地配置');
+      // 二次确认文案出现，且用户拒绝后不执行
+      const confirmArg = vi.mocked(p.confirm).mock.calls[0]?.[0] as { message?: string };
+      expect(confirmArg?.message).toMatch(/确认要再次执行安装/);
+      expect(spawn).not.toHaveBeenCalled();
+      expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('已取消'))).toBe(true);
+      rmSync(home, { recursive: true, force: true });
+    });
+
+    it('warns about serviceNamePrefix switch when local install points elsewhere', async () => {
+      const home = useEmptyHome();
+      mkdirSync(join(home, '.loongsuite-pilot'));
+      writeFileSync(
+        join(home, '.loongsuite-pilot', 'config.json'),
+        JSON.stringify({ serviceNamePrefix: 'BSM-99999999-2222-3333-4444-555555555555' })
+      );
+      vi.mocked(marketProvider.renewObservability).mockResolvedValue({
+        ok: true,
+        data: { serviceName: 'BSM-11111111-2222-3333-4444-555555555555', installCommand: CMD },
+      });
+      vi.mocked(p.confirm).mockResolvedValue(false);
+
+      await runObs(['install', '11111111-2222-4333-8444-555555555555']);
+
+      const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
+      expect(output).toContain('切换 serviceNamePrefix');
+      expect(spawn).not.toHaveBeenCalled();
+      rmSync(home, { recursive: true, force: true });
+    });
+  });
+
+  describe('readLocalPilotServiceName', () => {
+    let dir: string;
+
+    beforeEach(() => {
+      dir = mkdtempSync(join(tmpdir(), 'loongsuite-pilot-'));
+    });
+
+    afterEach(() => {
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    it('reads serviceNamePrefix from <pilotDir>/config.json', () => {
+      writeFileSync(
+        join(dir, 'config.json'),
+        JSON.stringify({ serviceNamePrefix: 'BSM-11111111-2222-3333-4444-555555555555' })
+      );
+      expect(readLocalPilotServiceName(dir)).toBe('BSM-11111111-2222-3333-4444-555555555555');
+    });
+
+    it('returns null when config is missing, corrupt, or has no serviceNamePrefix', () => {
+      expect(readLocalPilotServiceName(dir)).toBeNull();
+      writeFileSync(join(dir, 'config.json'), '{oops');
+      expect(readLocalPilotServiceName(dir)).toBeNull();
+      writeFileSync(join(dir, 'config.json'), JSON.stringify({ serviceNamePrefix: '' }));
+      expect(readLocalPilotServiceName(dir)).toBeNull();
+    });
+
+    it('defaults to ~/.loongsuite-pilot based on homedir', () => {
+      const home = mkdtempSync(join(tmpdir(), 'home-'));
+      mockHome.current = home;
+      mkdirSync(join(home, '.loongsuite-pilot'));
+      writeFileSync(
+        join(home, '.loongsuite-pilot', 'config.json'),
+        JSON.stringify({ serviceNamePrefix: 'BSM-22222222-2222-3333-4444-555555555555' })
+      );
+      expect(readLocalPilotServiceName()).toBe('BSM-22222222-2222-3333-4444-555555555555');
+      rmSync(home, { recursive: true, force: true });
+    });
+  });
+
+  describe('obs list 本机安装检测', () => {
+    it('marks the record whose serviceName matches local Pilot config', async () => {
+      const home = mkdtempSync(join(tmpdir(), 'home-'));
+      mockHome.current = home;
+      mkdirSync(join(home, '.loongsuite-pilot'));
+      const localServiceName = 'BSM-22222222-2222-3333-4444-555555555555';
+      writeFileSync(
+        join(home, '.loongsuite-pilot', 'config.json'),
+        JSON.stringify({ serviceNamePrefix: localServiceName })
+      );
+      vi.mocked(marketProvider.listObservability).mockResolvedValue({
+        ok: true,
+        data: [
+          {
+            id: '33333333-4444-4555-4666-477777777777',
+            agentName: 'nas-01',
+            note: null,
+            serviceName: localServiceName,
+            createdAt: '2026-08-21T10:00:00Z',
+          },
+          {
+            id: '44444444-5555-4666-4777-888888888888',
+            agentName: 'other-host',
+            note: null,
+            serviceName: 'BSM-99999999-2222-3333-4444-555555555555',
+            createdAt: '2026-08-22T10:00:00Z',
+          },
+        ],
+      });
+
+      await runObs(['list']);
+
+      const marked = logSpy.mock.calls
+        .map((c: unknown[]) => String(c[0]))
+        .filter((line: string) => line.includes('本机已安装'));
+      expect(marked).toHaveLength(1);
+      expect(marked[0]).toContain('#33333333');
+      // 不匹配的行不携带标记
+      expect(marked[0]).not.toContain('#44444444');
+      rmSync(home, { recursive: true, force: true });
     });
   });
 

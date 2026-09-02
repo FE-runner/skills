@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { spawn } from 'child_process';
 import * as p from '@clack/prompts';
 import { marketProvider } from './providers/market.ts';
@@ -126,11 +129,13 @@ Manage AI Coding Agent observability records (shared with the Market web dashboa
 Commands:
   obs <agentName> [--note <note>]
                            Create an observability record and print its install commands
+                           (plus a local LoongSuite Pilot check)
   obs add <agentName> [--note <note>]
                            Same as above (add is an alias)
-  obs list                 List your observability records (each row shows agentId)
+  obs list                 List your observability records (marks ones installed on this machine)
   obs refresh <agentId>    Generate a new install token (old ones are invalidated immediately)
   obs install <agentId>    Generate a new install token AND run it on this machine
+                           (double-confirms when a local install already exists)
 
 Options:
   --note <note>    Optional note for the record
@@ -139,8 +144,30 @@ Options:
 }
 
 /**
+ * 读取本机 LoongSuite Pilot 配置（`~/.loongsuite-pilot/config.json`）中的 `serviceNamePrefix`。
+ * 该字段由安装脚本写入，值为 `BSM-<agentId>`，可与 Market 接入记录的 serviceName 直接比对，
+ * 从而判断某条接入是否安装在本机。未安装、文件损坏或字段缺失时返回 null（静默降级，不报错）。
+ */
+export function readLocalPilotServiceName(
+  pilotDir: string = join(homedir(), '.loongsuite-pilot')
+): string | null {
+  const configPath = join(pilotDir, 'config.json');
+  if (!existsSync(configPath)) return null;
+  try {
+    const raw = JSON.parse(readFileSync(configPath, 'utf-8')) as {
+      serviceNamePrefix?: unknown;
+    };
+    const prefix = raw.serviceNamePrefix;
+    return typeof prefix === 'string' && prefix.length > 0 ? prefix : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 打印接入清单。每条记录必须打印 `agentId`（`obs refresh <agentId>` 所需 id 由此获取）。
  * 接入为单一 loongsuite 方案：不印 Agent 类型列。
+ * `localServiceName` 非空时与记录 serviceName 比对，给安装在本机的接入打「本机已安装」标记。
  */
 function printObservabilityList(
   records: Array<{
@@ -149,7 +176,8 @@ function printObservabilityList(
     note?: string | null;
     serviceName: string;
     createdAt: string;
-  }>
+  }>,
+  localServiceName?: string | null
 ): void {
   if (records.length === 0) {
     console.log('暂无接入记录。运行 `' + BIN_NAME + ' obs <agentName>` 创建。');
@@ -158,9 +186,17 @@ function printObservabilityList(
   console.log(`共 ${records.length} 条接入记录:`);
   for (const record of records) {
     const noteSuffix = record.note ? ` (备注: ${record.note})` : '';
+    const localMark = record.serviceName === localServiceName ? '  ✓ 本机已安装' : '';
     console.log(
-      `#${record.id}  ${record.agentName}  ${record.serviceName}  ${record.createdAt}${noteSuffix}`
+      `#${record.id}  ${record.agentName}  ${record.serviceName}  ${record.createdAt}${noteSuffix}${localMark}`
     );
+  }
+  if (localServiceName && !records.some((r) => r.serviceName === localServiceName)) {
+    console.log(
+      `注意: 本机已安装 LoongSuite Pilot (${localServiceName})，但未匹配到清单中的任何接入记录`
+    );
+  } else if (!localServiceName) {
+    console.log('本机未检测到 LoongSuite Pilot 安装（缺少 ~/.loongsuite-pilot/config.json）');
   }
   console.log(`换发安装凭证: ${BIN_NAME} obs refresh <agentId>`);
 }
@@ -227,7 +263,7 @@ export async function runObs(args: string[]): Promise<void> {
       reportApiFailure(result);
       return;
     }
-    printObservabilityList(result.data);
+    printObservabilityList(result.data, readLocalPilotServiceName());
     return;
   }
 
@@ -263,8 +299,20 @@ export async function runObs(args: string[]): Promise<void> {
     const command = pickPlatformCommand(result.data.installCommand);
     console.log(`  serviceName: ${result.data.serviceName}`);
     console.log(`  安装命令: ${command}`);
+    // 本机检查：已装过 LoongSuite Pilot 时先告知现状，再要求二次确认（防止无意覆盖本地配置）
+    const localServiceName = readLocalPilotServiceName();
+    if (localServiceName) {
+      console.log(`  本机检测: 已安装 LoongSuite Pilot (serviceNamePrefix: ${localServiceName})`);
+      if (localServiceName === result.data.serviceName) {
+        console.log('  目标接入已安装在本机，再次执行将重装并覆盖本地配置');
+      } else {
+        console.log('  本机当前指向另一条接入，再次执行将切换 serviceNamePrefix');
+      }
+    }
     const confirmed = await p.confirm({
-      message: '立即在本机执行上面的安装命令？（凭证一次性、5 分钟有效）',
+      message: localServiceName
+        ? '本机已存在 LoongSuite Pilot 安装，确认要再次执行安装？'
+        : '立即在本机执行上面的安装命令？（凭证一次性、5 分钟有效）',
     });
     if (p.isCancel(confirmed) || !confirmed) {
       console.log('已取消；命令 5 分钟内仍可手动执行');
@@ -300,4 +348,14 @@ export async function runObs(args: string[]): Promise<void> {
   console.log(
     `  凭证: 5 分钟内有效且仅能使用一次；过期或已使用后请 ${BIN_NAME} obs refresh ${data.id}`
   );
+  // 本机检查：新接入的 serviceName 必然不同于本机现有安装，只提示下一步动作
+  const localServiceName = readLocalPilotServiceName();
+  if (localServiceName) {
+    console.log(`  本机检测: 已安装 LoongSuite Pilot (serviceNamePrefix: ${localServiceName})`);
+    console.log(`  如需将本机切换到新接入，运行 \`${BIN_NAME} obs install ${data.id}\``);
+  } else {
+    console.log(
+      `  本机检测: 未检测到 LoongSuite Pilot；运行 \`${BIN_NAME} obs install ${data.id}\` 可在本机安装`
+    );
+  }
 }
