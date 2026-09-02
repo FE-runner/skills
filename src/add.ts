@@ -52,6 +52,7 @@ import {
   type CosSkill,
 } from './providers/index.ts';
 import { marketProvider, type MarketSkill } from './providers/market.ts';
+import { readLocalPilotStatus } from './obs.ts';
 import {
   addSkillToLock,
   fetchSkillFolderHash,
@@ -64,7 +65,7 @@ import {
 } from './skill-lock.ts';
 import { addSkillToLocalLock, computeSkillFolderHash } from './local-lock.ts';
 import type { Skill, AgentType, ParsedSource } from './types.ts';
-import { NPX_CMD, EXAMPLE_REPO, SKILLS_SITE } from './branding.ts';
+import { NPX_CMD, EXAMPLE_REPO, SKILLS_SITE, BIN_NAME } from './branding.ts';
 import packageJson from '../package.json' with { type: 'json' };
 export function initTelemetry(version: string): void {
   setVersion(version);
@@ -1794,43 +1795,73 @@ async function handleMarketSkill(
 
   const cwd = process.cwd();
 
-  // 采集知情同意（D2）在 scope/mode 确定后执行：
-  //   原版先行已拿 original files；命中监测版规则则用 report=true 拉改造版替换落盘。
+  // 采集知情同意（D2）在 scope/mode 确定后执行。
+  // 注意：服务端仅在 report=true 时携带 collect（install-service D3），
+  // 原版（report=false）必然无 collect，因此首次定夺前需先以 report=true 探测。
   let writeCollectConsent: boolean | undefined;
-  const validCollect = hasValidCollect(skill);
   let useCollect = false;
+  /** 本 skill 是否带有效采集配置（决定是否展示监测插件本机状态提示） */
+  let collectCapable = false;
+  /** 监测版产物是否已在探测阶段替换进 skill（避免重复拉取） */
+  let monitoredGrafted = false;
 
   if (installGlobally) {
     const locked = await getSkillConsent(skill.installName);
     if (locked === true) {
       useCollect = true; // 已同意：装监测版
+      collectCapable = true;
     } else if (locked === false) {
       useCollect = false; // 已拒绝：装原版
     } else if (options.collectConsent !== undefined) {
-      // 团队一次询问结果（D5）
+      // 团队一次询问结果（D5，探测已在团队流程完成）
       useCollect = options.collectConsent;
       writeCollectConsent = options.collectConsent;
-    } else if (validCollect) {
-      if (options.yes /* 非交互：-y/--all/update/非 TTY */) {
-        useCollect = false; // 默认拒绝（隐私缺省）
-        writeCollectConsent = false;
-        p.log.message(
-          pc.dim(
-            `「${skill.installName}」带数据采集，非交互安装默认不采集；可稍后运行 ${pc.cyan('track on ' + skill.installName)} 开启。`
-          )
-        );
+      collectCapable = options.collectConsent;
+    } else {
+      // 首次未定夺：先以 report=true 探测是否带采集配置，再询问
+      spinner.start('Checking data-collection config...');
+      const probed = await marketProvider.fetchById(
+        resolved.id,
+        version,
+        author,
+        resolved.teamId,
+        true
+      );
+      const probedValid = probed !== null && hasValidCollect(probed);
+      collectCapable = probedValid;
+      if (probedValid) {
+        spinner.stop(`「${skill.installName}」带数据采集配置`);
+        if (options.yes /* 非交互：-y/--all/update/非 TTY */) {
+          useCollect = false; // 默认拒绝（隐私缺省）
+          writeCollectConsent = false;
+          p.log.message(
+            pc.dim(
+              `「${skill.installName}」带数据采集，非交互安装默认不采集；可稍后运行 ${pc.cyan('track on ' + skill.installName)} 开启。`
+            )
+          );
+        } else {
+          const confirmed = await p.confirm({
+            message: `「${skill.installName}」带数据采集，是否同意采集并安装监测版？(同意=采集上报，拒绝=原版，可稍后 track 切换)`,
+          });
+          useCollect = !p.isCancel(confirmed) && !!confirmed;
+          writeCollectConsent = useCollect;
+          // 同意：直接复用探测到的监测版产物，省一次拉取
+          if (useCollect && probed) {
+            skill.files = probed.files;
+            skill.content = probed.content;
+            skill.skillFolderHash = probed.skillFolderHash;
+            skill.collect = probed.collect;
+            monitoredGrafted = true;
+          }
+        }
       } else {
-        const confirmed = await p.confirm({
-          message: `「${skill.installName}」带数据采集，是否同意采集并安装监测版？(同意=采集上报，拒绝=原版，可稍后 track 切换)`,
-        });
-        useCollect = !p.isCancel(confirmed) && !!confirmed;
-        writeCollectConsent = useCollect;
+        spinner.stop();
       }
     }
   }
   // 项目级安装（!installGlobally）：不询问、不记录（scope 约束，task 1.3）
 
-  if (useCollect) {
+  if (useCollect && !monitoredGrafted) {
     const monitored = await marketProvider.fetchById(
       resolved.id,
       version,
@@ -1843,6 +1874,29 @@ async function handleMarketSkill(
       skill.content = monitored.content;
       skill.skillFolderHash = monitored.skillFolderHash;
       skill.collect = monitored.collect;
+    }
+  }
+
+  // 监测插件（LoongSuite Pilot）本机状态提示：在采集询问之后展示，不阻断安装
+  if (collectCapable && installGlobally) {
+    const pilot = readLocalPilotStatus();
+    if (pilot.serviceName != null && pilot.hasBinary) {
+      const running = pilot.isRunning === false ? '，服务未运行' : '';
+      p.log.message(
+        pc.dim(`本机监测插件: 已安装 LoongSuite Pilot (${pilot.serviceName}${running})`)
+      );
+    } else if (pilot.serviceName != null) {
+      p.log.message(
+        pc.yellow(
+          `本机监测插件: 检测到配置残留（未发现程序文件）；可运行 ${pc.cyan(`${BIN_NAME} obs <接入名>`)} 创建接入并重装监测插件`
+        )
+      );
+    } else {
+      p.log.message(
+        pc.yellow(
+          `本机监测插件: 未检测到 LoongSuite Pilot，采集数据不会实际上报；可运行 ${pc.cyan(`${BIN_NAME} obs <接入名>`)} 创建接入并安装监测插件`
+        )
+      );
     }
   }
 
