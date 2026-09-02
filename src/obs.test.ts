@@ -38,6 +38,7 @@ import {
   detectHostPlatform,
   pickPlatformCommand,
   readLocalPilotServiceName,
+  readLocalPilotStatus,
   buildUninstallCommand,
 } from './obs.ts';
 
@@ -72,6 +73,16 @@ describe('obs', () => {
     const home = mkdtempSync(join(tmpdir(), 'home-'));
     mockHome.current = home;
     return home;
+  }
+
+  /** 在临时 home 中写入一套「完整安装」的 Pilot 痕迹：config.json（serviceNamePrefix）+ current 程序文件 */
+  function writePilotHome(home: string, serviceName: string): void {
+    mkdirSync(join(home, '.loongsuite-pilot'), { recursive: true });
+    writeFileSync(
+      join(home, '.loongsuite-pilot', 'config.json'),
+      JSON.stringify({ serviceNamePrefix: serviceName })
+    );
+    writeFileSync(join(home, '.loongsuite-pilot', 'current'), '1.0.0\n');
   }
 
   describe('parseObsOptions', () => {
@@ -184,11 +195,7 @@ describe('obs', () => {
 
     it('prints a local-install hint on create when Pilot is already installed', async () => {
       const home = useEmptyHome();
-      mkdirSync(join(home, '.loongsuite-pilot'));
-      writeFileSync(
-        join(home, '.loongsuite-pilot', 'config.json'),
-        JSON.stringify({ serviceNamePrefix: 'BSM-99999999-2222-3333-4444-555555555555' })
-      );
+      writePilotHome(home, 'BSM-99999999-2222-3333-4444-555555555555');
       vi.mocked(marketProvider.createObservability).mockResolvedValue({
         ok: true,
         data: {
@@ -385,12 +392,8 @@ describe('obs', () => {
 
     it('double-confirms with a local-install warning before reinstalling (same serviceName)', async () => {
       const home = useEmptyHome();
-      mkdirSync(join(home, '.loongsuite-pilot'));
       const localServiceName = 'BSM-11111111-2222-3333-4444-555555555555';
-      writeFileSync(
-        join(home, '.loongsuite-pilot', 'config.json'),
-        JSON.stringify({ serviceNamePrefix: localServiceName })
-      );
+      writePilotHome(home, localServiceName);
       vi.mocked(marketProvider.renewObservability).mockResolvedValue({
         ok: true,
         data: { serviceName: localServiceName, installCommand: CMD },
@@ -412,11 +415,7 @@ describe('obs', () => {
 
     it('warns about serviceNamePrefix switch when local install points elsewhere', async () => {
       const home = useEmptyHome();
-      mkdirSync(join(home, '.loongsuite-pilot'));
-      writeFileSync(
-        join(home, '.loongsuite-pilot', 'config.json'),
-        JSON.stringify({ serviceNamePrefix: 'BSM-99999999-2222-3333-4444-555555555555' })
-      );
+      writePilotHome(home, 'BSM-99999999-2222-3333-4444-555555555555');
       vi.mocked(marketProvider.renewObservability).mockResolvedValue({
         ok: true,
         data: { serviceName: 'BSM-11111111-2222-3333-4444-555555555555', installCommand: CMD },
@@ -462,13 +461,59 @@ describe('obs', () => {
     it('defaults to ~/.loongsuite-pilot based on homedir', () => {
       const home = mkdtempSync(join(tmpdir(), 'home-'));
       mockHome.current = home;
-      mkdirSync(join(home, '.loongsuite-pilot'));
-      writeFileSync(
-        join(home, '.loongsuite-pilot', 'config.json'),
-        JSON.stringify({ serviceNamePrefix: 'BSM-22222222-2222-3333-4444-555555555555' })
-      );
+      writePilotHome(home, 'BSM-22222222-2222-3333-4444-555555555555');
       expect(readLocalPilotServiceName()).toBe('BSM-22222222-2222-3333-4444-555555555555');
       rmSync(home, { recursive: true, force: true });
+    });
+  });
+
+  describe('readLocalPilotStatus', () => {
+    let dir: string;
+
+    beforeEach(() => {
+      dir = mkdtempSync(join(tmpdir(), 'loongsuite-pilot-'));
+    });
+
+    afterEach(() => {
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    it('reports full install when config and binary markers exist', () => {
+      writeFileSync(
+        join(dir, 'config.json'),
+        JSON.stringify({ serviceNamePrefix: 'BSM-11111111-2222-3333-4444-555555555555' })
+      );
+      writeFileSync(join(dir, 'current'), '1.0.0\n');
+      const status = readLocalPilotStatus(dir);
+      expect(status.serviceName).toBe('BSM-11111111-2222-3333-4444-555555555555');
+      expect(status.hasBinary).toBe(true);
+      expect(status.isRunning).toBeNull(); // 无 pid 文件，无法判断
+    });
+
+    it('flags residual config when program files are gone (e.g. uninstall kept data)', () => {
+      writeFileSync(
+        join(dir, 'config.json'),
+        JSON.stringify({ serviceNamePrefix: 'BSM-11111111-2222-3333-4444-555555555555' })
+      );
+      const status = readLocalPilotStatus(dir);
+      expect(status.serviceName).toBe('BSM-11111111-2222-3333-4444-555555555555');
+      expect(status.hasBinary).toBe(false);
+    });
+
+    it('detects a running service via the pid file', () => {
+      writeFileSync(join(dir, 'current'), '1.0.0\n');
+      writeFileSync(join(dir, 'loongsuite-pilot.pid'), `${process.pid}\n`);
+      expect(readLocalPilotStatus(dir).isRunning).toBe(true);
+    });
+
+    it('treats a stale or malformed pid file as not running', () => {
+      writeFileSync(join(dir, 'loongsuite-pilot.pid'), 'not-a-pid');
+      expect(readLocalPilotStatus(dir).isRunning).toBe(false);
+    });
+
+    it('returns an all-empty status when the pilot dir does not exist', () => {
+      const status = readLocalPilotStatus(join(dir, 'nope'));
+      expect(status).toEqual({ serviceName: null, hasBinary: false, isRunning: null });
     });
   });
 
@@ -476,12 +521,8 @@ describe('obs', () => {
     it('marks the record whose serviceName matches local Pilot config', async () => {
       const home = mkdtempSync(join(tmpdir(), 'home-'));
       mockHome.current = home;
-      mkdirSync(join(home, '.loongsuite-pilot'));
       const localServiceName = 'BSM-22222222-2222-3333-4444-555555555555';
-      writeFileSync(
-        join(home, '.loongsuite-pilot', 'config.json'),
-        JSON.stringify({ serviceNamePrefix: localServiceName })
-      );
+      writePilotHome(home, localServiceName);
       vi.mocked(marketProvider.listObservability).mockResolvedValue({
         ok: true,
         data: [
@@ -511,6 +552,37 @@ describe('obs', () => {
       expect(marked[0]).toContain('#33333333');
       // 不匹配的行不携带标记
       expect(marked[0]).not.toContain('#44444444');
+      rmSync(home, { recursive: true, force: true });
+    });
+
+    it('does not mark installed when only residual config remains, and prints a note', async () => {
+      const home = mkdtempSync(join(tmpdir(), 'home-'));
+      mockHome.current = home;
+      // 只有 config.json，没有程序文件痕迹 → 视为卸载残留，不应打「已安装」标
+      const localServiceName = 'BSM-22222222-2222-3333-4444-555555555555';
+      mkdirSync(join(home, '.loongsuite-pilot'));
+      writeFileSync(
+        join(home, '.loongsuite-pilot', 'config.json'),
+        JSON.stringify({ serviceNamePrefix: localServiceName })
+      );
+      vi.mocked(marketProvider.listObservability).mockResolvedValue({
+        ok: true,
+        data: [
+          {
+            id: '33333333-4444-4555-4666-477777777777',
+            agentName: 'nas-01',
+            note: null,
+            serviceName: localServiceName,
+            createdAt: '2026-08-21T10:00:00Z',
+          },
+        ],
+      });
+
+      await runObs(['list']);
+
+      const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
+      expect(output).not.toContain('本机已安装');
+      expect(output).toContain('配置残留');
       rmSync(home, { recursive: true, force: true });
     });
   });
@@ -544,11 +616,7 @@ describe('obs', () => {
 
     it('double-confirms and skips execution when the user declines', async () => {
       const home = useEmptyHome();
-      mkdirSync(join(home, '.loongsuite-pilot'));
-      writeFileSync(
-        join(home, '.loongsuite-pilot', 'config.json'),
-        JSON.stringify({ serviceNamePrefix: 'BSM-11111111-2222-3333-4444-555555555555' })
-      );
+      writePilotHome(home, 'BSM-11111111-2222-3333-4444-555555555555');
       vi.mocked(p.confirm).mockResolvedValue(false);
 
       await runObs(['uninstall']);
@@ -565,11 +633,7 @@ describe('obs', () => {
 
     it('runs the uninstall command after confirm (unix host → /bin/sh)', async () => {
       const home = useEmptyHome();
-      mkdirSync(join(home, '.loongsuite-pilot'));
-      writeFileSync(
-        join(home, '.loongsuite-pilot', 'config.json'),
-        JSON.stringify({ serviceNamePrefix: 'BSM-11111111-2222-3333-4444-555555555555' })
-      );
+      writePilotHome(home, 'BSM-11111111-2222-3333-4444-555555555555');
       vi.mocked(p.confirm).mockResolvedValue(true);
       const child = new EventEmitter();
       vi.mocked(spawn).mockReturnValue(child as never);
@@ -590,11 +654,7 @@ describe('obs', () => {
 
     it('sets exit code 1 when the uninstall command fails', async () => {
       const home = useEmptyHome();
-      mkdirSync(join(home, '.loongsuite-pilot'));
-      writeFileSync(
-        join(home, '.loongsuite-pilot', 'config.json'),
-        JSON.stringify({ serviceNamePrefix: 'BSM-11111111-2222-3333-4444-555555555555' })
-      );
+      writePilotHome(home, 'BSM-11111111-2222-3333-4444-555555555555');
       vi.mocked(p.confirm).mockResolvedValue(true);
       const child = new EventEmitter();
       vi.mocked(spawn).mockReturnValue(child as never);
@@ -603,6 +663,25 @@ describe('obs', () => {
       await runObs(['uninstall']);
 
       expect(process.exitCode).toBe(1);
+      rmSync(home, { recursive: true, force: true });
+    });
+    it('still allows cleanup when only residual config remains (no program files)', async () => {
+      const home = useEmptyHome();
+      mkdirSync(join(home, '.loongsuite-pilot'));
+      writeFileSync(
+        join(home, '.loongsuite-pilot', 'config.json'),
+        JSON.stringify({ serviceNamePrefix: 'BSM-11111111-2222-3333-4444-555555555555' })
+      );
+      vi.mocked(p.confirm).mockResolvedValue(false);
+
+      await runObs(['uninstall']);
+
+      const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
+      expect(output).toContain('检测到配置残留');
+      expect(output).not.toContain('已安装 LoongSuite Pilot');
+      // 残留场景仍进入确认与可执行流程
+      expect(p.confirm).toHaveBeenCalled();
+      expect(spawn).not.toHaveBeenCalled();
       rmSync(home, { recursive: true, force: true });
     });
   });

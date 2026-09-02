@@ -164,6 +164,73 @@ Options:
 }
 
 /**
+ * 本机 LoongSuite Pilot 安装状态（分层信号，均不执行任何插件命令）。
+ *
+ * - `serviceName`：config.json 的 serviceNamePrefix（BSM-<agentId>），缺失/损坏为 null
+ * - `hasBinary`：程序文件痕迹（current 版本文件 / bin / versions 目录），用于排除
+ *   「官方 uninstall 保留本地数据后只剩配置」的残留误报
+ * - `isRunning`：pid 文件 + `process.kill(pid, 0)` 探测进程存活；null = 无 pid 文件，无法判断
+ */
+export interface LocalPilotStatus {
+  serviceName: string | null;
+  hasBinary: boolean;
+  isRunning: boolean | null;
+}
+
+/** 二进制痕迹判定：任一程序文件/目录存在即认为二进制还在 */
+function hasPilotBinary(pilotDir: string): boolean {
+  return (
+    existsSync(join(pilotDir, 'current')) ||
+    existsSync(join(pilotDir, 'bin')) ||
+    existsSync(join(pilotDir, 'versions')) ||
+    existsSync(join(pilotDir, 'runtime'))
+  );
+}
+
+/** pid 文件 + kill(pid, 0) 探测服务进程；无 pid 文件返回 null（无法判断） */
+function probePilotRunning(pilotDir: string): boolean | null {
+  const pidPath = join(pilotDir, 'loongsuite-pilot.pid');
+  if (!existsSync(pidPath)) return null;
+  try {
+    const raw = readFileSync(pidPath, 'utf-8').trim();
+    const pid = Number.parseInt(raw, 10);
+    if (!Number.isInteger(pid) || pid <= 0) return false;
+    process.kill(pid, 0); // 信号 0 不发数据，仅探测进程存在
+    return true;
+  } catch (err) {
+    // EPERM = 进程存在但无权限发信号，同样视为在运行
+    if ((err as NodeJS.ErrnoException).code === 'EPERM') return true;
+    return false;
+  }
+}
+
+/**
+ * 读取本机 LoongSuite Pilot 安装状态。目录缺失时返回全空状态（静默降级，不报错）。
+ */
+export function readLocalPilotStatus(
+  pilotDir: string = join(homedir(), '.loongsuite-pilot')
+): LocalPilotStatus {
+  const configPath = join(pilotDir, 'config.json');
+  let serviceName: string | null = null;
+  if (existsSync(configPath)) {
+    try {
+      const raw = JSON.parse(readFileSync(configPath, 'utf-8')) as {
+        serviceNamePrefix?: unknown;
+      };
+      const prefix = raw.serviceNamePrefix;
+      if (typeof prefix === 'string' && prefix.length > 0) serviceName = prefix;
+    } catch {
+      // config 损坏：保留 serviceName=null，由程序文件痕迹兜底判断
+    }
+  }
+  return {
+    serviceName,
+    hasBinary: hasPilotBinary(pilotDir),
+    isRunning: probePilotRunning(pilotDir),
+  };
+}
+
+/**
  * 读取本机 LoongSuite Pilot 配置（`~/.loongsuite-pilot/config.json`）中的 `serviceNamePrefix`。
  * 该字段由安装脚本写入，值为 `BSM-<agentId>`，可与 Market 接入记录的 serviceName 直接比对，
  * 从而判断某条接入是否安装在本机。未安装、文件损坏或字段缺失时返回 null（静默降级，不报错）。
@@ -171,23 +238,14 @@ Options:
 export function readLocalPilotServiceName(
   pilotDir: string = join(homedir(), '.loongsuite-pilot')
 ): string | null {
-  const configPath = join(pilotDir, 'config.json');
-  if (!existsSync(configPath)) return null;
-  try {
-    const raw = JSON.parse(readFileSync(configPath, 'utf-8')) as {
-      serviceNamePrefix?: unknown;
-    };
-    const prefix = raw.serviceNamePrefix;
-    return typeof prefix === 'string' && prefix.length > 0 ? prefix : null;
-  } catch {
-    return null;
-  }
+  return readLocalPilotStatus(pilotDir).serviceName;
 }
 
 /**
  * 打印接入清单。每条记录必须打印 `agentId`（`obs refresh <agentId>` 所需 id 由此获取）。
  * 接入为单一 loongsuite 方案：不印 Agent 类型列。
- * `localServiceName` 非空时与记录 serviceName 比对，给安装在本机的接入打「本机已安装」标记。
+ * `localStatus` 非空时与记录 serviceName 比对，给安装在本机的接入打「本机已安装」标记；
+ * 仅配置残留（程序文件缺失）时改为在尾部提示残留，不误标已安装。
  */
 function printObservabilityList(
   records: Array<{
@@ -197,25 +255,34 @@ function printObservabilityList(
     serviceName: string;
     createdAt: string;
   }>,
-  localServiceName?: string | null
+  localStatus?: LocalPilotStatus
 ): void {
   if (records.length === 0) {
     console.log('暂无接入记录。运行 `' + BIN_NAME + ' obs <agentName>` 创建。');
     return;
   }
+  const markable = localStatus?.serviceName != null && localStatus.hasBinary;
+  const runningSuffix = localStatus?.isRunning === false ? '(服务未运行)' : '';
   console.log(`共 ${records.length} 条接入记录:`);
   for (const record of records) {
     const noteSuffix = record.note ? ` (备注: ${record.note})` : '';
-    const localMark = record.serviceName === localServiceName ? '  ✓ 本机已安装' : '';
+    const localMark =
+      markable && record.serviceName === localStatus?.serviceName
+        ? `  ✓ 本机已安装${runningSuffix}`
+        : '';
     console.log(
       `#${record.id}  ${record.agentName}  ${record.serviceName}  ${record.createdAt}${noteSuffix}${localMark}`
     );
   }
-  if (localServiceName && !records.some((r) => r.serviceName === localServiceName)) {
+  if (markable && !records.some((r) => r.serviceName === localStatus?.serviceName)) {
     console.log(
-      `注意: 本机已安装 LoongSuite Pilot (${localServiceName})，但未匹配到清单中的任何接入记录`
+      `注意: 本机已安装 LoongSuite Pilot (${localStatus?.serviceName})，但未匹配到清单中的任何接入记录`
     );
-  } else if (!localServiceName) {
+  } else if (localStatus?.serviceName != null && !localStatus.hasBinary) {
+    console.log(
+      `注意: 本机检测到配置残留 (serviceNamePrefix: ${localStatus.serviceName})，未发现程序文件，可能已卸载不完整`
+    );
+  } else if (localStatus?.serviceName == null && !localStatus?.hasBinary) {
     console.log('本机未检测到 LoongSuite Pilot 安装（缺少 ~/.loongsuite-pilot/config.json）');
   }
   console.log(`换发安装凭证: ${BIN_NAME} obs refresh <agentId>`);
@@ -295,7 +362,7 @@ export async function runObs(args: string[]): Promise<void> {
       reportApiFailure(result);
       return;
     }
-    printObservabilityList(result.data, readLocalPilotServiceName());
+    printObservabilityList(result.data, readLocalPilotStatus());
     return;
   }
 
@@ -331,18 +398,26 @@ export async function runObs(args: string[]): Promise<void> {
     const command = pickPlatformCommand(result.data.installCommand);
     console.log(`  serviceName: ${result.data.serviceName}`);
     console.log(`  安装命令: ${command}`);
-    // 本机检查：已装过 LoongSuite Pilot 时先告知现状，再要求二次确认（防止无意覆盖本地配置）
-    const localServiceName = readLocalPilotServiceName();
-    if (localServiceName) {
-      console.log(`  本机检测: 已安装 LoongSuite Pilot (serviceNamePrefix: ${localServiceName})`);
-      if (localServiceName === result.data.serviceName) {
+    // 本机检查：先告知现状再决定是否二次确认（防止无意覆盖本地配置）
+    const localStatus = readLocalPilotStatus();
+    if (localStatus.serviceName != null && localStatus.hasBinary) {
+      console.log(
+        `  本机检测: 已安装 LoongSuite Pilot (serviceNamePrefix: ${localStatus.serviceName}${localStatus.isRunning === false ? '，服务未运行' : ''})`
+      );
+      if (localStatus.serviceName === result.data.serviceName) {
         console.log('  目标接入已安装在本机，再次执行将重装并覆盖本地配置');
       } else {
         console.log('  本机当前指向另一条接入，再次执行将切换 serviceNamePrefix');
       }
+    } else if (localStatus.serviceName != null) {
+      console.log(
+        `  本机检测: 检测到配置残留 (serviceNamePrefix: ${localStatus.serviceName})，未发现程序文件；重新安装通常会修复`
+      );
     }
+    // 仅在「配置 + 程序文件」都在时才二次确认；残留配置场景重装即修复，走普通确认
+    const needDoubleConfirm = localStatus.serviceName != null && localStatus.hasBinary;
     const confirmed = await p.confirm({
-      message: localServiceName
+      message: needDoubleConfirm
         ? '本机已存在 LoongSuite Pilot 安装，确认要再次执行安装？'
         : '立即在本机执行上面的安装命令？（凭证一次性、5 分钟有效）',
     });
@@ -362,13 +437,21 @@ export async function runObs(args: string[]): Promise<void> {
   }
 
   if (opts.subcommand === 'uninstall') {
-    // 先做本机检查：未安装直接提示，不发请求也不执行脚本
-    const localServiceName = readLocalPilotServiceName();
-    if (!localServiceName) {
+    // 先做本机检查：配置与程序文件都缺失才视为未安装，不发请求也不执行脚本
+    const localStatus = readLocalPilotStatus();
+    if (localStatus.serviceName == null && !localStatus.hasBinary) {
       console.log('本机未检测到 LoongSuite Pilot 安装，无需卸载');
       return;
     }
-    console.log(`  本机检测: 已安装 LoongSuite Pilot (serviceNamePrefix: ${localServiceName})`);
+    if (localStatus.hasBinary) {
+      console.log(
+        `  本机检测: 已安装 LoongSuite Pilot${localStatus.serviceName != null ? ` (serviceNamePrefix: ${localStatus.serviceName})` : ''}${localStatus.isRunning === false ? '，服务未运行' : ''}`
+      );
+    } else {
+      console.log(
+        `  本机检测: 检测到配置残留 (serviceNamePrefix: ${localStatus.serviceName})，未发现程序文件`
+      );
+    }
     const command = pickPlatformCommand(buildUninstallCommand(opts.purge ?? false));
     console.log(`  卸载命令: ${command}`);
     const confirmed = await p.confirm({
@@ -410,11 +493,18 @@ export async function runObs(args: string[]): Promise<void> {
   console.log(
     `  凭证: 5 分钟内有效且仅能使用一次；过期或已使用后请 ${BIN_NAME} obs refresh ${data.id}`
   );
-  // 本机检查：新接入的 serviceName 必然不同于本机现有安装，只提示下一步动作
-  const localServiceName = readLocalPilotServiceName();
-  if (localServiceName) {
-    console.log(`  本机检测: 已安装 LoongSuite Pilot (serviceNamePrefix: ${localServiceName})`);
+  // 本机检查：按分层状态提示下一步动作
+  const localStatus = readLocalPilotStatus();
+  if (localStatus.serviceName != null && localStatus.hasBinary) {
+    console.log(
+      `  本机检测: 已安装 LoongSuite Pilot (serviceNamePrefix: ${localStatus.serviceName})`
+    );
     console.log(`  如需将本机切换到新接入，运行 \`${BIN_NAME} obs install ${data.id}\``);
+  } else if (localStatus.serviceName != null) {
+    console.log(
+      `  本机检测: 检测到配置残留 (serviceNamePrefix: ${localStatus.serviceName})，未发现程序文件`
+    );
+    console.log(`  运行 \`${BIN_NAME} obs install ${data.id}\` 可重新安装并修复`);
   } else {
     console.log(
       `  本机检测: 未检测到 LoongSuite Pilot；运行 \`${BIN_NAME} obs install ${data.id}\` 可在本机安装`
