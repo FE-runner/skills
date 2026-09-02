@@ -15,9 +15,9 @@ import { BIN_NAME } from './branding.ts';
  * 因此这些关键字不能再被当作接入名（agentName）。
  * 接入为单一 loongsuite 方案：创建不再需要 `--agent`。
  */
-const RESERVED_OBS_KEYWORDS = new Set(['add', 'list', 'refresh', 'install']);
+const RESERVED_OBS_KEYWORDS = new Set(['add', 'list', 'refresh', 'install', 'uninstall']);
 
-export type ObsSubcommand = 'create' | 'list' | 'refresh' | 'install';
+export type ObsSubcommand = 'create' | 'list' | 'refresh' | 'install' | 'uninstall';
 
 export interface ObsOptions {
   subcommand?: ObsSubcommand;
@@ -27,10 +27,18 @@ export interface ObsOptions {
   note?: string;
   /** refresh/install：agentId 原始字符串 */
   agentId?: string;
+  /** uninstall：连同本地数据（~/.loongsuite-pilot）一起删除 */
+  purge?: boolean;
   help: boolean;
   /** 本地参数校验/保留字冲突错误消息（非空时命令应立即失败，不发起请求） */
   error?: string;
 }
+
+/** 官方 LoongSuite Pilot 安装脚本 OSS 直链（与 Market 端 OBSERVABILITY_INSTALL_TEMPLATE 同源，改动需两边同步） */
+const PILOT_INSTALLER_SH_URL =
+  'https://aliyun-observability-release-cn-shanghai.oss-cn-shanghai.aliyuncs.com/loongsuite-pilot/installer.sh';
+const PILOT_INSTALLER_PS1_URL =
+  'https://aliyun-observability-release-cn-shanghai.oss-cn-shanghai.aliyuncs.com/loongsuite-pilot/installer.ps1';
 
 /**
  * 解析 `skills obs …` 子命令参数。
@@ -43,6 +51,7 @@ export interface ObsOptions {
 export function parseObsOptions(args: string[]): ObsOptions {
   const positionals: string[] = [];
   let note: string | undefined;
+  let purge = false;
   let help = false;
 
   for (let i = 0; i < args.length; i++) {
@@ -51,6 +60,8 @@ export function parseObsOptions(args: string[]): ObsOptions {
       help = true;
     } else if (arg === '--note') {
       note = args[++i];
+    } else if (arg === '--purge') {
+      purge = true;
     } else if (arg && arg.startsWith('-')) {
       return { help, error: `不支持的选项: ${arg}` };
     } else if (arg) {
@@ -73,6 +84,13 @@ export function parseObsOptions(args: string[]): ObsOptions {
       };
     }
     return { help, subcommand: 'list' };
+  }
+
+  if (first === 'uninstall') {
+    if (positionals.length > 1) {
+      return { help, error: 'uninstall 不接受位置参数。用法: obs uninstall [--purge]' };
+    }
+    return { help, subcommand: 'uninstall', purge };
   }
 
   if (first === 'refresh' || first === 'install') {
@@ -136,6 +154,8 @@ Commands:
   obs refresh <agentId>    Generate a new install token (old ones are invalidated immediately)
   obs install <agentId>    Generate a new install token AND run it on this machine
                            (double-confirms when a local install already exists)
+  obs uninstall [--purge]  Uninstall LoongSuite Pilot on this machine
+                           (--purge also deletes local data in ~/.loongsuite-pilot)
 
 Options:
   --note <note>    Optional note for the record
@@ -233,7 +253,19 @@ export function runInstallCommand(command: string): Promise<void> {
 }
 
 /**
- * `skills obs …` 命令：创建接入记录 / 列出接入清单 / 按 agentId 换发安装 token / 本机执行安装。
+ * 构造官方卸载命令（双平台）。卸载不需要安装凭证，直接用 OSS 上的官方安装脚本
+ * 执行 `uninstall` 子命令；`--purge` 连同 ~/.loongsuite-pilot 本地数据一起删除。
+ */
+export function buildUninstallCommand(purge: boolean): ObservabilityInstallCommand {
+  const subcommand = purge ? 'uninstall --purge' : 'uninstall';
+  return {
+    unix: `curl -fsSL ${PILOT_INSTALLER_SH_URL} -o /tmp/loongsuite-pilot-installer.sh && bash /tmp/loongsuite-pilot-installer.sh ${subcommand}`,
+    windows: `Invoke-WebRequest -Uri '${PILOT_INSTALLER_PS1_URL}' -OutFile "$env:TEMP\\loongsuite-pilot-installer.ps1" -UseBasicParsing; & "$env:TEMP\\loongsuite-pilot-installer.ps1" ${purge ? 'uninstall -Purge' : 'uninstall'}`,
+  };
+}
+
+/**
+ * `skills obs …` 命令：创建接入记录 / 列出接入清单 / 按 agentId 换发安装 token / 本机执行安装 / 本机卸载。
  * 复用既有 API Key 鉴权（`auth.ts`）与统一失败处理（`api-error.ts`）。
  */
 export async function runObs(args: string[]): Promise<void> {
@@ -324,6 +356,36 @@ export async function runObs(args: string[]): Promise<void> {
       console.log('✓ 安装命令执行完成');
     } catch (err) {
       console.error(`安装失败: ${err instanceof Error ? err.message : String(err)}`);
+      process.exitCode = 1;
+    }
+    return;
+  }
+
+  if (opts.subcommand === 'uninstall') {
+    // 先做本机检查：未安装直接提示，不发请求也不执行脚本
+    const localServiceName = readLocalPilotServiceName();
+    if (!localServiceName) {
+      console.log('本机未检测到 LoongSuite Pilot 安装，无需卸载');
+      return;
+    }
+    console.log(`  本机检测: 已安装 LoongSuite Pilot (serviceNamePrefix: ${localServiceName})`);
+    const command = pickPlatformCommand(buildUninstallCommand(opts.purge ?? false));
+    console.log(`  卸载命令: ${command}`);
+    const confirmed = await p.confirm({
+      message: opts.purge
+        ? '将卸载 LoongSuite Pilot 并删除本地数据（配置与采集记录），确认继续？'
+        : '将卸载 LoongSuite Pilot（保留 ~/.loongsuite-pilot 本地数据），确认继续？',
+    });
+    if (p.isCancel(confirmed) || !confirmed) {
+      console.log('已取消');
+      return;
+    }
+    console.log('开始执行卸载…（脚本输出见下方）');
+    try {
+      await runInstallCommand(command);
+      console.log('✓ 卸载命令执行完成');
+    } catch (err) {
+      console.error(`卸载失败: ${err instanceof Error ? err.message : String(err)}`);
       process.exitCode = 1;
     }
     return;

@@ -38,6 +38,7 @@ import {
   detectHostPlatform,
   pickPlatformCommand,
   readLocalPilotServiceName,
+  buildUninstallCommand,
 } from './obs.ts';
 
 const CMD = {
@@ -65,6 +66,13 @@ describe('obs', () => {
     errorSpy.mockRestore();
     logSpy.mockRestore();
   });
+
+  /** 将 homedir 指向一个空的临时目录（无 ~/.loongsuite-pilot），保证 install/uninstall 用例封闭 */
+  function useEmptyHome(): string {
+    const home = mkdtempSync(join(tmpdir(), 'home-'));
+    mockHome.current = home;
+    return home;
+  }
 
   describe('parseObsOptions', () => {
     it('parses a create command with optional note (no --agent)', () => {
@@ -120,6 +128,22 @@ describe('obs', () => {
       expect(parseObsOptions(['add', 'refresh']).error).toContain('refresh');
       // "install" 同理
       expect(parseObsOptions(['add', 'install']).error).toContain('install');
+      // "uninstall" 同理
+      expect(parseObsOptions(['add', 'uninstall']).error).toContain('uninstall');
+    });
+
+    it('parses uninstall with optional --purge and rejects positionals', () => {
+      expect(parseObsOptions(['uninstall'])).toEqual({
+        help: false,
+        subcommand: 'uninstall',
+        purge: false,
+      });
+      expect(parseObsOptions(['uninstall', '--purge'])).toEqual({
+        help: false,
+        subcommand: 'uninstall',
+        purge: true,
+      });
+      expect(parseObsOptions(['uninstall', 'extra']).error).toContain('不接受位置参数');
     });
   });
 
@@ -295,13 +319,6 @@ describe('obs', () => {
         true
       );
     });
-
-    /** 将 homedir 指向一个空的临时目录（无 ~/.loongsuite-pilot），保证 install 用例封闭 */
-    function useEmptyHome(): string {
-      const home = mkdtempSync(join(tmpdir(), 'home-'));
-      mockHome.current = home;
-      return home;
-    }
 
     it('runs the platform install command after confirm (unix host → /bin/sh)', async () => {
       // process.platform 非 win32（测试机即如此）→ detectHostPlatform 返回 'unix'
@@ -494,6 +511,98 @@ describe('obs', () => {
       expect(marked[0]).toContain('#33333333');
       // 不匹配的行不携带标记
       expect(marked[0]).not.toContain('#44444444');
+      rmSync(home, { recursive: true, force: true });
+    });
+  });
+
+  describe('obs uninstall', () => {
+    it('builds dual-platform uninstall commands with optional purge', () => {
+      const plain = buildUninstallCommand(false);
+      expect(plain.unix).toContain('installer.sh');
+      expect(plain.unix).toContain('uninstall');
+      expect(plain.unix).not.toContain('--purge');
+      expect(plain.windows).toContain('installer.ps1');
+      expect(plain.windows).toContain('uninstall');
+      expect(plain.windows).not.toContain('-Purge');
+
+      const purged = buildUninstallCommand(true);
+      expect(purged.unix).toContain('uninstall --purge');
+      expect(purged.windows).toContain('uninstall -Purge');
+    });
+
+    it('skips execution when no local install is detected (no confirm, no spawn)', async () => {
+      useEmptyHome();
+
+      await runObs(['uninstall']);
+
+      const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
+      expect(output).toContain('未检测到 LoongSuite Pilot 安装');
+      expect(output).toContain('无需卸载');
+      expect(p.confirm).not.toHaveBeenCalled();
+      expect(spawn).not.toHaveBeenCalled();
+    });
+
+    it('double-confirms and skips execution when the user declines', async () => {
+      const home = useEmptyHome();
+      mkdirSync(join(home, '.loongsuite-pilot'));
+      writeFileSync(
+        join(home, '.loongsuite-pilot', 'config.json'),
+        JSON.stringify({ serviceNamePrefix: 'BSM-11111111-2222-3333-4444-555555555555' })
+      );
+      vi.mocked(p.confirm).mockResolvedValue(false);
+
+      await runObs(['uninstall']);
+
+      const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
+      expect(output).toContain('本机检测: 已安装 LoongSuite Pilot');
+      expect(String(vi.mocked(p.confirm).mock.calls[0]?.[0]?.message)).toContain(
+        '保留 ~/.loongsuite-pilot'
+      );
+      expect(spawn).not.toHaveBeenCalled();
+      expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('已取消'))).toBe(true);
+      rmSync(home, { recursive: true, force: true });
+    });
+
+    it('runs the uninstall command after confirm (unix host → /bin/sh)', async () => {
+      const home = useEmptyHome();
+      mkdirSync(join(home, '.loongsuite-pilot'));
+      writeFileSync(
+        join(home, '.loongsuite-pilot', 'config.json'),
+        JSON.stringify({ serviceNamePrefix: 'BSM-11111111-2222-3333-4444-555555555555' })
+      );
+      vi.mocked(p.confirm).mockResolvedValue(true);
+      const child = new EventEmitter();
+      vi.mocked(spawn).mockReturnValue(child as never);
+      setImmediate(() => child.emit('exit', 0));
+
+      await runObs(['uninstall', '--purge']);
+
+      const uninstallCmd = buildUninstallCommand(true);
+      expect(spawn).toHaveBeenCalledWith('/bin/sh', ['-c', uninstallCmd.unix], {
+        stdio: 'inherit',
+      });
+      expect(process.exitCode).toBeUndefined();
+      expect(
+        logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('卸载命令执行完成'))
+      ).toBe(true);
+      rmSync(home, { recursive: true, force: true });
+    });
+
+    it('sets exit code 1 when the uninstall command fails', async () => {
+      const home = useEmptyHome();
+      mkdirSync(join(home, '.loongsuite-pilot'));
+      writeFileSync(
+        join(home, '.loongsuite-pilot', 'config.json'),
+        JSON.stringify({ serviceNamePrefix: 'BSM-11111111-2222-3333-4444-555555555555' })
+      );
+      vi.mocked(p.confirm).mockResolvedValue(true);
+      const child = new EventEmitter();
+      vi.mocked(spawn).mockReturnValue(child as never);
+      setImmediate(() => child.emit('exit', 1));
+
+      await runObs(['uninstall']);
+
+      expect(process.exitCode).toBe(1);
       rmSync(home, { recursive: true, force: true });
     });
   });
