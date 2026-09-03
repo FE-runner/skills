@@ -40,6 +40,7 @@ import {
   readLocalPilotServiceName,
   readLocalPilotStatus,
   buildUninstallCommand,
+  createRecordAndInstallPilot,
 } from './obs.ts';
 
 const CMD = {
@@ -683,6 +684,73 @@ describe('obs', () => {
       expect(p.confirm).toHaveBeenCalled();
       expect(spawn).not.toHaveBeenCalled();
       rmSync(home, { recursive: true, force: true });
+    });
+  });
+
+  describe('createRecordAndInstallPilot', () => {
+    it('creates a record (hostname as agentName) and runs the install command', async () => {
+      vi.mocked(marketProvider.createObservability).mockResolvedValue({
+        ok: true,
+        data: {
+          id: '11111111-2222-4333-8444-555555555555',
+          agentName: 'some-host',
+          serviceName: 'BSM-11111111-2222-3333-4444-555555555555',
+          installCommand: CMD,
+          installScript: CMD,
+        },
+      });
+      const child = new EventEmitter();
+      vi.mocked(spawn).mockReturnValue(child as never);
+      setImmediate(() => child.emit('exit', 0));
+
+      const ok = await createRecordAndInstallPilot('sk-test');
+
+      expect(marketProvider.createObservability).toHaveBeenCalledWith(
+        expect.objectContaining({ note: expect.stringContaining('自动创建') }),
+        'sk-test'
+      );
+      expect(spawn).toHaveBeenCalledWith('/bin/sh', ['-c', CMD.unix], { stdio: 'inherit' });
+      expect(ok).toBe(true);
+      expect(process.exitCode).toBeUndefined();
+    });
+
+    it('returns false and hints refresh when the install command fails', async () => {
+      vi.mocked(marketProvider.createObservability).mockResolvedValue({
+        ok: true,
+        data: {
+          id: '11111111-2222-4333-8444-555555555555',
+          agentName: 'some-host',
+          serviceName: 'BSM-11111111-2222-3333-4444-555555555555',
+          installCommand: CMD,
+          installScript: CMD,
+        },
+      });
+      const child = new EventEmitter();
+      vi.mocked(spawn).mockReturnValue(child as never);
+      setImmediate(() => child.emit('exit', 1));
+
+      const ok = await createRecordAndInstallPilot('sk-test');
+
+      expect(ok).toBe(false);
+      expect(process.exitCode).toBe(1);
+      expect(errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('obs refresh'))).toBe(
+        true
+      );
+    });
+
+    it('returns false when the create API fails', async () => {
+      vi.mocked(marketProvider.createObservability).mockResolvedValue({
+        ok: false,
+        status: 401,
+        message: '未登录',
+      });
+      const child = new EventEmitter();
+      vi.mocked(spawn).mockReturnValue(child as never);
+
+      const ok = await createRecordAndInstallPilot('sk-test');
+
+      expect(ok).toBe(false);
+      expect(spawn).not.toHaveBeenCalled();
     });
   });
 

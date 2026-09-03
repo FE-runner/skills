@@ -52,7 +52,8 @@ import {
   type CosSkill,
 } from './providers/index.ts';
 import { marketProvider, type MarketSkill } from './providers/market.ts';
-import { readLocalPilotStatus } from './obs.ts';
+import { readLocalPilotStatus, createRecordAndInstallPilot } from './obs.ts';
+import { getApiKey } from './auth.ts';
 import {
   addSkillToLock,
   fetchSkillFolderHash,
@@ -1877,26 +1878,44 @@ async function handleMarketSkill(
     }
   }
 
-  // 监测插件（LoongSuite Pilot）本机状态提示：在采集询问之后展示，不阻断安装
+  // 监测插件（LoongSuite Pilot）本机状态：完整安装只做提示；缺失/残留时引导自动安装（未登录除外）
   if (collectCapable && installGlobally) {
     const pilot = readLocalPilotStatus();
+    const missingReason =
+      pilot.serviceName != null
+        ? '检测到监测插件配置残留（未发现程序文件）'
+        : '未检测到 LoongSuite Pilot 监测插件';
     if (pilot.serviceName != null && pilot.hasBinary) {
       const running = pilot.isRunning === false ? '，服务未运行' : '';
       p.log.message(
         pc.dim(`本机监测插件: 已安装 LoongSuite Pilot (${pilot.serviceName}${running})`)
       );
-    } else if (pilot.serviceName != null) {
+    } else if (options.yes || !process.stdin.isTTY) {
+      // 非交互环境不自动安装（避免静默执行远程脚本），保留提示
       p.log.message(
         pc.yellow(
-          `本机监测插件: 检测到配置残留（未发现程序文件）；可运行 ${pc.cyan(`${BIN_NAME} obs <接入名>`)} 创建接入并重装监测插件`
+          `本机监测插件: ${missingReason}，采集数据不会实际上报；可稍后运行 ${pc.cyan(`${BIN_NAME} obs <接入名>`)} 创建接入并安装监测插件`
+        )
+      );
+    } else if (!getApiKey()) {
+      p.log.message(
+        pc.yellow(
+          `本机监测插件: ${missingReason}，采集数据不会实际上报；先运行 ${pc.cyan(`${BIN_NAME} login <api-key>`)} 登录，下次安装带监测的 skill 时可自动安装`
         )
       );
     } else {
-      p.log.message(
-        pc.yellow(
-          `本机监测插件: 未检测到 LoongSuite Pilot，采集数据不会实际上报；可运行 ${pc.cyan(`${BIN_NAME} obs <接入名>`)} 创建接入并安装监测插件`
-        )
-      );
+      p.log.message(pc.yellow(`本机监测插件: ${missingReason}，采集数据不会实际上报`));
+      const installPilot = await p.confirm({
+        message: '是否现在创建接入记录并自动安装 LoongSuite Pilot 监测插件？',
+        initialValue: true,
+      });
+      if (!p.isCancel(installPilot) && installPilot) {
+        await createRecordAndInstallPilot(getApiKey()!);
+      } else {
+        p.log.message(
+          pc.dim(`已跳过；可稍后运行 ${pc.cyan(`${BIN_NAME} obs <接入名>`)} 创建接入并安装监测插件`)
+        );
+      }
     }
   }
 

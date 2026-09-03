@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { homedir, hostname } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'child_process';
 import * as p from '@clack/prompts';
@@ -329,6 +329,38 @@ export function buildUninstallCommand(purge: boolean): ObservabilityInstallComma
     unix: `curl -fsSL ${PILOT_INSTALLER_SH_URL} -o /tmp/loongsuite-pilot-installer.sh && bash /tmp/loongsuite-pilot-installer.sh ${subcommand}`,
     windows: `Invoke-WebRequest -Uri '${PILOT_INSTALLER_PS1_URL}' -OutFile "$env:TEMP\\loongsuite-pilot-installer.ps1" -UseBasicParsing; & "$env:TEMP\\loongsuite-pilot-installer.ps1" ${purge ? 'uninstall -Purge' : 'uninstall'}`,
   };
+}
+
+/**
+ * 创建接入记录并在本机自动安装 LoongSuite Pilot（供带采集 skill 安装流程复用）。
+ * 接入名取本机主机名（同名不唯一，多台机器各自创建即可），备注标注自动创建来源。
+ * @returns ok=true 表示插件安装命令执行成功；失败时已输出原因与补救提示。
+ */
+export async function createRecordAndInstallPilot(apiKey: string): Promise<boolean> {
+  const result = await marketProvider.createObservability(
+    { agentName: hostname(), note: `${BIN_NAME} 自动创建` },
+    apiKey
+  );
+  if (!result.ok) {
+    reportApiFailure(result);
+    return false;
+  }
+  const command = pickPlatformCommand(result.data.installCommand);
+  console.log(`  接入名: ${result.data.agentName}`);
+  console.log(`  serviceName: ${result.data.serviceName}`);
+  console.log('开始安装 LoongSuite Pilot…（脚本输出见下方）');
+  try {
+    await runInstallCommand(command);
+    console.log(
+      `✓ LoongSuite Pilot 安装完成（凭证为一次性，失败可 ${BIN_NAME} obs refresh ${result.data.id} 换发重试）`
+    );
+    return true;
+  } catch (err) {
+    console.error(`安装失败: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(`凭证已作废，可运行 \`${BIN_NAME} obs refresh ${result.data.id}\` 换发后重试`);
+    process.exitCode = 1;
+    return false;
+  }
 }
 
 /**
