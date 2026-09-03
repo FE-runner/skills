@@ -235,6 +235,8 @@ npx blueai-skills obs uninstall [--purge]
 npx blueai-skills obs --help
 ```
 
+安装带采集的 Skill（全局方式）时，若本机未安装监测插件：已登录用户会询问是否**自动创建接入记录（主机名命名）并安装 LoongSuite Pilot**；未登录提示先 `login`；`-y`/非交互环境只保留指引不自动执行。
+
 本地联调：默认连生产平台，可用 `SKILLS_SITE` 指向本地服务（如本地平台跑在 3001）：
 
 ```bash

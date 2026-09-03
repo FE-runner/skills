@@ -8,22 +8,22 @@
 
 ### Requirement: 首次安装知情同意
 
-`skills add` 以**全局方式**（`--global`）安装 Skill 时 SHALL 携带 `report=true` 请求安装接口并消费响应的 `collect` 字段。响应**无** `collect`（作者未开启采集）时 SHALL 安装原版且**不写入** `collectConsent` 字段。响应**有** `collect`（作者开启采集）时 SHALL 询问用户「是否同意采集并安装监测版」：同意 → 安装监测版（改造产物）并写入 `lock.skills[<skillName>].collectConsent = true`；拒绝 → 安装原版并写入 `false`。在**非交互环境**（`-y`/`--all`/update 重装/非 TTY 输入）下 SHALL **默认拒绝**：不询问，安装原版并写入 `false`，并提示用户可稍后运行 `track on <skillName>` 开启采集。该记录 SHALL **永久生效**（per-skill，后续安装该 skill 不再询问），但**不跨 skill 生效**。**项目级安装**（非 `--global`）SHALL NOT 询问采集、SHALL NOT 写入 `collectConsent`。**团队批量安装**（`add t_<teamId>/<name>`）以**一次询问覆盖该团队全部 `skill`**（见「团队安装的采集同意」Requirement）。
+`skills add` 以**全局方式**（`--global`）安装 Skill 时 SHALL 采用**原版先行**策略：先以 `report=false` 拉取原版产物。仅当**首次未定夺**（lock 无 `collectConsent`）时，SHALL 再以 `report=true` 请求安装接口探测是否带采集配置——**`report` 参数 SHALL 为布尔值**（Market 契约 `SkillInstallBody.report: z.boolean()`，路由以 `body.report === true` 判定；字符串 `'true'` 恒判 false，会导致采集配置永不下发）。响应**无** `collect`（作者未开启采集）时 SHALL 安装原版且**不写入** `collectConsent` 字段。响应**有** `collect` 时 SHALL 询问用户「是否同意采集并安装监测版」：同意 → **直接复用探测到的监测版产物**落盘（不重复拉取）并写入 `lock.skills[<skillName>].collectConsent = true`；拒绝 → 安装原版并写入 `false`。在**非交互环境**（`-y`/`--all`/update 重装/非 TTY 输入）下 SHALL **默认拒绝**：不询问，安装原版并写入 `false`，并提示用户可稍后运行 `track on <skillName>` 开启采集。该记录 SHALL **永久生效**（per-skill，后续安装该 skill 不再询问），但**不跨 skill 生效**。**项目级安装**（非 `--global`）SHALL NOT 询问采集、SHALL NOT 写入 `collectConsent`。**团队批量安装**（`add t_<teamId>/<name>`）以**一次询问覆盖该团队全部 `skill`**（见「团队安装的采集同意」Requirement）。
 
 #### Scenario: 首次安装无采集配置的 skill
 
-- **WHEN** 用户 `add` 安装一个作者未开启采集的 Skill（响应无 collect）
+- **WHEN** 用户 `add` 安装一个作者未开启采集的 Skill（探测响应无 collect）
 - **THEN** CLI 安装原版，不询问，不写入 collectConsent 字段
 
 #### Scenario: 非交互环境遇到带采集的 skill
 
-- **WHEN** 用户以 `-y`/`--all`/update 重装/非 TTY 方式安装带采集的 Skill（响应有 collect）且此前未定夺
+- **WHEN** 用户以 `-y`/`--all`/update 重装/非 TTY 方式安装带采集的 Skill（探测响应有 collect）且此前未定夺
 - **THEN** CLI 不询问、默认拒绝：安装原版并写入 collectConsent=false，提示可稍后运行 `track on <skillName>` 开启
 
 #### Scenario: 首次安装带采集的 skill 并同意
 
-- **WHEN** 用户 `add` 安装带采集的 Skill（响应有 collect）且用户同意
-- **THEN** CLI 安装监测版（含签名与 blueai-track.js）并写入 collectConsent=true，该 skill 后不再询问
+- **WHEN** 用户 `add` 安装带采集的 Skill（探测响应有 collect）且用户同意
+- **THEN** CLI 直接复用探测到的监测版产物（含签名与 blueai-track.js，单行明文签名）落盘并写入 collectConsent=true，该 skill 后不再询问
 
 #### Scenario: 首次安装带采集的 skill 并拒绝
 
@@ -34,6 +34,40 @@
 
 - **WHEN** 用户以项目级方式（非 `--global`）`add` 安装带采集的 Skill
 - **THEN** CLI 不询问、安装原版、不写入 collectConsent；项目级 `skills-lock.json` 不含该字段
+
+### Requirement: 监测插件状态与自动安装
+
+全局安装带采集 Skill 时（采集询问已触发，或 lock 已定夺为同意），CLI SHALL 在采集询问之后展示本机 LoongSuite Pilot 监测插件状态（分层检测契约见 `cli-observability-agent`），并按状态分流：
+
+- **完整安装**（配置 + 程序文件）→ SHALL 仅提示 serviceNamePrefix与服务运行状态，不阻断安装
+- **缺失或配置残留** 且 **已登录** 且 **交互环境** → SHALL 询问「是否现在创建接入记录并自动安装监测插件」（默认同意）：同意 → 以本机主机名创建接入记录并在本机执行平台安装命令（见 `cli-observability-agent` 的「接入记录自动创建与插件安装」Requirement）；拒绝 → 提示可稍后 `obs <接入名>` 手动安装
+- **缺失或残留** 且 **未登录** → SHALL 提示先运行 `login`，不做自动安装
+- **非交互环境**（`-y`/非 TTY）→ SHALL NOT 自动执行安装脚本，仅保留提示
+
+#### Scenario: 已登录且本机无插件，同意自动安装
+
+- **WHEN** 全局安装带采集 Skill，本机未检测到监测插件，用户已登录且同意自动安装询问
+- **THEN** CLI 以主机名创建接入记录并自动在本机安装 LoongSuite Pilot，打印 serviceName
+
+#### Scenario: 已登录但拒绝自动安装
+
+- **WHEN** 全局安装带采集 Skill，本机无插件，用户已登录但拒绝自动安装
+- **THEN** CLI 不创建记录、不执行脚本，提示可稍后 `obs <接入名>` 手动安装
+
+#### Scenario: 未登录时不自动安装
+
+- **WHEN** 全局安装带采集 Skill，本机无插件，用户未配置 API Key
+- **THEN** CLI 提示先 `login` 后可自动安装，不弹出安装询问
+
+#### Scenario: 非交互环境不自动安装
+
+- **WHEN** 以 `-y`/非 TTY 方式全局安装带采集 Skill 且本机无插件
+- **THEN** CLI 不执行安装脚本，仅保留 `obs <接入名>` 安装指引
+
+#### Scenario: 完整安装仅提示
+
+- **WHEN** 全局安装带采集 Skill，本机监测插件完整安装
+- **THEN** CLI 仅 dim 提示 serviceNamePrefix（含服务未运行标注），不弹任何询问
 
 ### Requirement: 团队安装的采集同意
 
@@ -72,7 +106,7 @@
 
 CLI SHALL 提供 `track` 子命令统一管理**全局**采集状态（SHALL NOT 覆盖项目级安装的技能）：
 - `track list`：SHALL 按全局 `.agents/.skill-lock.json` 中已装 Skill 列表展示采集状态（on=collectConsent true / off=false / 未定夺=缺失）
-- `track on <skillName>`：SHALL 以该 skill 的 lock 条目中 `skillPath`（market skillId）调用 `fetchById`（`report=true`）重新请求安装监测版覆盖全局落盘，并写入 `collectConsent=true`
+- `track on <skillName>`：SHALL 以该 skill 的 lock 条目中 `skillPath`（market skillId）调用 `fetchById`（`report=true`，布尔，见「首次安装知情同意」的参数契约）重新请求安装监测版覆盖全局落盘，并写入 `collectConsent=true`
 - `track off <skillName>`：SHALL 以 `skillPath` 调 `fetchById`（`report=false`）重新请求安装原版覆盖全局落盘，并写入 `collectConsent=false`（从监测退回原样，反悔不丢失用户数据，已采集历史不追溯）
 
 #### Scenario: track list 展示状态

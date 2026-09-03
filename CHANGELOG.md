@@ -15,6 +15,17 @@
   - `obs list`：列出接入清单（每行含 agentId，供 refresh/install 引用）
   - `obs refresh <agentId>`：换发安装凭证并打印双平台命令（旧凭证立即失效；新凭证一次性、5 分钟有效）
   - `obs install <agentId>`：换发凭证并二次确认后在本机执行对应宿主平台的安装命令（探针装运行命令的机器）
+- **本机 LoongSuite Pilot 安装检测**：`obs` 命令组内置分层检测（纯文件信号 + pid 进程探测，不执行任何插件命令）
+  - `obs list`：给本机已装的接入打 `✓ 本机已安装` 标记（含服务未运行标注）；卸载残留（仅配置）不误标
+  - `obs install`：执行前本机检查，已有完整安装时二次确认（区分重装覆盖与切换 serviceNamePrefix）；残留配置走普通确认
+  - `obs add`：创建结果附带本机检测提示与 `obs install` 下一步指引
+  - `obs uninstall [--purge]`：本机卸载 LoongSuite Pilot，未安装直接跳过；残留配置仍可清理；`--purge` 连同 `~/.loongsuite-pilot` 本地数据一起删除
+- **安装带采集 skill 自动装监测插件**：全局安装带采集 Skill 且本机无插件时，已登录用户可一键「创建接入记录（主机名，备注自动创建）+ 自动安装 LoongSuite Pilot」；未登录提示先 `login`；非交互环境仅保留指引
+
+### 修复
+
+- **采集同意询问从未触发**：Market 端仅 `report=true` 携带 `collect`，原版（`report=false`）先行拉取后判 collect 恒为 false——首次未定夺时改为先 `report=true` 探测再询问，同意后复用探测产物省一次拉取
+- **`report` 参数类型错误**：`fetchById` 发字符串 `'true'`，Market 契约为布尔（路由 `body.report === true` 判定）——改发 `true`，修复单装探测、同意询问、团队批量探测全链路拿不到 collect 的问题
 
 ## [1.4.7-bmc1.6.2] - 2026-08-11
 

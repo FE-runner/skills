@@ -168,3 +168,22 @@ CLI SHALL 通过**纯本地文件信号**检测本机 LoongSuite Pilot 安装状
 
 - **WHEN** 卸载命令在 shell 中非零退出
 - **THEN** CLI 打印失败信息并置退出码为非零
+
+### Requirement: 接入记录自动创建与插件安装（供采集安装流程复用）
+
+CLI SHALL 提供接入记录自动创建与插件安装的复用链路（供带采集 Skill 的安装流程调用，调用方已完成用户确认，该链路 SHALL NOT 重复询问）：以**本机主机名**（`os.hostname()`）作为接入名（agentName 不要求唯一，多机各自创建）创建接入记录，备注 SHALL 标注自动创建来源；创建成功后 SHALL 在本机执行对应宿主平台的安装命令。安装命令失败 SHALL 置非零退出并提示 `obs refresh <agentId>` 换发一次性凭证重试；接入创建 API 失败 SHALL 走统一失败处理且 SHALL NOT 执行安装脚本。
+
+#### Scenario: 自动创建并安装成功
+
+- **WHEN** 调用方传入有效 API Key，接入创建成功且安装命令零退出
+- **THEN** CLI 打印接入名与 serviceName，返回成功
+
+#### Scenario: 安装命令失败
+
+- **WHEN** 安装命令在 shell 中非零退出
+- **THEN** CLI 置非零退出并提示 `obs refresh <agentId>` 换发凭证重试
+
+#### Scenario: 接入创建 API 失败
+
+- **WHEN** 接入创建接口返回失败（如 401 未登录）
+- **THEN** CLI 走统一失败处理（含 401 重新登录提示），不执行安装脚本
