@@ -144,10 +144,15 @@ ${BOLD}Project:${RESET}
 
 ${BOLD}Observability:${RESET}
   obs <agentName>          Create an obs record and print its install commands
+                           (plus a local LoongSuite Pilot check)
       --note <note>        Optional note for the record
-  obs list                 List your obs records (each row shows agentId)
-  obs refresh <agentId>    Re-issue the install token (old one invalidated)
+  obs add <agentName>      Same as above (add is an alias)
+  obs list                 List your obs records (marks ones installed on this machine)
+  obs refresh <agentId>    Re-issue the install token (old one invalidated; agentId is a UUID)
   obs install <agentId>    Re-issue the token and run the install on this machine
+                           (double-confirms when a local install already exists)
+  obs uninstall [--purge]  Uninstall LoongSuite Pilot on this machine
+                           (--purge also deletes local data in ~/.loongsuite-pilot)
 ${BOLD}Collection Consent:${RESET}
   track list               List global skills and their collection-consent status (on/off/未定夺)
   track on <skill>         Install the monitored build for a global skill (consent=true)
@@ -229,8 +234,10 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ${BIN_NAME} withdraw my-skill              ${DIM}# withdraw pending review${RESET}
 
   ${DIM}$${RESET} ${BIN_NAME} obs 公司机                 ${DIM}# create an obs record and print its install commands${RESET}
-  ${DIM}$${RESET} ${BIN_NAME} obs list                          ${DIM}# list your records (each row shows agentId)${RESET}
-  ${DIM}$${RESET} ${BIN_NAME} obs refresh 42                  ${DIM}# re-issue the token; old one invalidated${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} obs list                          ${DIM}# list your records (marks ones installed on this machine)${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} obs refresh <agentId>          ${DIM}# re-issue the token; old one invalidated${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} obs install <agentId>         ${DIM}# re-issue the token and install on this machine${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} obs uninstall               ${DIM}# uninstall LoongSuite Pilot (--purge removes local data)${RESET}
 
   ${DIM}$${RESET} ${BIN_NAME} track list                       ${DIM}# list collection consent for global skills${RESET}
   ${DIM}$${RESET} ${BIN_NAME} track on my-skill                ${DIM}# switch to monitored build + consent=true${RESET}
