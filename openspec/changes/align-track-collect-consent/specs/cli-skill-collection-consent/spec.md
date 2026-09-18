@@ -2,7 +2,7 @@
 
 ### Requirement: 有效采集配置判定
 
-CLI SHALL 仅在安装响应中的 `collect` 同时包含 `config` 与 `meta.blueai_signature` 时，将其视为有效的监测版采集配置。响应不含 `collect`、`collect` 非对象、`collect` 仅含 `reason`、或缺少 `config`/`meta.blueai_signature` 时，CLI SHALL 视为无效采集配置并按无监测版处理。
+CLI SHALL 仅在安装响应中的 `collect` 同时包含 `config` 与非空字符串 `meta.blueai_signature` 时，将其视为有效的监测版采集配置。响应不含 `collect`、`collect` 非对象、`collect` 仅含 `reason`、或缺少/为空 `config`/`meta.blueai_signature` 时，CLI SHALL 视为无效采集配置并按无监测版处理。
 
 #### Scenario: 成功响应判定为有效
 

@@ -35,3 +35,9 @@
 - `src/track.test.ts` 需要在 `beforeEach` 清理 mock 调用历史；否则 installer 调用会跨用例累积，导致失败路径断言误报。
 - task 2.1 的验证已收窄为主 spec Purpose/Open Questions 检查：旧 requirement 由 delta spec 在 archive 阶段移除，apply 阶段直接删除会与 REMOVED delta 冲突。
 - 验证结果：`pnpm test src/track.test.ts src/add.test.ts tests/market-observability-provider.test.ts`、`pnpm type-check`、`pnpm format:check`、`pnpm test` 均通过。
+
+## Review Warning 修复
+
+- `add` 在已同意采集（`collectConsent=true`）但当前版本返回无效 collect 时，改为本次安装原版、保留用户同意状态并输出告警；不把服务端降级误呈现为已安装监测版。
+- delta spec 将有效采集判定收紧为“非空字符串 `meta.blueai_signature`”，与实现一致。
+- CHANGELOG 改为“delta spec 已移除旧口径；归档后行为统一”，避免在主 spec 旧 requirement 尚未 archive 时过早宣称完全移除。

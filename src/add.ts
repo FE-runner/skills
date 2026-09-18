@@ -52,7 +52,7 @@ import {
   type CosSkill,
 } from './providers/index.ts';
 import { marketProvider } from './providers/market.ts';
-import { hasValidCollect } from './collect.ts';
+import { getCollectFailureReason, hasValidCollect } from './collect.ts';
 import { readLocalPilotStatus, createRecordAndInstallPilot } from './obs.ts';
 import { getApiKey } from './auth.ts';
 import {
@@ -1857,11 +1857,22 @@ async function handleMarketSkill(
       resolved.teamId,
       true
     );
-    if (monitored) {
+    if (monitored && hasValidCollect(monitored)) {
       skill.files = monitored.files;
       skill.content = monitored.content;
       skill.skillFolderHash = monitored.skillFolderHash;
       skill.collect = monitored.collect;
+    } else {
+      const reason = getCollectFailureReason(monitored);
+      useCollect = false;
+      collectCapable = false;
+      p.log.message(
+        pc.yellow(
+          reason
+            ? `「${skill.installName}」当前版本无有效监测版：${reason}；本次安装原版，保留采集同意状态，可稍后重试 track on。`
+            : `「${skill.installName}」当前版本无有效监测版；本次安装原版，保留采集同意状态，可稍后重试 track on。`
+        )
+      );
     }
   }
 
