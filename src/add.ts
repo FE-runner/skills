@@ -51,7 +51,8 @@ import {
   cosProvider,
   type CosSkill,
 } from './providers/index.ts';
-import { marketProvider, type MarketSkill } from './providers/market.ts';
+import { marketProvider } from './providers/market.ts';
+import { hasValidCollect } from './collect.ts';
 import { readLocalPilotStatus, createRecordAndInstallPilot } from './obs.ts';
 import { getApiKey } from './auth.ts';
 import {
@@ -1563,20 +1564,6 @@ async function getSkillConsent(skillName: string): Promise<boolean | 'missing'> 
   } catch {
     return 'missing';
   }
-}
-
-/**
- * 判断响应中的 collect 是否为「有效采集配置」（D2）：
- * 服务端改造失败时会返回 collect 仅含 reason 键，视为无采集（装原版不写字段），非有效 collect。
- */
-function hasValidCollect(skill: MarketSkill): boolean {
-  if (skill.collect === undefined || skill.collect === null) return false;
-  if (typeof skill.collect === 'object') {
-    const c = skill.collect as Record<string, unknown>;
-    // 仅含 reason 键 = 服务端改造失败降级（config 缺失）→ 按无采集处理
-    return c.config !== undefined && c.meta !== undefined;
-  }
-  return false;
 }
 
 /**

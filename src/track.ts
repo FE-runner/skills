@@ -3,7 +3,7 @@ import { getAllLockedSkills, getSkillFromLock, addSkillToLock } from './skill-lo
 import { installWellKnownSkillForAgent } from './installer.ts';
 import { agents } from './agents.ts';
 import type { AgentType } from './types.ts';
-import type { MarketSkill } from './providers/market.ts';
+import { getCollectFailureReason, hasValidCollect } from './collect.ts';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 
@@ -97,8 +97,13 @@ async function runTrackToggle(skillName: string, report: boolean): Promise<void>
     return;
   }
 
-  if (report && !skill.collect) {
-    p.log.error(`「${target.name}」作者未开启采集，无监测版可装（未写入 lock）`);
+  if (report && !hasValidCollect(skill)) {
+    const reason = getCollectFailureReason(skill);
+    p.log.error(
+      reason
+        ? `「${target.name}」改造失败，无监测版可装：${reason}（未写入 lock）`
+        : `「${target.name}」作者未开启采集，无监测版可装（未写入 lock）`
+    );
     return;
   }
 

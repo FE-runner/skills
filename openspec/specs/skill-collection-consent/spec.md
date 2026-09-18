@@ -2,7 +2,7 @@
 
 ## Purpose
 
-为 Skill 数据采集的用户侧合规闭环（与 skills-market 侧「作者声明」对称）：CLI 在安装、反悔、查询采集状态上的行为契约。本 spec 为 **skills-market ↔ blueai-skills 双仓端到端契约**——market 侧 spec（`openspec/specs/skill-collection-consent/spec.md`，skills-market 仓）定义作者声明与安装接口的 `report` 载荷，本仓按同 spec 落地用户侧，供双仓维护对账。采集数据直达阿里云可观测插件，平台不落使用数据。
+为 Skill 数据采集的用户侧合规闭环（与 skills-market 侧「作者声明」对称）：market 侧定义作者采集声明与安装接口的 `report` 载荷，CLI 只消费安装响应并原样落盘服务端产物。本 spec 为 **skills-market ↔ blueai-skills 双仓端到端契约**，供双仓维护对账；CLI 的用户侧状态机、首次询问与 `track` 行为见 `cli-skill-collection-consent`。采集数据直达阿里云可观测插件，平台不落使用数据。
 
 ## Requirements
 
@@ -78,9 +78,4 @@ CLI SHALL NOT 解析 `meta.blueai_signature` 内容（Base64(JSON{skillName,skil
 #### Scenario: 撤回声明后已装副本仍采集
 
 - **WHEN** 作者关闭采集声明后，已装改造版的用户执行更新
-- **THEN** 本仓按升级语义处理：已装改造副本不被自动移除，用户可 `track off` 停采（默认保持上次选择，见 Open Questions）
-
-## Open Questions
-
-- **升级/重装默认包类型边界**：已 track off（装原版）的 skill 在升级重装时默认装哪种包——本仓当前倾向「保持用户上次选择（装原版则不采集，reinstall 继续原版）」，需与 blueai-skills 侧确认后写死语义。本 spec 先行记录，不阻塞两端落地。
-- 插件就绪探测的监测脚本命令与返回协议（CLI 探测阿里云采集插件是否安装、未装时引导）——由后续提供，落地时按脚本 + 阻塞式引导实现。
+- **THEN** 本仓按升级语义处理：已装改造副本不被自动移除，用户可 `track off` 停采（默认保持上次选择）

@@ -27,3 +27,11 @@
 - 存量用户若此前因 `{reason}` 被误写 `collectConsent=true`，本 change 不做自动修复；后续 `track off` 或用有效版本重新 `track on` 可纠正。
 - OpenSpec delta 不能修改既有 capability 的 Purpose；主 spec Purpose 与 Open Questions 的直接更新放在 apply 阶段，见 `design.md` D5 与 `tasks.md` 2.1。
 - propose 阶段 commit 只允许包含本 change 目录；不要把主 spec Purpose 修复混进 propose commit。
+
+## 实施决策（apply）
+
+- 共享模块落地为 `src/collect.ts`，导出 `hasValidCollect` 与 `getCollectFailureReason`；后者只用于 `track on` 的错误提示，不改变判定。
+- `src/add.ts` 只删除本地判定并改为引用共享模块，未改首次探测、团队探测与非交互默认拒绝语义。
+- `src/track.test.ts` 需要在 `beforeEach` 清理 mock 调用历史；否则 installer 调用会跨用例累积，导致失败路径断言误报。
+- task 2.1 的验证已收窄为主 spec Purpose/Open Questions 检查：旧 requirement 由 delta spec 在 archive 阶段移除，apply 阶段直接删除会与 REMOVED delta 冲突。
+- 验证结果：`pnpm test src/track.test.ts src/add.test.ts tests/market-observability-provider.test.ts`、`pnpm type-check`、`pnpm format:check`、`pnpm test` 均通过。

@@ -24,6 +24,8 @@
 
 ### 修复
 
+- **`track on` 误判采集失败降级响应**：Market 返回 `collect = { reason }` 时原逻辑仍会安装原版并写入 `collectConsent=true`；现统一要求 `collect.config` 与 `collect.meta.blueai_signature` 同时存在，失败降级时不安装、不写 lock，并输出失败原因
+- **采集同意 spec 旧口径清理**：移除 `blueai-track.js`、插文字、按包类型判定采集状态等已废弃描述，CLI 行为统一以 `collectConsent` lock 三态与当前签名/`obs-run` 产物契约为准
 - **采集同意询问从未触发**：Market 端仅 `report=true` 携带 `collect`，原版（`report=false`）先行拉取后判 collect 恒为 false——首次未定夺时改为先 `report=true` 探测再询问，同意后复用探测产物省一次拉取
 - **`report` 参数类型错误**：`fetchById` 发字符串 `'true'`，Market 契约为布尔（路由 `body.report === true` 判定）——改发 `true`，修复单装探测、同意询问、团队批量探测全链路拿不到 collect 的问题
 

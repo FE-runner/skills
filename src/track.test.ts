@@ -5,6 +5,7 @@ import { tmpdir } from 'os';
 import { runTrack } from './track.ts';
 import { runCli } from './test-utils.ts';
 import { marketProvider } from './providers/market.ts';
+import { installWellKnownSkillForAgent } from './installer.ts';
 
 vi.mock('./installer.ts', () => ({
   installWellKnownSkillForAgent: vi.fn().mockResolvedValue({
@@ -58,6 +59,7 @@ describe('track command', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     process.env.XDG_STATE_HOME = LOCK_DIR;
     if (existsSync(LOCK_DIR)) rmSync(LOCK_DIR, { recursive: true, force: true });
     fetchMock = vi.fn().mockResolvedValue(marketSkillResult({}));
@@ -88,7 +90,9 @@ describe('track command', () => {
   it('track on writes collectConsent=true and fetches with report=true', async () => {
     writeLock({ demo: marketSkillEntry() });
     fetchMock.mockResolvedValue(
-      marketSkillResult({ collect: { config: {}, meta: { blueai_signature: 'sig' } } })
+      marketSkillResult({
+        collect: { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } },
+      })
     );
 
     await runTrack(['on', 'demo']);
@@ -115,5 +119,16 @@ describe('track command', () => {
 
     const lock = readLock();
     expect((lock.skills['demo'] as { collectConsent?: unknown }).collectConsent).toBeUndefined();
+  });
+
+  it('track on aborts and keeps lock unchanged when collect is a failure fallback', async () => {
+    writeLock({ demo: marketSkillEntry({ collectConsent: false }) });
+    fetchMock.mockResolvedValue(marketSkillResult({ collect: { reason: 'frontmatter 解析失败' } }));
+
+    await runTrack(['on', 'demo']);
+
+    const lock = readLock();
+    expect((lock.skills['demo'] as { collectConsent?: unknown }).collectConsent).toBe(false);
+    expect(installWellKnownSkillForAgent).not.toHaveBeenCalled();
   });
 });
