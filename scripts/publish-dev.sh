@@ -44,7 +44,7 @@ BMC_REST="${BMC_VER#*.}"
 BMC_MINOR="${BMC_REST%%.*}"
 BMC_PATCH="${BMC_REST#*.}"
 NEXT_PATCH=$((BMC_PATCH + 1))
-STAMP="$(date +%Y%m%d%H%M)"
+STAMP="$(date +%Y%m%d%H%M%S)"
 DEV_VER="${BASE_VER}-bmc${BMC_MAJOR}.${BMC_MINOR}.${NEXT_PATCH}-dev.${STAMP}"
 TAG="dev-v${DEV_VER}"
 

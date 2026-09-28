@@ -68,7 +68,7 @@
 
 ### Requirement: 隔离模式对真实 agent 目录的边界
 
-隔离模式启用时，CLI SHALL NOT 向真实 agent 目录写入技能或创建软链，且 `list`、`remove` 等本地状态读取 SHALL NOT 以真实 agent 目录作为来源。开发版安装的技能仅对开发版 CLI 可见，真实 agent 不会读取到开发版安装结果。
+隔离模式启用时，对**全局作用域**：CLI SHALL NOT 向真实 agent 全局目录写入技能或创建软链，`list -g`、`remove -g` 等全局状态读取 SHALL NOT 以真实 agent 目录作为来源。开发版全局安装的技能仅对开发版 CLI 可见，真实 agent 不会读取到开发版安装结果。项目级安装、列表、卸载（不带 `-g`）SHALL 保持原行为，仍在 `<cwd>/.agents/skills` 与项目内 agent 目录读写。
 
 #### Scenario: 全局安装不触碰真实 agent 目录
 
@@ -82,8 +82,13 @@
 
 #### Scenario: 卸载不影响正式状态
 
-- **WHEN** 用户在隔离模式下执行 `remove`
+- **WHEN** 用户在隔离模式下执行 `remove -g`
 - **THEN** 只从状态根移除技能，真实 agent 目录与正式版安装状态保持不变
+
+#### Scenario: 项目级行为保持不变
+
+- **WHEN** 用户在隔离模式下执行项目级安装、`list` 或 `remove`（不带 `-g`）
+- **THEN** CLI 仍按原有项目级路径读写 `<cwd>/.agents/skills` 与项目内 agent 目录
 
 ### Requirement: Pilot 路径不受隔离模式影响
 

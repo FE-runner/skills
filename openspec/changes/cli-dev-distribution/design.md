@@ -64,6 +64,8 @@
 
 备选：仍建软链。否决原因：软链会写进真实 agent 目录，隔离在第一次安装时就失效。
 
+作用域：隔离边界只覆盖全局作用域；`experimental_sync` 与 `experimental_install` 仅使用项目级路径（内部固定 `global: false`），不经过全局隔离；`update -g` 通过 installer 复用同一隔离规则。项目级安装、列表、卸载保持原行为。
+
 ### D6：开发版复用 `publish.yml`，由 `dev-v*` 标签触发 CI 发布
 
 在现有 `publish.yml` 的 `on.push.tags` 增加 `dev-v*`，按标签前缀分叉：`dev-v*` 使用 `SKILLS_BUILD_TARGET=dev` 构建并以 `npm publish --tag dev` 发布；`v*` 保持 `--tag latest` 与 GitHub Release。开发版 SHALL 跳过 GitHub Release 步骤。
@@ -76,7 +78,7 @@
 
 ### D7：版本号由本地生成、经标签传入 CI
 
-本地入口生成 `1.4.7-bmc<x.y.z>-dev.<yyyymmddhhmm>` 形式的唯一版本号，创建 `dev-v<版本号>` 标签并推送到 GitHub 镜像；CI 从 `github.ref_name` 去掉 `dev-v` 前缀得到版本号，用 `npm version <版本号> --no-git-tag-version` 设置后再构建发布。版本号不在 develop 上提交，工作区保持干净。
+本地入口生成 `1.4.7-bmc<x.y.z>-dev.<yyyymmddhhmmss>` 形式的唯一版本号，创建 `dev-v<版本号>` 标签并推送到 GitHub 镜像；CI 从 `github.ref_name` 去掉 `dev-v` 前缀得到版本号，用 `npm version <版本号> --no-git-tag-version` 设置后再构建发布。版本号不在 develop 上提交，工作区保持干净。发布前还会校验该版本在 npm 与远端标签均不存在。
 
 备选：CI 内部用运行号自行派生版本号。否决原因：版本号脱离标签无法追溯，本地与 CI 可能出现不一致。
 
@@ -96,7 +98,7 @@ OpenSpec delta 不支持修改既有 capability 的 Purpose。`cli-skill-collect
 
 - [开发版安装的技能真实 agent 看不到] → 这是隔离的预期代价，文档明确“开发版用于验证 CLI 行为”；需要验证 agent 实际读取效果时用项目级安装或专用机器。
 - [路径收口遗漏] → `src/cli.ts` 曾有重复的 `getSkillLockPath()`，`src/agents.ts` 还有模块级 `home` 常量；统一到 `src/paths.ts` 并用测试覆盖两处调用。
-- [环境变量组合歧义] → 明确优先级为“显式运行时变量 > 构建期 dev 默认 > 正式默认”，并用矩阵单测固定四种组合。
+- [环境变量组合歧义] → 以构建期标记为上限：正式构建忽略 `BLUEAI_SKILLS_DEV`，开发构建可显式关闭；`BLUEAI_SKILLS_HOME` 仅在隔离启用时生效，并按判定表逐行单测覆盖。
 - [内网域名出现在 public npm 包] → 已知并接受；dev 包只发布 `dev` dist-tag，不含任何密钥，域名本身非机密。
 - [npm 版本不可复用 / CI 失败后标签已存在] → 版本号带时间戳，修好流水线后重新生成新版本号与新标签即可，不复用旧标签。
 - [dev 触发依赖被标记提交上的工作流文件] → 首次开发版发布前必须确保 `publish.yml` 的 dev 分支改动已在被标记的 commit 上；标签本身不带触发器不会补触发。

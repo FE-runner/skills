@@ -16,20 +16,20 @@
 ## 3. 隔离模式下的真实 agent 目录边界
 
 - [x] 3.1 安装流程在隔离模式下不写 agent 专属目录、不建软链；验证在临时 HOME 下执行 dev 构建全局安装后，`~/.claude/skills`、`~/.codex/skills`、`~/.openclaw/skills` 均未被创建或修改
-- [x] 3.2 `list` 与 `remove` 的扫描来源在隔离模式下收窄到状态根 canonical 目录；验证预置真实 agent 目录中的同名 skill 后，dev 构建 `list -g` 不显示该 skill，`remove` 也不影响它
+- [x] 3.2 **全局** `list -g` / `remove -g` 的扫描与清理来源在隔离模式下收窄到状态根 canonical 目录（项目级行为不变）；验证预置真实 agent 目录中的同名 skill 后，dev 构建 `list -g` 不显示该 skill，`remove -g` 也不影响它
 - [x] 3.3 确认 Pilot 路径未被本 change 改动；验证 `src/obs.ts` 的 `~/.loongsuite-pilot` 默认值保持不变，`pnpm test src/obs.test.ts` 全部通过
 
 ## 4. 开发版发布入口（dev-v 标签触发 CI）
 
 - [x] 4.1 修改 `.github/workflows/publish.yml`：`on.push.tags` 增加 `dev-v*`，job 内按 `github.ref_name` 前缀分叉——`dev-v*` 用 `SKILLS_BUILD_TARGET=dev` 构建并从标签派生版本号后执行 `npm publish --tag dev`，`v*` 维持 `--tag latest`；验证 YAML 可解析且两条分支的发布参数正确
 - [x] 4.2 让开发版跳过 GitHub Release：`gh release create` 步骤增加 `!startsWith(github.ref_name, 'dev-v')` 条件；验证条件存在，且 `v*` 分支仍会创建 Release
-- [x] 4.3 新增 `scripts/publish-dev.*`：计算 `1.4.7-bmc<x.y.z>-dev.<yyyymmddhhmm>` 形式唯一版本号、创建并推送 `dev-v<版本号>` 标签到 GitHub 镜像 `old-origin`，本地不执行 `npm publish`、不修改 `package.json`；验证 dry-run 执行后 `git status --porcelain` 为空且无残留 `dev-v*` 本地标签
+- [x] 4.3 新增 `scripts/publish-dev.*`：计算 `1.4.7-bmc<x.y.z>-dev.<yyyymmddhhmmss>` 形式唯一版本号、创建并推送 `dev-v<版本号>` 标签到 GitHub 镜像 `old-origin`，本地不执行 `npm publish`、不修改 `package.json`；验证 dry-run 执行后 `git status --porcelain` 为空且无残留 `dev-v*` 本地标签
 - [x] 4.4 在 `package.json` 注册 `publish:dev` script；验证 `node -p "require('./package.json').scripts['publish:dev']"` 有输出且指向新脚本
 - [x] 4.5 确认标签模式不重叠：验证 `dev-v*` 不以 `v` 开头、不会被 `v*` 规则匹配，正式发布路径不会被 dev tag 触发
 
 ## 5. 测试与静态检查
 
-- [x] 5.1 新增或扩展 `src/paths.test.ts`、`src/auth.test.ts`、`src/list.test.ts` 覆盖隔离模式路径、凭证隔离与扫描边界；验证 `pnpm test src/paths.test.ts src/auth.test.ts src/list.test.ts` 通过
+- [x] 5.1 新增或扩展 `src/paths.test.ts`、`src/auth.test.ts`、`src/list.test.ts` 覆盖隔离模式路径、凭证隔离与扫描边界，并新增 tests/dev-isolation.test.ts 覆盖隔离全局安装只落状态根与 remove -g 不修改真实 agent 目录；验证 `pnpm test src/paths.test.ts src/auth.test.ts src/list.test.ts` 通过
 - [x] 5.2 回归采集同意与私有技能链路：验证 `pnpm test src/track.test.ts tests/market-observability-provider.test.ts` 通过
 - [x] 5.3 运行 `pnpm type-check`，验证新增 `src/paths.ts` 的类型导入与调用点无报错
 - [x] 5.4 运行 `pnpm format` 后执行 `pnpm format:check`，验证格式符合仓库要求
