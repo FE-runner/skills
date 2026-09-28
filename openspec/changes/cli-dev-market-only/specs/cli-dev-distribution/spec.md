@@ -24,6 +24,12 @@
 
 **Migration**: 见「Pilot 始终使用真实用户目录」。
 
+### Requirement: 正式构建不变性
+
+**Reason**: 其中"SHALL NOT 启用开发隔离模式""新增环境变量缺省时不生效""正式构建忽略隔离开关"等表述都建立在隔离模式存在的前提上，该前提已移除。
+
+**Migration**: 见「正式构建默认值不变」与「开发版仅覆盖市场端点」；正式构建的默认值不变，差异边界改由「开发版仅覆盖市场端点」表述。
+
 ## ADDED Requirements
 
 ### Requirement: 开发版仅覆盖市场端点
@@ -82,3 +88,22 @@ LoongSuite Pilot 的检测、安装与卸载 SHALL 始终使用真实用户目�
 
 - **WHEN** 开发者查阅开发版使用说明
 - **THEN** 文档明确说明 Pilot 安装 / 卸载会作用于真实机器状态，需在专用机器或虚拟机上验证
+
+### Requirement: 正式构建默认值不变
+
+正式构建 SHALL 保持原有默认市场地址 `https://blueai-skills-market.bluemediagroup.cn`、`@latest` npx 提示与既有本地路径行为（凭证 `~/.blueai/secrets.json`、全局锁 `~/.agents/.skill-lock.json` 或 `$XDG_STATE_HOME/skills/.skill-lock.json`、canonical 目录 `~/.agents/skills`）。
+
+#### Scenario: 正式构建默认路径不变
+
+- **WHEN** 用户运行正式构建的 CLI
+- **THEN** 凭证、全局锁、canonical 目录与改动前一致
+
+#### Scenario: XDG 状态目录行为保留
+
+- **WHEN** 用户设置 `XDG_STATE_HOME` 并运行任一构建的 CLI
+- **THEN** 全局锁写入 `$XDG_STATE_HOME/skills/.skill-lock.json`
+
+#### Scenario: 正式构建市场地址不变
+
+- **WHEN** 用户运行正式构建的 CLI 且未设置 `SKILLS_SITE`
+- **THEN** 市场基地址为 `https://blueai-skills-market.bluemediagroup.cn`
