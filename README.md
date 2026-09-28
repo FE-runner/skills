@@ -522,10 +522,10 @@ npx --yes blueai-skills@dev <命令>
 ```
 
 - 默认市场为内网测试环境 `https://blueai-skills-market.domob-inc.cn`，仍可用 `SKILLS_SITE` 覆盖。
-- 默认启用状态隔离：凭证、全局锁、全局已装技能都落在 `~/.blueai-skills-dev/`，不读写正式版状态，也不向 `~/.claude/skills`、`~/.codex/skills`、`~/.openclaw/skills` 等真实 agent 目录写入或建软链。
-- 因此开发版安装的技能只对开发版 CLI 可见；需要验证真实 agent 读取效果时，请用项目级安装或专用机器。
-- LoongSuite Pilot 仍使用 `~/.loongsuite-pilot/`，`obs install` / `obs uninstall` 会作用于真实机器，请在专用机器或虚拟机上验证。
-- 临时关闭隔离：`BLUEAI_SKILLS_DEV=0 npx --yes blueai-skills@dev ...`；自定义状态根：`BLUEAI_SKILLS_HOME=/path/to/root npx --yes blueai-skills@dev ...`。
+- 除市场地址与提示 tag 外，开发版与正式版行为完全一致：凭证 `~/.blueai/secrets.json`、全局锁 `~/.agents/.skill-lock.json`（或 `$XDG_STATE_HOME/skills/.skill-lock.json`）、canonical 目录 `~/.agents/skills/`，并按既有规则写入真实 agent 目录，因此开发版安装的技能 Claude / Codex 可以直接使用。
+- 因为共用本地状态：两个市场的 `skillId` 不互通（正式版 `check` 对开发版装的技能匹配不上）、同名技能互相覆盖、登录态共享（切换市场需重新 `login`，或临时用 `SKILLS_API_KEY`）。
+- LoongSuite Pilot 使用 `~/.loongsuite-pilot/`，`obs install` / `obs uninstall` 会作用于真实机器，请在专用机器或虚拟机上验证。
+- 网页端同样可用：测试市场工作台 `https://blueai-skills-market.domob-inc.cn`，可观测页面 `https://blueai-skills-market.domob-inc.cn/dashboard/observability`（与 CLI 的 `obs` 命令共用同一批接入记录）。
 - 回到正式版：`npx --yes blueai-skills@latest <命令>`。
 
 维护者发布开发版：

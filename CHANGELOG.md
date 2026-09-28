@@ -6,7 +6,8 @@
 
 ### 新功能
 
-- **开发版（内测）分发与状态隔离**：新增 `dev-v*` 标签触发的 CI 发布通道（`npm publish --tag dev`，不影响 `latest`，且不为开发版创建 GitHub Release）；开发版构建默认连内网市场 `https://blueai-skills-market.domob-inc.cn`、npx 提示为 `@dev`；默认启用状态隔离，凭证 / 全局锁 / 全局技能落在 `~/.blueai-skills-dev/`，不读写真实 agent 目录（LoongSuite Pilot 保持 `~/.loongsuite-pilot`）。正式构建的默认市场、锁文件与安装路径保持不变。
+- **开发版（内测）分发**：新增 `dev-v*` 标签触发的 CI 发布通道（`npm publish --tag dev`，不影响 `latest`，且不为开发版创建 GitHub Release）；开发版构建与正式版只有两处差异——默认市场为内网 `https://blueai-skills-market.domob-inc.cn`、npx 提示为 `@dev`；凭证、全局锁、技能目录与真实 agent 目录均与正式版共用，开发版安装的技能可被 Claude / Codex 直接使用（LoongSuite Pilot 保持 `~/.loongsuite-pilot`）。正式构建的默认值不变。
+- **开发版隔离范围收窄**：移除上一版开发构建引入的状态根隔离与 `BLUEAI_SKILLS_HOME` / `BLUEAI_SKILLS_DEV` 两个临时开关；共用本地状态后，开发版与正式版的登录态、技能清单、全局锁统一，已知代价是两个市场的 `skillId` 不互通（正式版 `check` 对开发版装的技能匹配不上）与同名技能互相覆盖。
 - **`obs` 命令对齐 LoongSuite Pilot（替换 hermes/openclaw 双探针）**：
   - 删除 `--agent <hermes|openclaw>`：创建改为 `obs <agentName> [--note …]`（`add` 仍为 create 别名），create 请求体不再携带 `agentType`
   - 双平台命令消费：create/renewToken 响应字段改为 `installCommand: { unix, windows }`，`obs refresh` 打印两条命令，`obs install` 按宿主平台（`process.platform`）选择对应命令执行（unix 走 `/bin/sh -c`，Windows 走 `powershell.exe -ExecutionPolicy Bypass`）

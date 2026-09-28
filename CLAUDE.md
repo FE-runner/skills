@@ -286,7 +286,8 @@ pnpm publish:dev                # 生成 dev-v<版本> 标签并推送到 old-or
 - 触发方式：推送 `dev-v*` 标签后由 `.github/workflows/publish.yml` 以 `SKILLS_BUILD_TARGET=dev` 构建、`npm publish --tag dev` 发布；`v*` 仍走 `--tag latest`，两类标签互不匹配。
 - 仅改 `publish.yml` 的 dev 分支时不需要先动 `master`：标签推送使用被推送提交上的工作流文件；但改动必须先提交到被标记的 commit。
 - 开发版构建默认市场为内网 `https://blueai-skills-market.domob-inc.cn`，npx 提示为 `@dev`（见 `src/branding.ts` 与 `build.config.mjs`）。
-- 状态隔离：开发版默认把凭证（`~/.blueai-skills-dev/secrets.json`）、全局锁（`~/.blueai-skills-dev/.agents/.skill-lock.json`）、canonical 目录（`~/.blueai-skills-dev/.agents/skills`）收拢到状态根，且不写/不读真实 agent 目录；Pilot 仍用 `~/.loongsuite-pilot`。路径判定集中在 `src/paths.ts`。
+- 与正式版的差异只有两处：默认市场地址、提示中的 npx tag。凭证（`~/.blueai/secrets.json`）、全局锁（`~/.agents/.skill-lock.json`，或 `$XDG_STATE_HOME/skills/.skill-lock.json`）、canonical 目录（`~/.agents/skills`）与真实 agent 目录均与正式版共用，开发版装的技能可被 Claude / Codex 直接读取；Pilot 仍用 `~/.loongsuite-pilot`。路径集中在 `src/paths.ts`。
+- 共用状态的三条已知影响：两个市场 `skillId` 不互通（正式版 `check` 对开发版装的技能匹配不上）、同名技能互相覆盖、登录态共享（切市场需重新 `login` 或用 `SKILLS_API_KEY`）。
 - 开发者用法：`npx --yes blueai-skills@dev`；回正式版：`npx --yes blueai-skills@latest`。
 
 也可使用 `pnpm release[:patch|:minor|:major]`（`scripts/release.sh`）自动完成版本号变更；但发布动作依旧由 CI 承担。

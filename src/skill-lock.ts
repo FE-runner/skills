@@ -64,8 +64,8 @@ export interface SkillLockFile {
 
 /**
  * Get the path to the global skill lock file.
- * 未启用开发隔离时保留 `$XDG_STATE_HOME/skills/.skill-lock.json` 优先行为；
- * 开发隔离模式下固定落在状态根（见 `paths.ts`）。
+ * `$XDG_STATE_HOME/skills/.skill-lock.json` 优先，否则回退 `~/.agents/.skill-lock.json`；
+ * 开发版与正式版构建一致（见 `paths.ts`）。
  */
 export function getSkillLockPath(): string {
   return getGlobalSkillLockPath();

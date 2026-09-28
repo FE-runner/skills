@@ -1,7 +1,7 @@
 # cli-dev-distribution Specification
 
 ## Purpose
-为 `blueai-skills` 提供一条不污染正式发布的开发版通道：开发构建默认连接内网测试市场、以独立状态根隔离本地凭证与安装状态，并通过 dev dist-tag 发布供内部开发者用 npx 试用。
+为 `blueai-skills` 提供一条不污染正式发布的开发版通道：开发构建只覆盖默认市场端点与命令提示中的 npx tag，其余本地状态与路径行为同正式版，并通过 dev dist-tag 发布供内部开发者用 npx 试用。
 
 ## Requirements
 

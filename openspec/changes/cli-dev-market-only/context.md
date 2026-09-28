@@ -29,3 +29,13 @@
 - 移除两个环境变量属破坏性变更；上一期 dev 版本的使用者若显式设置过，需要自行删除。
 - 两个主 spec 的 Purpose 只能由 apply 阶段直接修改，见 design D7 与 tasks 3.5 / 3.6。
 - 开发版写入真实 agent 目录是本次要达成的效果，使用说明中需保留"测试后如何清理"的提示。
+
+## 实施决策（apply）
+
+- 隔离机制整体删除：`src/paths.ts` 只保留 `getCredentialDir()` 与 `getGlobalSkillLockPath()`；`src/installer.ts` 恢复 `homedir()` 基准与 `isGlobal && isUniversalAgent(agentType)` 判断，删除 `isCanonicalOnlyGlobalInstall` helper；`src/remove.ts` 恢复真实 agent 目录的扫描与清理。
+- `build.config.mjs` 删除 dev 构建标记注入，只保留 `SKILLS_DEFAULT_SITE` 与 `BLUEAI_NPX_TAG` 的 dev/prod 双向显式注入。
+- 测试：删除 `tests/dev-isolation.test.ts`；`src/paths.test.ts` 收缩为凭证目录 / 全局锁路径断言，并新增“已移除的隔离开关不再影响任何路径”用例。
+- 按 design D7 直接修正两个主 spec 的 Purpose（`cli-dev-distribution`、`cli-skill-collection-consent`）。
+- 文档：`README.md`、`CLAUDE.md`、`CHANGELOG.md`、`DEV_VERSION_USAGE.md` 已同步；新增「测试市场（网页端）」章节，写入市场入口与可观测页面 `.../dashboard/observability` 的用途，并附界面截图（`assets/dev-market-observability.png`）。飞书文档以 `overwrite` 重写（revision 8，含图片 block，无 warning），回查确认仅保留“变量已移除”与“旧状态根目录不再读取”两处刻意提及。
+- 披露风险（待用户确认）：截图含真实主机名、serviceName（BSM-…）与团队名称；仓库的 GitHub 镜像 `FE-runner/skills` 是 public，若把该图片随 `develop` 推到该镜像会公开这些信息。本次仅本地提交，未 push。
+- 验证结果：`pnpm test` 531 passed；`pnpm type-check`、`pnpm format:check` 通过；dev 构建产物含 `domob-inc.cn` 与 `@dev` 且无 `BLUEAI_SKILLS_DEV_BUILD` / 状态根引用，正式构建产物含 `bluemediagroup.cn` 与 `@latest`；同一命令在 dev / prod 构建下的 HOME 文件树 `diff` 为空；状态根目录不再生成。

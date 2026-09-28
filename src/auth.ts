@@ -9,7 +9,7 @@ const API_KEY_SECRET_KEY = 'blueai-skills-market-push.apiKey';
 /** 环境变量优先级最高，覆盖本地凭证文件 */
 const API_KEY_ENV_VAR = 'SKILLS_API_KEY';
 
-/** 当前生效的凭证文件路径：正式构建为 ~/.blueai/secrets.json；开发隔离模式为 <状态根>/secrets.json。 */
+/** 凭证文件路径：~/.blueai/secrets.json。开发版与正式版构建一致。 */
 export function getSecretsPath(): string {
   return join(getCredentialDir(), 'secrets.json');
 }
