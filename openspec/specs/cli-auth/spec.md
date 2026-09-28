@@ -7,16 +7,16 @@ TBD - created by archiving change add-publish-command. Update Purpose after arch
 
 ### Requirement: `skills login <api-key>` 保存市场 API Key
 
-系统 SHALL 提供 `skills login <api-key>` 命令，将传入的 API Key 写入当前生效的凭证文件（正式构建为 `~/.blueai/secrets.json`；`cli-dev-distribution` 的开发隔离模式下为 `<状态根>/secrets.json`），键名为 `blueai-skills-market-push.apiKey`（复用既有惯例键名，不新增独立键名）。若该文件或其所在目录不存在，SHALL 自动创建。
+系统 SHALL 提供 `skills login <api-key>` 命令，将传入的 API Key 写入 `~/.blueai/secrets.json`，键名为 `blueai-skills-market-push.apiKey`（复用既有惯例键名，不新增独立键名）。若该文件或其所在目录不存在，SHALL 自动创建。开发版与正式版构建使用同一路径。
 
 #### Scenario: 首次登录，文件不存在
 
-- **WHEN** 用户执行 `skills login sk-xxxx`，且当前生效的凭证文件不存在
-- **THEN** 系统创建凭证目录（若不存在）和 `secrets.json` 文件，写入 `{ "blueai-skills-market-push.apiKey": "sk-xxxx" }`
+- **WHEN** 用户执行 `skills login sk-xxxx`，且 `~/.blueai/secrets.json` 不存在
+- **THEN** 系统创建 `~/.blueai/` 目录（若不存在）和 `secrets.json` 文件，写入 `{ "blueai-skills-market-push.apiKey": "sk-xxxx" }`
 
 #### Scenario: 文件已存在，仅更新该键
 
-- **WHEN** 用户执行 `skills login sk-yyyy`，且当前生效的 `secrets.json` 已存在且包含其他键
+- **WHEN** 用户执行 `skills login sk-yyyy`，且 `~/.blueai/secrets.json` 已存在且包含其他键
 - **THEN** 系统仅更新 `blueai-skills-market-push.apiKey` 的值为 `sk-yyyy`，保留文件中其他键不变
 
 #### Scenario: 未提供 API Key 参数
@@ -26,40 +26,40 @@ TBD - created by archiving change add-publish-command. Update Purpose after arch
 
 ### Requirement: API Key 读取优先级
 
-系统 SHALL 在需要鉴权的命令（`publish`、`withdraw`）中，按以下优先级读取 API Key：环境变量 `SKILLS_API_KEY` 优先于当前生效的凭证文件中的 `blueai-skills-market-push.apiKey`。
+系统 SHALL 在需要鉴权的命令（`publish`、`withdraw`）中，按以下优先级读取 API Key：环境变量 `SKILLS_API_KEY` 优先于 `~/.blueai/secrets.json` 中的 `blueai-skills-market-push.apiKey`。
 
 #### Scenario: 环境变量存在时优先使用
 
-- **WHEN** `process.env.SKILLS_API_KEY` 已设置，且当前生效的凭证文件中也存在该键
+- **WHEN** `process.env.SKILLS_API_KEY` 已设置，且 `~/.blueai/secrets.json` 中也存在该键
 - **THEN** 系统使用环境变量的值发起请求，忽略文件中的值
 
 #### Scenario: 仅文件中存在
 
-- **WHEN** `process.env.SKILLS_API_KEY` 未设置，当前生效的凭证文件中存在 `blueai-skills-market-push.apiKey`
+- **WHEN** `process.env.SKILLS_API_KEY` 未设置，`~/.blueai/secrets.json` 中存在 `blueai-skills-market-push.apiKey`
 - **THEN** 系统使用文件中的值发起请求
 
 #### Scenario: 两者均不存在
 
-- **WHEN** 环境变量未设置且当前生效的凭证文件不存在或其中无该键
+- **WHEN** 环境变量未设置且 `~/.blueai/secrets.json` 不存在或其中无该键
 - **THEN** 系统在实际发起需要鉴权的请求前输出错误提示"请先运行 `skills login <api-key>` 或设置 `SKILLS_API_KEY` 环境变量"，并以非零状态码退出，不发起网络请求
 
 ### Requirement: 凭证文件权限限制
 
-系统 SHALL 在创建当前生效的凭证目录时设置权限为 `0700`，在创建或写入该目录下的 `secrets.json` 文件时设置权限为 `0600`，避免同机其他用户读取。
+系统 SHALL 在创建 `~/.blueai/` 目录时设置权限为 `0700`，在创建或写入 `~/.blueai/secrets.json` 文件时设置权限为 `0600`，避免同机其他用户读取。
 
 #### Scenario: 首次创建目录
 
-- **WHEN** `skills login` 执行时当前生效的凭证目录不存在
+- **WHEN** `skills login` 执行时 `~/.blueai/` 目录不存在
 - **THEN** 系统创建该目录并设置权限为 `0700`
 
 #### Scenario: 首次创建文件
 
-- **WHEN** `skills login` 执行时当前生效的 `secrets.json` 文件不存在
+- **WHEN** `skills login` 执行时 `~/.blueai/secrets.json` 文件不存在
 - **THEN** 系统创建该文件并设置权限为 `0600`
 
 #### Scenario: 已存在文件权限过宽
 
-- **WHEN** 当前生效的 `secrets.json` 已存在，且当前权限比 `0600` 更宽（如其他用户可读）
+- **WHEN** `~/.blueai/secrets.json` 已存在，且当前权限比 `0600` 更宽（如其他用户可读）
 - **THEN** 系统正常完成写入，同时输出一次性警告提示当前文件权限过宽，不强制修改已有文件权限
 
 ### Requirement: `skills whoami` 查询当前登录身份
@@ -78,7 +78,7 @@ TBD - created by archiving change add-publish-command. Update Purpose after arch
 
 #### Scenario: 本地无可用 Key
 
-- **WHEN** 用户执行 `skills whoami`，且环境变量 `SKILLS_API_KEY` 未设置、当前生效的凭证文件中也没有 `blueai-skills-market-push.apiKey`
+- **WHEN** 用户执行 `skills whoami`，且环境变量 `SKILLS_API_KEY` 未设置、`~/.blueai/secrets.json` 中也没有 `blueai-skills-market-push.apiKey`
 - **THEN** 系统输出错误提示"请先运行 `skills login <api-key>` 或设置 `SKILLS_API_KEY` 环境变量"，设置 `process.exitCode = 1`，不发起网络请求
 
 #### Scenario: Key 已失效（401）

@@ -24,87 +24,6 @@
 - **WHEN** 开发版构建的 CLI 输出安装或更新提示
 - **THEN** 提示中的命令为 `npx blueai-skills@dev ...`，不出现 `@latest`
 
-### Requirement: 开发隔离模式与状态根
-
-开发版构建 SHALL 默认启用开发隔离模式，并 SHALL 允许运行时环境变量 `BLUEAI_SKILLS_DEV` 以显式假值（`0` / `false`，大小写不敏感）关闭。隔离模式启用时，CLI SHALL 使用一个状态根承载本地状态，默认值为 `~/.blueai-skills-dev/`，并 SHALL 支持运行时环境变量 `BLUEAI_SKILLS_HOME` 覆盖该路径；隔离模式关闭时 `BLUEAI_SKILLS_HOME` SHALL 被忽略。正式构建 SHALL NOT 启用隔离模式，且 SHALL 忽略 `BLUEAI_SKILLS_DEV` 的任何取值。
-
-#### Scenario: 开发版默认启用隔离
-
-- **WHEN** 用户在未设置 `BLUEAI_SKILLS_HOME` 的情况下运行开发版构建的 CLI 并触发本地状态写入
-- **THEN** 本地状态写入 `~/.blueai-skills-dev/` 之下，不写入正式版使用的 `~/.blueai/` 或 `~/.agents/`
-
-#### Scenario: 状态根可被运行时覆盖
-
-- **WHEN** 用户以 `BLUEAI_SKILLS_HOME=/tmp/dev-root` 运行开发版构建的 CLI
-- **THEN** CLI 使用 `/tmp/dev-root` 作为状态根
-
-#### Scenario: 隔离模式可显式关闭
-
-- **WHEN** 用户以 `BLUEAI_SKILLS_DEV=0` 运行开发版构建的 CLI
-- **THEN** CLI 退回正式构建的默认路径行为，不启用状态根
-
-#### Scenario: 隔离关闭时忽略状态根变量
-
-- **WHEN** 用户以 `BLUEAI_SKILLS_DEV=0` 与 `BLUEAI_SKILLS_HOME=/tmp/dev-root` 同时运行开发版构建的 CLI
-- **THEN** CLI 使用正式默认路径，不使用 `/tmp/dev-root`
-
-### Requirement: 隔离模式下的状态路径
-
-隔离模式启用时，CLI SHALL 将以下状态置于状态根之下，且三者 SHALL 与正式构建的同名状态互不读写：凭证文件位于状态根内（`<状态根>/secrets.json`），全局 skill 锁位于 `<状态根>/.agents/.skill-lock.json`，全局 canonical skills 目录位于 `<状态根>/.agents/skills/`。
-
-#### Scenario: 凭证落入状态根
-
-- **WHEN** 用户在隔离模式下执行 `login <api-key>`
-- **THEN** API Key 写入 `<状态根>/secrets.json`，`~/.blueai/secrets.json` 不被修改
-
-#### Scenario: 全局锁落入状态根
-
-- **WHEN** 用户在隔离模式下执行全局安装
-- **THEN** 安装记录写入 `<状态根>/.agents/.skill-lock.json`，`~/.agents/.skill-lock.json` 不被修改
-
-#### Scenario: canonical 安装目录落入状态根
-
-- **WHEN** 用户在隔离模式下执行全局安装
-- **THEN** 技能文件写入 `<状态根>/.agents/skills/<skill-name>/`
-
-### Requirement: 隔离模式对真实 agent 目录的边界
-
-隔离模式启用时，对**全局作用域**：CLI SHALL NOT 向真实 agent 全局目录写入技能或创建软链，`list -g`、`remove -g` 等全局状态读取 SHALL NOT 以真实 agent 目录作为来源。开发版全局安装的技能仅对开发版 CLI 可见，真实 agent 不会读取到开发版安装结果。项目级安装、列表、卸载（不带 `-g`）SHALL 保持原行为，仍在 `<cwd>/.agents/skills` 与项目内 agent 目录读写。
-
-#### Scenario: 全局安装不触碰真实 agent 目录
-
-- **WHEN** 用户在隔离模式下执行带 `-g` 的安装
-- **THEN** CLI 不写入 `~/.claude/skills`、`~/.codex/skills`、`~/.openclaw/skills` 等真实 agent 目录，也不创建指向状态根的软链
-
-#### Scenario: 列表只反映状态根
-
-- **WHEN** 用户在隔离模式下执行 `list -g`
-- **THEN** 输出只包含状态根内已安装的技能，不包含真实 agent 目录中已存在的正式版技能
-
-#### Scenario: 卸载不影响正式状态
-
-- **WHEN** 用户在隔离模式下执行 `remove -g`
-- **THEN** 只从状态根移除技能，真实 agent 目录与正式版安装状态保持不变
-
-#### Scenario: 项目级行为保持不变
-
-- **WHEN** 用户在隔离模式下执行项目级安装、`list` 或 `remove`（不带 `-g`）
-- **THEN** CLI 仍按原有项目级路径读写 `<cwd>/.agents/skills` 与项目内 agent 目录
-
-### Requirement: Pilot 路径不受隔离模式影响
-
-LoongSuite Pilot 的检测、安装与卸载 SHALL 始终使用真实用户目录 `~/.loongsuite-pilot/`，不随状态根迁移。隔离模式 SHALL 在文档中明确 Pilot 属于机器级状态，相关安装/卸载验证应使用专用机器。
-
-#### Scenario: 隔离模式下检测真实 Pilot
-
-- **WHEN** 用户在隔离模式下执行会读取本机 Pilot 状态的命令
-- **THEN** CLI 读取 `~/.loongsuite-pilot/`，不读取 `<状态根>/.loongsuite-pilot/`
-
-#### Scenario: 文档声明 Pilot 测试边界
-
-- **WHEN** 开发者查阅开发版使用说明
-- **THEN** 文档明确说明 Pilot 安装/卸载会作用于真实机器状态，需在专用机器或虚拟机上验证
-
 ### Requirement: dev 预发布触发（dev-v 标签）
 
 开发版发布入口 SHALL 生成唯一预发布版本号（保留 `-bmc` 版本体系段并含可区分每次发布的标识），并以 `dev-v<版本号>` 形式在 GitHub 镜像仓库创建并推送标签。该入口 SHALL NOT 在本地执行 `npm publish`，SHALL NOT 推送 `v*` 形式的标签。
@@ -148,26 +67,78 @@ LoongSuite Pilot 的检测、安装与卸载 SHALL 始终使用真实用户目�
 - **WHEN** 维护者推送 `v*` 标签
 - **THEN** CI 仍以 `--tag latest` 发布并创建 GitHub Release
 
-### Requirement: 正式构建不变性
+### Requirement: 开发版仅覆盖市场端点
 
-正式构建 SHALL NOT 启用开发隔离模式，SHALL 保持原有默认市场地址与 `@latest` npx 提示，且新增环境变量缺省时 SHALL 与改动前的路径行为完全一致（凭证 `~/.blueai/secrets.json`、全局锁 `~/.agents/.skill-lock.json` 或 `$XDG_STATE_HOME/skills/.skill-lock.json`、canonical 目录 `~/.agents/skills`）。
+开发版构建 SHALL 只在两处与正式构建不同：默认市场基地址，以及命令提示中的 npx tag。除此之外，开发版的命令行为、本地路径与状态读写 SHALL 与正式构建一致。
+
+#### Scenario: 除市场与提示外行为一致
+
+- **WHEN** 用户在同一环境分别运行开发版与正式版构建的同一命令
+- **THEN** 两者的本地文件读写路径一致，仅市场请求目标与提示中的 npx tag 不同
+
+#### Scenario: 运行时可覆盖市场端点
+
+- **WHEN** 用户以 `SKILLS_SITE=<地址>` 运行开发版构建
+- **THEN** CLI 使用该地址，内网默认地址被覆盖
+
+#### Scenario: 隔离开关不再被读取
+
+- **WHEN** 用户设置 `BLUEAI_SKILLS_HOME` 或 `BLUEAI_SKILLS_DEV` 后运行开发版构建
+- **THEN** CLI 行为不因这两个变量改变，本地路径仍与正式构建一致
+
+### Requirement: 开发版与正式版共用本地状态路径
+
+开发版构建 SHALL 与正式构建共用同一套本地状态路径：凭证文件为 `~/.blueai/secrets.json`；全局 skill 锁为 `~/.agents/.skill-lock.json`，设置 `XDG_STATE_HOME` 时为 `$XDG_STATE_HOME/skills/.skill-lock.json`；全局 canonical 技能目录为 `~/.agents/skills/`，并 SHALL 按既有规则向各 agent 专属全局目录建立链接或副本。
+
+#### Scenario: 凭证路径与正式版一致
+
+- **WHEN** 用户在开发版构建下执行 `login <api-key>`
+- **THEN** API Key 写入 `~/.blueai/secrets.json`
+
+#### Scenario: 全局锁路径与正式版一致
+
+- **WHEN** 用户在开发版构建下执行全局安装
+- **THEN** 安装记录写入 `~/.agents/.skill-lock.json`，或设置 `XDG_STATE_HOME` 时写入 `$XDG_STATE_HOME/skills/.skill-lock.json`
+
+#### Scenario: 技能安装到真实 agent 目录
+
+- **WHEN** 用户在开发版构建下执行全局安装
+- **THEN** 技能文件写入 `~/.agents/skills/<skill-name>/`，并按既有规则在 agent 专属全局目录建立链接或副本，Claude / Codex 等真实 agent 可读取
+
+#### Scenario: 列表与卸载读取真实目录
+
+- **WHEN** 用户在开发版构建下执行 `list -g` 或 `remove -g`
+- **THEN** CLI 读取与清理真实 canonical 目录与真实 agent 目录，行为与正式版一致
+
+### Requirement: Pilot 始终使用真实用户目录
+
+LoongSuite Pilot 的检测、安装与卸载 SHALL 始终使用真实用户目录 `~/.loongsuite-pilot/`。开发版使用说明 SHALL 明确 Pilot 属于机器级状态，安装与卸载验证应使用专用机器。
+
+#### Scenario: 检测真实 Pilot
+
+- **WHEN** 用户执行会读取本机 Pilot 状态的命令
+- **THEN** CLI 读取 `~/.loongsuite-pilot/`
+
+#### Scenario: 文档声明 Pilot 测试边界
+
+- **WHEN** 开发者查阅开发版使用说明
+- **THEN** 文档明确说明 Pilot 安装 / 卸载会作用于真实机器状态，需在专用机器或虚拟机上验证
+
+### Requirement: 正式构建默认值不变
+
+正式构建 SHALL 保持原有默认市场地址 `https://blueai-skills-market.bluemediagroup.cn`、`@latest` npx 提示与既有本地路径行为（凭证 `~/.blueai/secrets.json`、全局锁 `~/.agents/.skill-lock.json` 或 `$XDG_STATE_HOME/skills/.skill-lock.json`、canonical 目录 `~/.agents/skills`）。
 
 #### Scenario: 正式构建默认路径不变
 
-- **WHEN** 用户运行正式构建的 CLI 且未设置任何新增环境变量
+- **WHEN** 用户运行正式构建的 CLI
 - **THEN** 凭证、全局锁、canonical 目录与改动前一致
 
 #### Scenario: XDG 状态目录行为保留
 
-- **WHEN** 用户运行正式构建的 CLI 且设置了 `XDG_STATE_HOME`
-- **THEN** 全局锁仍写入 `$XDG_STATE_HOME/skills/.skill-lock.json`
+- **WHEN** 用户设置 `XDG_STATE_HOME` 并运行任一构建的 CLI
+- **THEN** 全局锁写入 `$XDG_STATE_HOME/skills/.skill-lock.json`
 
 #### Scenario: 正式构建市场地址不变
 
 - **WHEN** 用户运行正式构建的 CLI 且未设置 `SKILLS_SITE`
 - **THEN** 市场基地址为 `https://blueai-skills-market.bluemediagroup.cn`
-
-#### Scenario: 正式构建忽略隔离开关
-
-- **WHEN** 用户以 `BLUEAI_SKILLS_DEV=1`（或 `BLUEAI_SKILLS_HOME=/tmp/dev-root`）运行正式构建的 CLI
-- **THEN** CLI 仍使用正式默认路径与默认市场地址，不启用隔离模式

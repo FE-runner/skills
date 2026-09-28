@@ -5,9 +5,9 @@ TBD - created by archiving change fix-openclaw-skills-dir. Update Purpose after 
 
 ## Requirements
 
-### Requirement: OpenClaw 项目级 skill 安装目标路径
+### Requirement: OpenClaw 安装目标（开发版与正式版一致）
 
-`openclaw` agent 未指定 `--global`/`-g` 时，CLI SHALL 将 skill 安装到 `<cwd>/.agents/skills/<skill-name>/`，而非 `<cwd>/skills/<skill-name>/`。在 `cli-dev-distribution` 的开发隔离模式下，全局安装（`-g`）SHALL 只写入状态根 canonical 目录 `<状态根>/.agents/skills/<skill-name>/`，SHALL NOT 写入任何 agent 专属全局目录（含 `~/.openclaw/skills/`）。
+`openclaw` agent 未指定 `--global`/`-g` 时，CLI SHALL 将 skill 安装到 `<cwd>/.agents/skills/<skill-name>/`，而非 `<cwd>/skills/<skill-name>/`。指定 `-g` 时 SHALL 写入 agent 专属全局目录。上述行为对开发版与正式版构建一致，不区分构建类型。
 
 #### Scenario: 容器内非 root 用户项目级安装
 
@@ -22,9 +22,9 @@ TBD - created by archiving change fix-openclaw-skills-dir. Update Purpose after 
 #### Scenario: 全局安装路径不受影响
 
 - **WHEN** 用户执行 `blueai-skills add <skill> --agent openclaw --copy -g`
-- **THEN** 在未启用开发隔离模式的构建中，文件写入 `~/.openclaw/skills/<skill-name>/`（`globalSkillsDir`），行为与修复前一致
+- **THEN** 文件写入 `~/.openclaw/skills/<skill-name>/`（`globalSkillsDir`），行为与修复前一致
 
-#### Scenario: 开发隔离模式下全局安装只落状态根
+#### Scenario: 开发版全局安装与正式版一致
 
-- **WHEN** 用户在开发版构建的隔离模式下执行 `blueai-skills add <skill> -g`
-- **THEN** 技能文件只写入 `<状态根>/.agents/skills/<skill-name>/`，`~/.openclaw/skills/` 及其他 agent 专属全局目录均不产生写入或软链
+- **WHEN** 用户在开发版构建下执行 `blueai-skills add <skill> -g`
+- **THEN** 技能文件写入真实 canonical `~/.agents/skills/<skill-name>/` 与真实 agent 专属全局目录，不写入任何状态根路径
