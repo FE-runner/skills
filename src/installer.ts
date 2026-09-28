@@ -13,7 +13,7 @@ import {
 } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, basename, normalize, resolve, sep, relative, dirname } from 'path';
-import { homedir, platform } from 'os';
+import { platform } from 'os';
 import type { Skill, AgentType, RemoteSkill } from './types.ts';
 import type { WellKnownSkill } from './providers/wellknown.ts';
 
@@ -25,6 +25,7 @@ export interface FileBasedSkill {
 import { agents, detectInstalledAgents, isUniversalAgent } from './agents.ts';
 import { AGENTS_DIR, SKILLS_SUBDIR } from './constants.ts';
 import { parseSkillMd } from './skills.ts';
+import { IS_DEV_ISOLATION, getGlobalBaseDir } from './paths.ts';
 
 export type InstallMode = 'symlink' | 'copy';
 
@@ -74,8 +75,16 @@ function isPathSafe(basePath: string, targetPath: string): boolean {
 }
 
 export function getCanonicalSkillsDir(global: boolean, cwd?: string): string {
-  const baseDir = global ? homedir() : cwd || process.cwd();
+  const baseDir = global ? getGlobalBaseDir() : cwd || process.cwd();
   return join(baseDir, AGENTS_DIR, SKILLS_SUBDIR);
+}
+
+/**
+ * 全局安装是否只写 canonical 目录、不写任何 agent 专属目录。
+ * 覆盖两种情况：universal agent 本就共用 `.agents/skills`；开发隔离模式要求不碰真实 agent 目录。
+ */
+function isCanonicalOnlyGlobalInstall(agentType: AgentType, isGlobal: boolean): boolean {
+  return isGlobal && (isUniversalAgent(agentType) || IS_DEV_ISOLATION);
 }
 
 /**
@@ -88,8 +97,13 @@ export function getAgentBaseDir(agentType: AgentType, global: boolean, cwd?: str
     return getCanonicalSkillsDir(global, cwd);
   }
 
+  // 开发隔离模式：全局安装只落状态根 canonical 目录，不写任何 agent 专属全局目录。
+  if (global && IS_DEV_ISOLATION) {
+    return getCanonicalSkillsDir(global, cwd);
+  }
+
   const agent = agents[agentType];
-  const baseDir = global ? homedir() : cwd || process.cwd();
+  const baseDir = global ? getGlobalBaseDir() : cwd || process.cwd();
 
   if (global) {
     if (agent.globalSkillsDir === undefined) {
@@ -284,10 +298,8 @@ export async function installSkillForAgent(
     await cleanAndCreateDirectory(canonicalDir);
     await copyDirectory(skill.path, canonicalDir);
 
-    // For universal agents with global install, the skill is already in the canonical
-    // ~/.agents/skills directory. Skip creating a symlink to the agent-specific global dir
-    // (e.g. ~/.copilot/skills) to avoid duplicates.
-    if (isGlobal && isUniversalAgent(agentType)) {
+    // universal agent 与开发隔离模式都只落 canonical 目录，不再向 agent 专属目录建链。
+    if (isCanonicalOnlyGlobalInstall(agentType, isGlobal)) {
       return {
         success: true,
         path: canonicalDir,
@@ -525,8 +537,8 @@ export async function installRemoteSkillForAgent(
     const skillMdPath = join(canonicalDir, 'SKILL.md');
     await writeFile(skillMdPath, skill.content, 'utf-8');
 
-    // For universal agents with global install, skip creating agent-specific symlink
-    if (isGlobal && isUniversalAgent(agentType)) {
+    // universal agent 与开发隔离模式都只落 canonical 目录。
+    if (isCanonicalOnlyGlobalInstall(agentType, isGlobal)) {
       return {
         success: true,
         path: canonicalDir,
@@ -663,8 +675,8 @@ export async function installWellKnownSkillForAgent(
     await cleanAndCreateDirectory(canonicalDir);
     await writeSkillFiles(canonicalDir);
 
-    // For universal agents with global install, skip creating agent-specific symlink
-    if (isGlobal && isUniversalAgent(agentType)) {
+    // universal agent 与开发隔离模式都只落 canonical 目录。
+    if (isCanonicalOnlyGlobalInstall(agentType, isGlobal)) {
       return {
         success: true,
         path: canonicalDir,
@@ -768,6 +780,12 @@ export async function listInstalledSkills(
   for (const { global: isGlobal } of scopeTypes) {
     // Add canonical directory
     scopes.push({ global: isGlobal, path: getCanonicalSkillsDir(isGlobal, cwd) });
+
+    // 开发隔离模式：全局状态只认状态根 canonical 目录，不扫描真实 agent 目录；
+    // 项目级安装保持原行为，避免开发版无法管理仓库内技能。
+    if (isGlobal && IS_DEV_ISOLATION) {
+      continue;
+    }
 
     // Add each installed agent's skills directory
     for (const agentType of agentsToCheck) {

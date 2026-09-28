@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+      - 'dev-v*'
 
 jobs:
   publish:
@@ -32,18 +33,26 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Set dev version from tag
+        if: startsWith(github.ref_name, 'dev-v')
+        run: npm version "${GITHUB_REF_NAME#dev-v}" --no-git-tag-version
+
       - name: Build
         run: pnpm build
+        env:
+          SKILLS_BUILD_TARGET: ${{ startsWith(github.ref_name, 'dev-v') && 'dev' || '' }}
 
       - name: Upgrade npm for Trusted Publisher (OIDC) support
         run: npm install -g npm@latest
 
       - name: Publish to npm
         id: publish
-        run: npm publish --provenance --access public --tag latest
+        run: npm publish --provenance --access public --tag ${{ startsWith(github.ref_name, 'dev-v') && 'dev' || 'latest' }}
+        env:
+          SKILLS_BUILD_TARGET: ${{ startsWith(github.ref_name, 'dev-v') && 'dev' || '' }}
 
       - name: Create GitHub Release
-        if: steps.publish.outcome == 'success'
+        if: steps.publish.outcome == 'success' && !startsWith(github.ref_name, 'dev-v')
         run: |
           VERSION=$(node -p "require('./package.json').version")
 

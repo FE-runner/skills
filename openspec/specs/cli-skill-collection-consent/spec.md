@@ -2,7 +2,7 @@
 
 ## Purpose
 
-为 `skills` CLI 用户提供 Skill 采集知情同意与状态管理：首次安装带采集的 Skill 时询问是否同意（per-skill 永久记忆），以 `lock.skills[<skillName>].collectConsent` 三态判定采集状态，并提供 `track list/on/off` 命令组统一查看、开启、反悔。采集状态唯一来源是 lock 字段（不扫描包文件），复用既有 `.agents/.skill-lock.json` 写入流，不新建文件。本 capability **仅覆盖全局安装**（`--global`）：项目级安装不提示、不记录采集状态，`track` 命令不管理项目级技能。
+为 `skills` CLI 用户提供 Skill 采集知情同意与状态管理：首次安装带采集的 Skill 时询问是否同意（per-skill 永久记忆），以 `lock.skills[<skillName>].collectConsent` 三态判定采集状态，并提供 `track list/on/off` 命令组统一查看、开启、反悔。采集状态唯一来源是 lock 字段（不扫描包文件），复用**当前生效的全局锁文件**（正式构建为 `.agents/.skill-lock.json`；`cli-dev-distribution` 的开发隔离模式下为状态根下的同名文件）写入流，不新建文件。本 capability **仅覆盖全局安装**（`--global`）：项目级安装不提示、不记录采集状态，`track` 命令不管理项目级技能。
 
 ## Requirements
 

@@ -12,6 +12,7 @@ import {
   getCanonicalSkillsDir,
   sanitizeName,
 } from './installer.ts';
+import { IS_DEV_ISOLATION } from './paths.ts';
 
 export interface RemoveOptions {
   global?: boolean;
@@ -46,9 +47,11 @@ export async function removeCommand(skillNames: string[], options: RemoveOptions
 
   if (isGlobal) {
     await scanDir(getCanonicalSkillsDir(true, cwd));
-    for (const agent of Object.values(agents)) {
-      if (agent.globalSkillsDir !== undefined) {
-        await scanDir(agent.globalSkillsDir);
+    if (!IS_DEV_ISOLATION) {
+      for (const agent of Object.values(agents)) {
+        if (agent.globalSkillsDir !== undefined) {
+          await scanDir(agent.globalSkillsDir);
+        }
       }
     }
   } else {

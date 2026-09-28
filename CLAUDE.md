@@ -14,7 +14,7 @@
 | 领域            | 上游                | BMC Fork                                                              |
 | --------------- | ------------------- | ---------------------------------------------------------------------- |
 | 包名            | `skills`            | `blueai-skills`                                                       |
-| Market API      | `https://skills.sh` | `https://blueai-skills-market.bluemediagroup.cn`（`SKILLS_SITE`，可用 `SKILLS_SITE` 环境变量覆盖） |
+| Market API      | `https://skills.sh` | `https://blueai-skills-market.bluemediagroup.cn`（`SKILLS_SITE`，可用 `SKILLS_SITE` 环境变量覆盖）；开发版构建默认 `https://blueai-skills-market.domob-inc.cn` |
 | 遥测            | 默认开启            | 默认**关闭**                                                          |
 | COS Provider    | 无                  | 新增（`providers/cos.ts`）                                            |
 | Market Provider | 无                  | 新增（`providers/market.ts`），并扩展为发布/审核/登录能力              |
@@ -273,6 +273,21 @@ git push old-origin master --follow-tags  # GitHub，触发 Publish workflow
 gh run list --limit 5            # 查看 workflow 运行状态
 npm view blueai-skills version   # 确认新版本上线
 ```
+
+### 开发版（内测）发布
+
+开发版用于让内部开发者用 npx 试用 `develop` 改动，不触碰 `latest`：
+
+```bash
+pnpm publish:dev -- --dry-run   # 预检：分支/工作区/版本唯一性
+pnpm publish:dev                # 生成 dev-v<版本> 标签并推送到 old-origin(GitHub)
+```
+
+- 触发方式：推送 `dev-v*` 标签后由 `.github/workflows/publish.yml` 以 `SKILLS_BUILD_TARGET=dev` 构建、`npm publish --tag dev` 发布；`v*` 仍走 `--tag latest`，两类标签互不匹配。
+- 仅改 `publish.yml` 的 dev 分支时不需要先动 `master`：标签推送使用被推送提交上的工作流文件；但改动必须先提交到被标记的 commit。
+- 开发版构建默认市场为内网 `https://blueai-skills-market.domob-inc.cn`，npx 提示为 `@dev`（见 `src/branding.ts` 与 `build.config.mjs`）。
+- 状态隔离：开发版默认把凭证（`~/.blueai-skills-dev/secrets.json`）、全局锁（`~/.blueai-skills-dev/.agents/.skill-lock.json`）、canonical 目录（`~/.blueai-skills-dev/.agents/skills`）收拢到状态根，且不写/不读真实 agent 目录；Pilot 仍用 `~/.loongsuite-pilot`。路径判定集中在 `src/paths.ts`。
+- 开发者用法：`npx --yes blueai-skills@dev`；回正式版：`npx --yes blueai-skills@latest`。
 
 也可使用 `pnpm release[:patch|:minor|:major]`（`scripts/release.sh`）自动完成版本号变更；但发布动作依旧由 CI 承担。
 

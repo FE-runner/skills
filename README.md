@@ -513,6 +513,30 @@ CLI 在仓库中的以下位置搜索技能：
 
 如果在标准位置未找到技能，将执行递归搜索。
 
+## 开发版（内测）
+
+开发版用于内部验证 `develop` 上尚未正式发布的改动，不会替换正式版：
+
+```bash
+npx --yes blueai-skills@dev <命令>
+```
+
+- 默认市场为内网测试环境 `https://blueai-skills-market.domob-inc.cn`，仍可用 `SKILLS_SITE` 覆盖。
+- 默认启用状态隔离：凭证、全局锁、全局已装技能都落在 `~/.blueai-skills-dev/`，不读写正式版状态，也不向 `~/.claude/skills`、`~/.codex/skills`、`~/.openclaw/skills` 等真实 agent 目录写入或建软链。
+- 因此开发版安装的技能只对开发版 CLI 可见；需要验证真实 agent 读取效果时，请用项目级安装或专用机器。
+- LoongSuite Pilot 仍使用 `~/.loongsuite-pilot/`，`obs install` / `obs uninstall` 会作用于真实机器，请在专用机器或虚拟机上验证。
+- 临时关闭隔离：`BLUEAI_SKILLS_DEV=0 npx --yes blueai-skills@dev ...`；自定义状态根：`BLUEAI_SKILLS_HOME=/path/to/root npx --yes blueai-skills@dev ...`。
+- 回到正式版：`npx --yes blueai-skills@latest <命令>`。
+
+维护者发布开发版：
+
+```bash
+pnpm publish:dev             # 预检 + 生成 dev-v<版本> 标签并推送到 GitHub 镜像
+pnpm publish:dev -- --dry-run
+```
+
+标签推送后由 `.github/workflows/publish.yml` 以 `npm publish --tag dev` 发布，`latest` 不受影响；开发版不会创建 GitHub Release。
+
 ## 兼容性
 
 技能通常在各 Agent 之间兼容，因为它们遵循共享的 [Agent Skills 规范](https://agentskills.io)。但某些功能可能是特定 Agent 独有的：

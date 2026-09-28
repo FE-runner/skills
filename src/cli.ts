@@ -3,7 +3,6 @@
 import { spawnSync } from 'child_process';
 import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
 import { basename, join, dirname } from 'path';
-import { homedir } from 'os';
 import { fileURLToPath } from 'url';
 import { runAdd, parseAddOptions, initTelemetry } from './add.ts';
 import { runFind } from './find.ts';
@@ -20,6 +19,7 @@ import { runSync, parseSyncOptions } from './sync.ts';
 import { track } from './telemetry.ts';
 import { readLocalLock } from './local-lock.ts';
 import { fetchSkillFolderHash, getGitHubToken } from './skill-lock.ts';
+import { getGlobalSkillLockPath } from './paths.ts';
 import { marketProvider } from './providers/market.ts';
 import { buildUpdateInstallSource, formatSourceInput } from './update-source.ts';
 import {
@@ -345,8 +345,6 @@ Describe when this skill should be used.
 // Check and Update Commands
 // ============================================
 
-const AGENTS_DIR = '.agents';
-const LOCK_FILE = '.skill-lock.json';
 const CURRENT_LOCK_VERSION = 3; // Bumped from 2 to 3 for folder hash support
 
 interface SkillLockEntry {
@@ -370,17 +368,8 @@ interface SkillLockFile {
   skills: Record<string, SkillLockEntry>;
 }
 
-function getSkillLockPath(): string {
-  // 支持 XDG_STATE_HOME（上游改进）
-  const xdgStateHome = process.env.XDG_STATE_HOME;
-  if (xdgStateHome) {
-    return join(xdgStateHome, 'skills', LOCK_FILE);
-  }
-  return join(homedir(), AGENTS_DIR, LOCK_FILE);
-}
-
 function readSkillLock(): SkillLockFile {
-  const lockPath = getSkillLockPath();
+  const lockPath = getGlobalSkillLockPath();
   try {
     const content = readFileSync(lockPath, 'utf-8');
     const parsed = JSON.parse(content) as SkillLockFile;

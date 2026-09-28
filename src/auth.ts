@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, chmodSync } from 'fs';
 import { join, dirname } from 'path';
-import { homedir } from 'os';
 import { BIN_NAME } from './branding.ts';
+import { getCredentialDir } from './paths.ts';
 
 /** 复用既有键名（其他本地脚本，如 push.mjs，已在用同一把 Key），不新增独立键名 */
 const API_KEY_SECRET_KEY = 'blueai-skills-market-push.apiKey';
@@ -9,9 +9,9 @@ const API_KEY_SECRET_KEY = 'blueai-skills-market-push.apiKey';
 /** 环境变量优先级最高，覆盖本地凭证文件 */
 const API_KEY_ENV_VAR = 'SKILLS_API_KEY';
 
-/** 默认凭证文件路径：~/.blueai/secrets.json */
+/** 当前生效的凭证文件路径：正式构建为 ~/.blueai/secrets.json；开发隔离模式为 <状态根>/secrets.json。 */
 export function getSecretsPath(): string {
-  return join(homedir(), '.blueai', 'secrets.json');
+  return join(getCredentialDir(), 'secrets.json');
 }
 
 function readSecrets(secretsPath: string): Record<string, unknown> {

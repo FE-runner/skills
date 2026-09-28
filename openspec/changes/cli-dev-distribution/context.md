@@ -34,3 +34,15 @@
 - CI 失败后标签已存在，重试要生成新版本号与新标签，不复用旧标签，也不得移动已推送的标签指向。
 - 首次 dev 发布后核对 `npm view blueai-skills dist-tags`：`latest` 必须未变。
 - 正式构建不变性靠单测固定，不靠人工检查。
+
+## 实施决策（apply）
+
+- `src/agents.ts` 未改动：隔离在 installer 层统一实现——全局 + 隔离时 `getAgentBaseDir` 返回 canonical，`isCanonicalOnlyGlobalInstall` 同时覆盖 universal agent 与隔离模式；agent 定义里的真实 `globalSkillsDir` 正式构建仍需要。
+- 隔离只作用于**全局**作用域；项目级安装、列表、卸载保持原行为（消解方案审查 Warning 3 的歧义）。`list -g` 与 `remove -g` 在隔离模式下只扫描状态根 canonical。
+- rolldown rc.1 的 `define` 必须写在 `rolldown.transform.define`；放在顶层 `rolldown.define` 不生效（实测 dev 构建仍输出生产地址）。
+- 三个构建期量都对 dev/正式显式注入字面量（正式构建的 `BLUEAI_SKILLS_DEV_BUILD` 注入空串），使正式产物里 `IS_DEV_ISOLATION` 被折叠为 `false`，运行时环境变量无法在正式构建上打开隔离。
+- dev 版本号由本地脚本生成并编码进 `dev-v<版本>` 标签；CI 用 `${GITHUB_REF_NAME#dev-v}` 去掉前缀后 `npm version --no-git-tag-version`，本地不修改 `package.json`。
+- `publish-dev.sh` 里变量后紧跟中文标点必须写 `${VAR}`，否则 bash 会把标点并入变量名（实测报 unbound variable）。
+- 方案审查 Warning 2（版本唯一性）已由 `publish-dev.sh` 的 npm 版本 + 远端 tag 双重预检覆盖；Warning 1/4 仍保留在 `review-findings.md`，未在 apply 阶段处理。
+- 主 spec `cli-skill-collection-consent` 的 Purpose 已在 apply 阶段直接改为“当前生效的全局锁文件”（delta 不支持改 Purpose，见 design D9）。
+- 验证结果：`pnpm test` 535 passed；`pnpm type-check`、`pnpm format:check` 通过；dev 构建 dist 含 `domob-inc.cn` 且 npx 为 `@dev`，正式构建 `IS_DEV_ISOLATION = false`；临时 HOME 下 dev `login` / `add -g` / `list -g` 只落状态根且未创建真实 agent 目录；`publish-dev.sh --dry-run` 不产生标签与工作区变更；`openspec validate --changes cli-dev-distribution` 与 `openspec validate --specs` 通过。
