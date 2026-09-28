@@ -165,10 +165,13 @@ export async function removeCommand(skillNames: string[], options: RemoveOptions
         // directory to clean up any legacy symlinks.
         const pathsToCleanup = new Set([skillPath]);
         const sanitizedName = sanitizeName(skillName);
-        if (isGlobal && agent.globalSkillsDir) {
-          pathsToCleanup.add(join(agent.globalSkillsDir, sanitizedName));
-        } else {
-          pathsToCleanup.add(join(cwd, agent.skillsDir, sanitizedName));
+        // 开发隔离模式：全局状态只在状态根 canonical，不接触真实 agent 目录。
+        if (!(isGlobal && IS_DEV_ISOLATION)) {
+          if (isGlobal && agent.globalSkillsDir) {
+            pathsToCleanup.add(join(agent.globalSkillsDir, sanitizedName));
+          } else {
+            pathsToCleanup.add(join(cwd, agent.skillsDir, sanitizedName));
+          }
         }
 
         for (const pathToCleanup of pathsToCleanup) {
@@ -194,16 +197,19 @@ export async function removeCommand(skillNames: string[], options: RemoveOptions
 
       // Only remove the canonical path if no other installed agents are using it.
       // This prevents breaking other agents when uninstalling from a specific agent (#287).
-      const installedAgents = await detectInstalledAgents();
-      const remainingAgents = installedAgents.filter((a) => !targetAgents.includes(a));
-
       let isStillUsed = false;
-      for (const agentKey of remainingAgents) {
-        const path = getInstallPath(skillName, agentKey, { global: isGlobal, cwd });
-        const exists = await lstat(path).catch(() => null);
-        if (exists) {
-          isStillUsed = true;
-          break;
+      // 隔离模式下开发版安装不与真实 agent 目录建立链接，无需（也不应）读取真实目录做占用判断。
+      if (!(isGlobal && IS_DEV_ISOLATION)) {
+        const installedAgents = await detectInstalledAgents();
+        const remainingAgents = installedAgents.filter((a) => !targetAgents.includes(a));
+
+        for (const agentKey of remainingAgents) {
+          const path = getInstallPath(skillName, agentKey, { global: isGlobal, cwd });
+          const exists = await lstat(path).catch(() => null);
+          if (exists) {
+            isStillUsed = true;
+            break;
+          }
         }
       }
 
