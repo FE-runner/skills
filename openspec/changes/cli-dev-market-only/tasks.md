@@ -17,10 +17,10 @@
 
 - [x] 3.1 更新 `README.md` 的"开发版（内测）"章节：删除状态隔离段落，改为"开发版只改市场端点与提示 tag，本地状态与正式版一致"，并补充共用状态的三条已知影响
 - [x] 3.2 更新 `CLAUDE.md` 开发版章节：删除状态根路径说明，改为开发版仅覆盖市场端点与 npx tag
-- [x] 3.3 更新 `DEV_VERSION_USAGE.md`：清理全部隔离 / 状态根表述——开头正式版对照表的状态行、"状态隔离说明"小节、环境变量表（移除 `BLUEAI_SKILLS_HOME` / `BLUEAI_SKILLS_DEV`）、常见问题两条、维护者登录说明、相关实现表；验证 `rg -n "状态隔离|状态根|BLUEAI_SKILLS" DEV_VERSION_USAGE.md` 无残留
+- [x] 3.3 更新 `DEV_VERSION_USAGE.md`：清理全部隔离 / 状态根表述——开头正式版对照表的状态行、"状态隔离说明"小节、环境变量表（移除 `BLUEAI_SKILLS_HOME` / `BLUEAI_SKILLS_DEV`）、常见问题两条、维护者登录说明、相关实现表；验证 `rg -n "状态隔离|状态根|BLUEAI_SKILLS" DEV_VERSION_USAGE.md` 仅命中刻意保留的两处（"两个变量已移除"与"旧状态根目录不再读取"），无其他残留
 - [x] 3.4 更新 `CHANGELOG.md`：记录开发版隔离范围收窄为市场端点，并标注两个环境变量移除
-- [x] 3.5 直接更新 `openspec/specs/cli-dev-distribution/spec.md` 的 Purpose：删除"以独立状态根隔离本地凭证与安装状态"表述，改为"开发版仅覆盖市场端点与命令提示 tag，其余本地状态与正式版一致"；验证该主 spec 中不再出现"状态根"字样
-- [x] 3.6 直接更新 `openspec/specs/cli-skill-collection-consent/spec.md` 的 Purpose：把"开发隔离模式下为状态根下的同名文件"改为"开发版与正式版复用同一份全局锁文件"；验证该主 spec 中不再出现"状态根"字样
+- [x] 3.5 直接更新 `openspec/specs/cli-dev-distribution/spec.md` 的 Purpose：删除"以独立状态根隔离本地凭证与安装状态"表述，改为"开发版只覆盖默认市场端点与命令提示 tag，其余本地状态与路径行为同正式版"；验证 Purpose 段落已更新（隔离相关 requirement 的移除由归档时应用本 change 的 delta 完成，主 spec 在归档前仍保留旧 requirement）
+- [x] 3.6 直接更新 `openspec/specs/cli-skill-collection-consent/spec.md` 的 Purpose：把"开发隔离模式下为状态根下的同名文件"改为"开发版与正式版一致"；验证 Purpose 段落已更新（`track 命令组` / `不新建文件` 的路径措辞由归档时应用 delta 完成）
 - [x] 3.7 同步飞书使用文档（`https://bluefocus.feishu.cn/docx/HnaPdt7Lzoha6ixr9e9c5aT1ngb`）：把状态隔离相关段落改为"与正式版共用本地状态，开发版只改市场端点与提示 tag"，并移除两个已删除环境变量的说明；验证回查文档大纲与正文不再出现"状态隔离 / 状态根"
 - [x] 3.8 补充测试市场网页端用法：在 `DEV_VERSION_USAGE.md`、`README.md` 与飞书文档中写入市场入口 `https://blueai-skills-market.domob-inc.cn` 与可观测页面 `.../dashboard/observability` 的用途，并附上「可观测 → 接入配置」界面截图（仓库内 `assets/dev-market-observability.png`）；验证飞书回查存在该章节与图片 block
 
