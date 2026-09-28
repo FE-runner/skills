@@ -114,7 +114,7 @@ CLI SHALL 仅在安装响应中的 `collect` 同时包含 `config` 与非空字�
 
 ### Requirement: lock 三态判定采集状态
 
-采集状态 SHALL 由 `lock.skills[<skillName>].collectConsent` 唯一决定：缺失 = 首次（未定夺）；`true` = 开（监测版）；`false` = 关（原版）。CLI 不得通过扫描已装包文件（是否有签名、`obs-run`、`obs-manifest.yaml` 或其他产物文件）判定采集状态。
+采集状态 SHALL 由 `lock.skills[<skillName>].collectConsent` 唯一决定：缺失 = 首次（未定夺）；`true` = 开（监测版）；`false` = 关（原版）。CLI 不得通过扫描已装包文件（是否有签名、`bsm-obs-run.cjs`、`bsm-obs-manifest.yaml` 或其他产物文件）判定采集状态。
 
 #### Scenario: lock 无字段
 

@@ -8,7 +8,7 @@
 
 ### Requirement: 安装接口携带 report 参数
 
-CLI SHALL 在安装 / 重装请求携带 `report`（boolean）控制采集改造产物：需要采集时 `report=true`，不采集时 `report=false`。接口响应含 `collect: { config: { collectEnabled }, meta: { blueai_signature } }` 表示改造成功，`files` 为服务端已生成好的产物；该产物可能仅含身份签名，也可能额外含 `.blueai-skills-market/obs-manifest.yaml` 与 `.blueai-skills-market/obs-run`，并由服务端决定 `SKILL.md` 内容。CLI SHALL 只按 `files` 目录结构落盘，不解析签名、不拼装结构化改造产物。`collect: { reason }` 表示服务端改造失败降级，`files` 为原样产物，CLI SHALL 按无有效采集配置处理。响应不含 `collect` 表示原样产物。
+CLI SHALL 在安装 / 重装请求携带 `report`（boolean）控制采集改造产物：需要采集时 `report=true`，不采集时 `report=false`。接口响应含 `collect: { config: { collectEnabled }, meta: { blueai_signature } }` 表示改造成功，`files` 为服务端已生成好的产物；该产物可能仅含身份签名，也可能额外含 `.blueai-skills-market/bsm-obs-manifest.yaml` 与 `.blueai-skills-market/bsm-obs-run.cjs`，并由服务端决定 `SKILL.md` 内容。CLI SHALL 只按 `files` 目录结构落盘，不解析签名、不拼装结构化改造产物。`collect: { reason }` 表示服务端改造失败降级，`files` 为原样产物，CLI SHALL 按无有效采集配置处理。响应不含 `collect` 表示原样产物。
 
 #### Scenario: report=true 返回改造版
 
@@ -18,7 +18,7 @@ CLI SHALL 在安装 / 重装请求携带 `report`（boolean）控制采集改造
 #### Scenario: report=true 返回结构化改造产物
 
 - **WHEN** CLI 以 report=true 请求安装的 skill 在目标版本存在成功的结构化改造快照
-- **THEN** 响应 files 中可额外包含 `.blueai-skills-market/obs-manifest.yaml` 与 `.blueai-skills-market/obs-run`，CLI 仍只按目录结构落盘
+- **THEN** 响应 files 中可额外包含 `.blueai-skills-market/bsm-obs-manifest.yaml` 与 `.blueai-skills-market/bsm-obs-run.cjs`，CLI 仍只按目录结构落盘
 
 #### Scenario: 改造失败降级原样
 
