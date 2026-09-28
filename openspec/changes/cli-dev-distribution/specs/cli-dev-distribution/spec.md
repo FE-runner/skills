@@ -25,7 +25,7 @@
 
 ### Requirement: 开发隔离模式与状态根
 
-开发版构建 SHALL 默认启用开发隔离模式。隔离模式启用时，CLI SHALL 使用一个状态根承载本地状态，默认值为 `~/.blueai-skills-dev/`，且 SHALL 支持运行时环境变量 `BLUEAI_SKILLS_HOME` 覆盖该路径。正式构建 SHALL 默认关闭隔离模式。
+开发版构建 SHALL 默认启用开发隔离模式，并 SHALL 允许运行时环境变量 `BLUEAI_SKILLS_DEV` 以显式假值（`0` / `false`，大小写不敏感）关闭。隔离模式启用时，CLI SHALL 使用一个状态根承载本地状态，默认值为 `~/.blueai-skills-dev/`，并 SHALL 支持运行时环境变量 `BLUEAI_SKILLS_HOME` 覆盖该路径；隔离模式关闭时 `BLUEAI_SKILLS_HOME` SHALL 被忽略。正式构建 SHALL NOT 启用隔离模式，且 SHALL 忽略 `BLUEAI_SKILLS_DEV` 的任何取值。
 
 #### Scenario: 开发版默认启用隔离
 
@@ -41,6 +41,11 @@
 
 - **WHEN** 用户以 `BLUEAI_SKILLS_DEV=0` 运行开发版构建的 CLI
 - **THEN** CLI 退回正式构建的默认路径行为，不启用状态根
+
+#### Scenario: 隔离关闭时忽略状态根变量
+
+- **WHEN** 用户以 `BLUEAI_SKILLS_DEV=0` 与 `BLUEAI_SKILLS_HOME=/tmp/dev-root` 同时运行开发版构建的 CLI
+- **THEN** CLI 使用正式默认路径，不使用 `/tmp/dev-root`
 
 ### Requirement: 隔离模式下的状态路径
 
@@ -155,3 +160,8 @@ LoongSuite Pilot 的检测、安装与卸载 SHALL 始终使用真实用户目�
 
 - **WHEN** 用户运行正式构建的 CLI 且未设置 `SKILLS_SITE`
 - **THEN** 市场基地址为 `https://blueai-skills-market.bluemediagroup.cn`
+
+#### Scenario: 正式构建忽略隔离开关
+
+- **WHEN** 用户以 `BLUEAI_SKILLS_DEV=1`（或 `BLUEAI_SKILLS_HOME=/tmp/dev-root`）运行正式构建的 CLI
+- **THEN** CLI 仍使用正式默认路径与默认市场地址，不启用隔离模式

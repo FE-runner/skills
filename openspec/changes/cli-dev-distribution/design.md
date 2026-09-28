@@ -35,15 +35,26 @@
 
 备选：各模块各自读环境变量。否决原因：`src/cli.ts` 与 `src/skill-lock.ts` 已经出现过重复实现，继续分散会再次漂移。
 
-### D3：隔离模式由构建期标记默认开启，运行时可显式切换
+### D3：隔离模式以构建期标记为上限，运行时只能关闭、不能开启
 
-`BLUEAI_SKILLS_DEV` 的运行时取值优先，缺省时取构建期注入的 dev 标记。开发版默认开启，正式版默认关闭；开发版可用 `BLUEAI_SKILLS_DEV=0` 退回正式路径，便于对比排查。
+判定分两层：构建期标记为关闭（正式构建）时隔离模式永远关闭，`BLUEAI_SKILLS_DEV=1` 被忽略；构建期标记为开启（开发构建）时，`BLUEAI_SKILLS_DEV` 为显式假值则关闭，否则开启。`BLUEAI_SKILLS_HOME` 仅在隔离模式启用时生效。
+
+| 构建 | `BLUEAI_SKILLS_DEV` | 隔离模式 | `BLUEAI_SKILLS_HOME` |
+| --- | --- | --- | --- |
+| 正式 | 未设置 / `0` / `1` | 关闭 | 忽略 |
+| 开发 | 未设置 | 开启 | 生效 |
+| 开发 | `0` / `false` | 关闭 | 忽略 |
+| 开发 | `1` / `true` / 其它非空值 | 开启 | 生效 |
+
+布尔解析：trim 后为 `0` 或 `false`（大小写不敏感）视为假值，其余非空值视为真值；未设置时取构建期默认。
 
 备选：仅凭 `BLUEAI_SKILLS_HOME` 是否设置来决定。否决原因：开发者漏设变量时会静默写进正式状态，不符合隔离目标。
 
+备选：允许正式构建通过 `BLUEAI_SKILLS_DEV=1` 开启隔离。否决原因：会破坏“正式构建不变性”这条可测试的硬约束，正式用户升级后的行为必须完全可预测。
+
 ### D4：状态根覆盖凭证、全局锁、canonical 目录；Pilot 明确例外
 
-状态根默认 `~/.blueai-skills-dev/`，可用 `BLUEAI_SKILLS_HOME` 覆盖。凭证为 `<状态根>/secrets.json`，全局锁为 `<状态根>/.agents/.skill-lock.json`，canonical 为 `<状态根>/.agents/skills/`。Pilot 保持 `~/.loongsuite-pilot/`。
+状态根默认 `~/.blueai-skills-dev/`，可用 `BLUEAI_SKILLS_HOME` 覆盖。凭证为 `<状态根>/secrets.json`，全局锁为 `<状态根>/.agents/.skill-lock.json`，canonical 为 `<状态根>/.agents/skills/`。隔离模式启用时 `XDG_STATE_HOME` 不参与全局锁定位；隔离模式关闭时保留 `XDG_STATE_HOME` 的既有行为。Pilot 保持 `~/.loongsuite-pilot/`。
 
 备选：Pilot 一并隔离。否决原因：Pilot 是带 PID 与安装脚本的机器级常驻服务，改目录会产生第二个实例，端口与服务名冲突不由 CLI 控制。
 

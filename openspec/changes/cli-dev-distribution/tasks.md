@@ -6,7 +6,7 @@
 
 ## 2. 状态根与路径收口
 
-- [ ] 2.1 新增 `src/paths.ts`，按 design D3 优先级导出隔离模式判定、状态根、凭证目录、全局锁路径、canonical skills 目录；验证新增单测覆盖“dev 默认 / dev 关闭 / 状态根覆盖 / 正式默认”四种组合
+- [ ] 2.1 新增 `src/paths.ts`，按 design D3 判定表导出隔离模式判定、状态根、凭证目录、全局锁路径、canonical skills 目录（含 `0`/`false` 布尔解析、`BLUEAI_SKILLS_HOME` 仅在隔离启用时生效、隔离启用时 `XDG_STATE_HOME` 不参与全局锁）；验证单测覆盖“正式 + 未设置/`0`/`1` 均关闭”“开发默认开启”“开发 + `0`/`false` 关闭”“开发 + `BLUEAI_SKILLS_HOME` 生效”“隔离关闭时忽略 `BLUEAI_SKILLS_HOME`”五类组合
 - [ ] 2.2 改造 `src/auth.ts` 使用 `paths` 的凭证目录；验证 dev 隔离模式下 `login` 写入 `<状态根>/secrets.json`，`src/auth.test.ts` 用例通过且正式默认路径不变
 - [ ] 2.3 将 `src/skill-lock.ts` 与 `src/cli.ts` 中重复的 `getSkillLockPath()` 收敛到 `src/paths.ts`；验证 dev 隔离模式全局安装写入 `<状态根>/.agents/.skill-lock.json`，现有锁相关测试通过
 - [ ] 2.4 改造 `src/installer.ts` 的 canonical 目录来源；验证 dev 隔离模式全局安装落在 `<状态根>/.agents/skills/<skill-name>/`
@@ -42,7 +42,7 @@
 
 ## 7. 集成验证
 
-- [ ] 7.1 执行 `SKILLS_BUILD_TARGET=dev pnpm build` 并以 `node bin/cli.mjs` 跑 `--version` 与无参 banner，验证输出版本含 `-dev.`、市场地址为 `domob-inc.cn`
+- [ ] 7.1 执行 `SKILLS_BUILD_TARGET=dev pnpm build` 并以 `node bin/cli.mjs` 跑无参 banner 与 `--help`，验证市场地址为 `domob-inc.cn`、提示命令为 `@dev`（本地构建不改 `package.json` 版本，`-dev.` 版本格式验证归 4.3/4.4 的标签与 CI 流程）
 - [ ] 7.2 在临时 HOME 下用 dev 构建串跑 `add -g` → `list -g` → `remove`，验证状态变化只发生在状态根，真实 `~/.blueai` 与 `~/.agents` 未被写入
 - [ ] 7.3 用正式构建复跑默认路径与默认市场检查，验证凭证、全局锁、canonical 目录与市场地址均与改动前一致；同时静态核对 `publish.yml` 的 `v*` 分支仍为 `--tag latest` 且仍创建 Release
 - [ ] 7.4 运行 `pnpm test`、`pnpm type-check`、`openspec validate --changes cli-dev-distribution`，验证全量测试与 OpenSpec 结构合法；若存在与本 change 无关的既有失败，记录失败摘要并确认不来自本次改动
