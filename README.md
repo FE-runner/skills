@@ -5,7 +5,7 @@
 开放式 AI Agent 技能生态系统的 CLI 工具。
 
 <!-- agent-list:start -->
-Supports **OpenCode**, **Claude Code**, **Codex**, **Cursor**, and [42 more](#available-agents).
+Supports **OpenCode**, **Claude Code**, **Codex**, **Cursor**, and [43 more](#available-agents).
 <!-- agent-list:end -->
 
 ## 安装技能
@@ -343,6 +343,7 @@ Agent 技能是可复用的指令集，用于扩展编程 Agent 的能力。它�
 | Neovate | `neovate` | `.neovate/skills/` | `~/.neovate/skills/` |
 | Pochi | `pochi` | `.pochi/skills/` | `~/.pochi/skills/` |
 | AdaL | `adal` | `.adal/skills/` | `~/.adal/skills/` |
+| WorkBuddy | `workbuddy` | `.workbuddy/skills/` | `~/.workbuddy/skills/` |
 <!-- supported-agents:end -->
 
 > [!NOTE]
@@ -440,6 +441,7 @@ CLI 在仓库中的以下位置搜索技能：
 - `.neovate/skills/`
 - `.pochi/skills/`
 - `.adal/skills/`
+- `.workbuddy/skills/`
 <!-- skill-discovery:end -->
 
 ### 插件清单发现

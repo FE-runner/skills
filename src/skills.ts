@@ -179,6 +179,7 @@ export async function discoverSkills(
     join(searchPath, '.roo/skills'),
     join(searchPath, '.trae/skills'),
     join(searchPath, '.windsurf/skills'),
+    join(searchPath, '.workbuddy/skills'),
     join(searchPath, '.zencoder/skills'),
   ];
 

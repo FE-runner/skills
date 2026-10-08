@@ -26,3 +26,12 @@
 - `src/git.ts` 当前没有单测；以 `pnpm type-check` 恢复通过 + 既有全量 `vitest` 兜底，不为 clone 引入网络依赖测试。
 - 真机加载确认依赖 WorkBuddy 客户端，可能无法在自动流水线内完成（task 5.3 允许如实标注未验证）。
 - baseline 状态：`pnpm install` 正常、`pnpm exec vitest run` 31 文件 461 测试全绿、`pnpm type-check` 失败（本次任务 3.1 修）。
+
+## 实施阶段新增（apply）
+
+- **`pnpm run -C scripts validate-agents.ts` 在本 checkout 不可用**（`scripts/` 无 package.json，报 `ERR_PNPM_NO_IMPORTER_MANIFEST_FOUND`）。实际改用 `node scripts/validate-agents.ts` 与 `node scripts/sync-agents.ts`（Node v26 原生支持 TS 类型剥离）。AGENTS.md 里记录的该命令形式在本仓库不可直接执行。
+- **README 生成结果反向验证了审查方那条 Critical 的误判**：`sync-agents.ts` 实际把 `.workbuddy/skills` 生成为 `- \`.workbuddy/skills/\``，agent 计数 42→43，表格与发现路径均正确。
+- **`detectInstalled` 的单测策略**：不做 fs mock，而是把 `WORKBUDDY_CONFIG_DIR` 指向临时目录/不存在的子路径，断言探测结果 true/false，并在 `finally` 恢复原 env。这样既 hermetic 又覆盖了 spec 的两个探测 Scenario。
+- **`src/git.ts` 修复方式**：`simpleGit({ timeout }).env(...)` 链式设置，并补一行注释说明 `env` 是实例方法而非构造选项（避免后人再写回去）。
+- **task 5.3（真机加载确认）未在流水线内执行**：WorkBuddy 是 GUI 客户端，无法在自动流水线内启动验证。以两道证据替代——(a) app 包内加载器源码：`getWorkbuddySkillsDir() = <configDir>/skills` 且按「子目录 + `SKILL.md`」扫描；(b) 端到端落点实测（项目级与 `WORKBUDDY_CONFIG_DIR` 覆盖的全局级均产出 `SKILL.md`）。**用户侧运行时确认仍待补做**。
+- **e2e 临时目录残留**：`/tmp/wb-e2e-8r4NMi`（清理命令 `rm -rf` 被本会话安全策略拦截，未强删；位于系统临时目录，无害）。
