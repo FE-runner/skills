@@ -2,7 +2,7 @@
 
 > 本 CHANGELOG 仅记录 BMC 内部 Fork（`-bmc` 标签）自身的改动，不包含上游 `blueai-skills` 原始项目的版本历史。
 
-## [Unreleased]
+## [1.4.7-bmc1.6.5] - 2026-10-08
 
 ### 新功能
 
@@ -10,6 +10,10 @@
   - 项目级安装到 `<工作区>/.workbuddy/skills/`，全局安装到 `~/.workbuddy/skills/`（支持 `WORKBUDDY_CONFIG_DIR` 覆盖配置目录）
   - `.workbuddy/skills` 纳入技能发现路径
   - 安装状态探测依据 WorkBuddy 配置目录是否存在
+
+### 改进
+
+- agent 列表展示顺序调整：`claude-code`、`codex`、`openclaw`、`hermes`、`workbuddy` 置顶，其余按字母序；README 头部 agent-list 改为跟随该顺序自动生成
 
 ### 修复
 
