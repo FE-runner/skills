@@ -21,6 +21,7 @@ export class GitCloneError extends Error {
 
 export async function cloneRepo(url: string, ref?: string): Promise<string> {
   const tempDir = await mkdtemp(join(tmpdir(), 'skills-'));
+  // `env` 是 SimpleGit 的实例方法（不是构造选项），链式设置以保持类型正确。
   const git = simpleGit({
     timeout: { block: CLONE_TIMEOUT_MS },
   }).env({ ...process.env, GIT_TERMINAL_PROMPT: '0' });

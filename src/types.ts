@@ -1,14 +1,16 @@
 export type AgentType =
+  | 'claude-code'
+  | 'codex'
+  | 'openclaw'
+  | 'hermes'
+  | 'workbuddy'
+  | 'adal'
   | 'amp'
   | 'antigravity'
   | 'augment'
   | 'bob'
-  | 'claude-code'
-  | 'openclaw'
-  | 'hermes'
   | 'cline'
   | 'codebuddy'
-  | 'codex'
   | 'command-code'
   | 'continue'
   | 'cortex'
@@ -33,6 +35,7 @@ export type AgentType =
   | 'opencode'
   | 'openhands'
   | 'pi'
+  | 'pochi'
   | 'qoder'
   | 'qwen-code'
   | 'replit'
@@ -42,8 +45,6 @@ export type AgentType =
   | 'warp'
   | 'windsurf'
   | 'zencoder'
-  | 'pochi'
-  | 'adal'
   | 'universal';
 
 export interface Skill {

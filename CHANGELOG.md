@@ -32,6 +32,23 @@
 - **采集同意询问从未触发**：Market 端仅 `report=true` 携带 `collect`，原版（`report=false`）先行拉取后判 collect 恒为 false——首次未定夺时改为先 `report=true` 探测再询问，同意后复用探测产物省一次拉取
 - **`report` 参数类型错误**：`fetchById` 发字符串 `'true'`，Market 契约为布尔（路由 `body.report === true` 判定）——改发 `true`，修复单装探测、同意询问、团队批量探测全链路拿不到 collect 的问题
 
+## [1.4.7-bmc1.6.5] - 2026-10-08
+
+### 新功能
+
+- 新增 WorkBuddy agent 支持
+  - 项目级安装到 `<工作区>/.workbuddy/skills/`，全局安装到 `~/.workbuddy/skills/`（支持 `WORKBUDDY_CONFIG_DIR` 覆盖配置目录）
+  - `.workbuddy/skills` 纳入技能发现路径
+  - 安装状态探测依据 WorkBuddy 配置目录是否存在
+
+### 改进
+
+- agent 列表展示顺序调整：`claude-code`、`codex`、`openclaw`、`hermes`、`workbuddy` 置顶，其余按字母序；README 头部 agent-list 改为跟随该顺序自动生成
+
+### 修复
+
+- 修复 `src/git.ts` 中 `simpleGit` 的 `env` 误用（`env` 是实例方法而非构造选项），`pnpm type-check` 恢复通过
+
 ## [1.4.7-bmc1.6.2] - 2026-08-11
 
 ### 修复

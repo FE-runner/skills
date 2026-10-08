@@ -1,0 +1,7 @@
+schema: spec-driven
+created: 2026-10-08
+lyx:
+  isolation: worktree
+  sourceBranch: master
+  developmentBranch: feature/workbuddy-agent-support
+  worktreePath: /Users/ly/.ly/worktrees/skills-cli/feature/workbuddy-agent-support
