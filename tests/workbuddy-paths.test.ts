@@ -78,8 +78,25 @@ describe('workbuddy 技能发现路径', () => {
     }
   });
 
-  it('发现 .workbuddy/skills 下的技能，且不把散落非技能文件当作技能', async () => {
+  it('通过 prioritySearchDirs 发现 .workbuddy/skills，且不把散落非技能文件当作技能', async () => {
     testDir = mkdtempSync(join(tmpdir(), 'workbuddy-discover-'));
+
+    // 锚点技能放在标准 skills/ 目录，确保 prioritySearchDirs 阶段就能找到技能。
+    // 这很关键：discoverSkills 在 skills.length === 0 时也会触发末尾的递归兜底扫描，
+    // 只有锚点命中、兜底不执行时，断言 .workbuddy/skills 下的技能被找到才唯一证明
+    // 它来自 prioritySearchDirs（而不是递归兜底）。
+    const anchorDir = join(testDir, 'skills', 'anchor-skill');
+    mkdirSync(anchorDir, { recursive: true });
+    writeFileSync(
+      join(anchorDir, 'SKILL.md'),
+      `---
+name: anchor-skill
+description: Anchor skill keeps discovery on the priority path
+---
+
+# Anchor
+`
+    );
 
     const skillsDir = join(testDir, '.workbuddy', 'skills');
     const skillDir = join(skillsDir, 'web-access');
@@ -98,9 +115,10 @@ description: WorkBuddy skill discovery demo
     // WorkBuddy 用户技能目录里常见的非技能散落文件，不应产生技能条目
     writeFileSync(join(skillsDir, '_bm_skillid_migration.json'), '{"version":2}');
 
-    const skills = await discoverSkills(testDir, undefined, { fullDepth: true });
+    const skills = await discoverSkills(testDir);
     const names = skills.map((s) => s.name);
 
+    expect(names).toContain('anchor-skill');
     expect(names).toContain('web-access');
     expect(names.some((name) => name.includes('_bm_skillid_migration'))).toBe(false);
   });
