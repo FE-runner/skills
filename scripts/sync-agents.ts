@@ -9,10 +9,15 @@ const ROOT = join(import.meta.dirname, '..');
 const README_PATH = join(ROOT, 'README.md');
 const PACKAGE_PATH = join(ROOT, 'package.json');
 
+/** 展示在 README 头部 agent-list 的 agent 个数。 */
+const FEATURED_AGENT_COUNT = 4;
+
 function generateAgentList(): string {
   const agentList = Object.values(agents);
-  const count = agentList.length;
-  return `Supports **OpenCode**, **Claude Code**, **Codex**, **Cursor**, and [${count - 4} more](#available-agents).`;
+  // 取注册表顺序最靠前的 N 个 agent，与 Available Agents 表格同源顺序，
+  // 避免这里写死名字后与 src/agents.ts 的顺序脱节。
+  const featured = agentList.slice(0, FEATURED_AGENT_COUNT).map((a) => `**${a.displayName}**`);
+  return `Supports ${featured.join(', ')}, and [${agentList.length - featured.length} more](#available-agents).`;
 }
 
 function generateAgentNames(): string {
