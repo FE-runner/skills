@@ -32,9 +32,14 @@
 - 备选：复用 `codebuddy` 的 `.codebuddy/skills`。否决——两者是不同产品，共用目录会让安装结果无法归属，且违背已核实的约定。
 - 影响：`agent-install-targets` 能力新增一条 requirement。
 
-### D2: 全局目录解析抽出可测试 helper，并支持 `WORKBUDDY_CONFIG_DIR`
+### D2: 配置目录/全局目录解析抽出可测试 helper，并支持 `WORKBUDDY_CONFIG_DIR`
 
-新增 `getWorkbuddyGlobalSkillsDir(homeDir?, env?)`（导出），解析优先级：`WORKBUDDY_CONFIG_DIR`（trim 后非空）→ `<homeDir>/.workbuddy`，再拼 `skills`。与既有 `getOpenClawGlobalSkillsDir(homeDir, pathExists)` 一样可注入参数做单测。
+新增两个导出 helper：
+
+- `getWorkbuddyConfigDir(homeDir?, env?)`：解析优先级 `WORKBUDDY_CONFIG_DIR`（trim 后非空）→ `<homeDir>/.workbuddy`。
+- `getWorkbuddyGlobalSkillsDir(homeDir?, env?)`：返回 `join(getWorkbuddyConfigDir(...), 'skills')`。
+
+拆分两个 helper 是为了让安装目标（skills 目录）与安装状态探测（配置目录自身）共用同一份解析逻辑，同时与既有 `getOpenClawGlobalSkillsDir(homeDir, pathExists)` 一样可注入参数做单测。
 
 - 备选：直接写死 `join(home, '.workbuddy/skills')`。否决——WorkBuddy 官方支持配置目录覆盖，与 `codex`(CODEX_HOME) / `claude-code`(CLAUDE_CONFIG_DIR) 的既有模式不一致。
 

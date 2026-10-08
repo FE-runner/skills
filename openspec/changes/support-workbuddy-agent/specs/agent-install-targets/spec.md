@@ -32,3 +32,17 @@ CLI SHALL 支持 `workbuddy` agent：项目级安装写入 `<cwd>/.workbuddy/ski
 
 - **WHEN** 用户执行 `blueai-skills add <本地路径>`，且该路径下存在 `.workbuddy/skills/<skill-name>/SKILL.md`
 - **THEN** 该技能 SHALL 出现在候选技能列表中
+
+### Requirement: WorkBuddy agent 安装状态探测
+
+CLI SHALL 在探测已安装 agent 时，把 WorkBuddy 配置目录存在视为 `workbuddy` 已安装；配置目录解析 SHALL 与安装目标一致，即优先 `WORKBUDDY_CONFIG_DIR`，否则默认 `~/.workbuddy`。
+
+#### Scenario: 配置目录存在时探测到 WorkBuddy
+
+- **WHEN** 用户执行需要探测已安装 agent 的命令（例如 `blueai-skills add -y` 的自动选择），且默认 `~/.workbuddy` 或 `WORKBUDDY_CONFIG_DIR` 指向的目录存在
+- **THEN** `workbuddy` SHALL 出现在已安装 agent 集合中
+
+#### Scenario: 配置目录不存在时不探测到 WorkBuddy
+
+- **WHEN** 默认 `~/.workbuddy` 不存在，且未设置有效的 `WORKBUDDY_CONFIG_DIR`
+- **THEN** `workbuddy` SHALL NOT 出现在已安装 agent 集合中

@@ -1,7 +1,7 @@
 ## 1. Agent 注册与路径解析
 
 - [ ] 1.1 在 `src/types.ts` 的 `AgentType` 增加 `workbuddy`，并在 `src/agents.ts` 新增 `workbuddy` 条目（`displayName: 'WorkBuddy'`、`skillsDir: '.workbuddy/skills'`、`globalSkillsDir` 指向 helper、`detectInstalled` 判断配置目录存在）；完成标准：`pnpm type-check` 对该文件无新增报错，且 `agents.workbuddy` 可被 `getAgentConfig('workbuddy')` 取到
-- [ ] 1.2 在 `src/agents.ts` 导出 `getWorkbuddyGlobalSkillsDir(homeDir?, env?)`，解析优先级 `WORKBUDDY_CONFIG_DIR`（trim 非空）→ `<homeDir>/.workbuddy`，返回 `<configDir>/skills`；完成标准：helper 可被单测注入参数调用
+- [ ] 1.2 在 `src/agents.ts` 导出 `getWorkbuddyConfigDir(homeDir?, env?)`（解析优先级 `WORKBUDDY_CONFIG_DIR`（trim 非空）→ `<homeDir>/.workbuddy`）与 `getWorkbuddyGlobalSkillsDir(homeDir?, env?)`（返回 `<configDir>/skills`）；完成标准：两个 helper 均可被单测注入参数调用
 - [ ] 1.3 新增 `tests/workbuddy-paths.test.ts`（参照 `tests/openclaw-paths.test.ts`），覆盖：默认回退到 `~/.workbuddy/skills`；`WORKBUDDY_CONFIG_DIR` 覆盖生效；空字符串/纯空白视为未设置；`detectInstalled` 在配置目录存在/不存在时的返回值；完成标准：`pnpm exec vitest run tests/workbuddy-paths.test.ts` 全绿
 
 ## 2. 技能发现路径
