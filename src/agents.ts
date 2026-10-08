@@ -49,6 +49,55 @@ export function getWorkbuddyGlobalSkillsDir(
 }
 
 export const agents: Record<AgentType, AgentConfig> = {
+  'claude-code': {
+    name: 'claude-code',
+    displayName: 'Claude Code',
+    skillsDir: '.claude/skills',
+    globalSkillsDir: join(claudeHome, 'skills'),
+    detectInstalled: async () => {
+      return existsSync(claudeHome);
+    },
+  },
+  codex: {
+    name: 'codex',
+    displayName: 'Codex',
+    skillsDir: '.agents/skills',
+    globalSkillsDir: join(codexHome, 'skills'),
+    detectInstalled: async () => {
+      return existsSync(codexHome) || existsSync('/etc/codex');
+    },
+  },
+  openclaw: {
+    name: 'openclaw',
+    displayName: 'OpenClaw',
+    skillsDir: 'skills',
+    globalSkillsDir: getOpenClawGlobalSkillsDir(),
+    detectInstalled: async () => {
+      return (
+        existsSync(join(home, '.openclaw')) ||
+        existsSync(join(home, '.clawdbot')) ||
+        existsSync(join(home, '.moltbot'))
+      );
+    },
+  },
+  hermes: {
+    name: 'hermes',
+    displayName: 'Hermes',
+    skillsDir: 'skills',
+    globalSkillsDir: join(home, '.hermes/skills'),
+    detectInstalled: async () => {
+      return existsSync(join(home, '.hermes'));
+    },
+  },
+  workbuddy: {
+    name: 'workbuddy',
+    displayName: 'WorkBuddy',
+    skillsDir: '.workbuddy/skills',
+    globalSkillsDir: getWorkbuddyGlobalSkillsDir(),
+    detectInstalled: async () => {
+      return existsSync(getWorkbuddyConfigDir());
+    },
+  },
   adal: {
     name: 'adal',
     displayName: 'AdaL',
@@ -94,15 +143,6 @@ export const agents: Record<AgentType, AgentConfig> = {
       return existsSync(join(home, '.bob'));
     },
   },
-  'claude-code': {
-    name: 'claude-code',
-    displayName: 'Claude Code',
-    skillsDir: '.claude/skills',
-    globalSkillsDir: join(claudeHome, 'skills'),
-    detectInstalled: async () => {
-      return existsSync(claudeHome);
-    },
-  },
   cline: {
     name: 'cline',
     displayName: 'Cline',
@@ -119,15 +159,6 @@ export const agents: Record<AgentType, AgentConfig> = {
     globalSkillsDir: join(home, '.codebuddy/skills'),
     detectInstalled: async () => {
       return existsSync(join(process.cwd(), '.codebuddy')) || existsSync(join(home, '.codebuddy'));
-    },
-  },
-  codex: {
-    name: 'codex',
-    displayName: 'Codex',
-    skillsDir: '.agents/skills',
-    globalSkillsDir: join(codexHome, 'skills'),
-    detectInstalled: async () => {
-      return existsSync(codexHome) || existsSync('/etc/codex');
     },
   },
   'command-code': {
@@ -229,15 +260,6 @@ export const agents: Record<AgentType, AgentConfig> = {
       return existsSync(join(configHome, 'goose'));
     },
   },
-  hermes: {
-    name: 'hermes',
-    displayName: 'Hermes',
-    skillsDir: 'skills',
-    globalSkillsDir: join(home, '.hermes/skills'),
-    detectInstalled: async () => {
-      return existsSync(join(home, '.hermes'));
-    },
-  },
   'iflow-cli': {
     name: 'iflow-cli',
     displayName: 'iFlow CLI',
@@ -326,19 +348,6 @@ export const agents: Record<AgentType, AgentConfig> = {
     globalSkillsDir: join(home, '.neovate/skills'),
     detectInstalled: async () => {
       return existsSync(join(home, '.neovate'));
-    },
-  },
-  openclaw: {
-    name: 'openclaw',
-    displayName: 'OpenClaw',
-    skillsDir: 'skills',
-    globalSkillsDir: getOpenClawGlobalSkillsDir(),
-    detectInstalled: async () => {
-      return (
-        existsSync(join(home, '.openclaw')) ||
-        existsSync(join(home, '.clawdbot')) ||
-        existsSync(join(home, '.moltbot'))
-      );
     },
   },
   opencode: {
@@ -448,15 +457,6 @@ export const agents: Record<AgentType, AgentConfig> = {
     globalSkillsDir: join(home, '.codeium/windsurf/skills'),
     detectInstalled: async () => {
       return existsSync(join(home, '.codeium/windsurf'));
-    },
-  },
-  workbuddy: {
-    name: 'workbuddy',
-    displayName: 'WorkBuddy',
-    skillsDir: '.workbuddy/skills',
-    globalSkillsDir: getWorkbuddyGlobalSkillsDir(),
-    detectInstalled: async () => {
-      return existsSync(getWorkbuddyConfigDir());
     },
   },
   zencoder: {

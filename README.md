@@ -5,7 +5,7 @@
 开放式 AI Agent 技能生态系统的 CLI 工具。
 
 <!-- agent-list:start -->
-Supports **AdaL**, **Amp**, **Antigravity**, **Augment**, and [43 more](#available-agents).
+Supports **Claude Code**, **Codex**, **OpenClaw**, **Hermes**, and [43 more](#available-agents).
 <!-- agent-list:end -->
 
 ## 安装技能
@@ -301,15 +301,18 @@ Agent 技能是可复用的指令集，用于扩展编程 Agent 的能力。它�
 <!-- supported-agents:start -->
 | Agent | `--agent` | Project Path | Global Path |
 |-------|-----------|--------------|-------------|
+| Claude Code | `claude-code` | `.claude/skills/` | `~/.claude/skills/` |
+| Codex | `codex` | `.agents/skills/` | `~/.codex/skills/` |
+| OpenClaw | `openclaw` | `skills/` | `~/.openclaw/skills/` |
+| Hermes | `hermes` | `skills/` | `~/.hermes/skills/` |
+| WorkBuddy | `workbuddy` | `.workbuddy/skills/` | `~/.workbuddy/skills/` |
 | AdaL | `adal` | `.adal/skills/` | `~/.adal/skills/` |
 | Amp, Kimi Code CLI, Replit, Universal | `amp`, `kimi-cli`, `replit`, `universal` | `.agents/skills/` | `~/.config/agents/skills/` |
 | Antigravity | `antigravity` | `.agents/skills/` | `~/.gemini/antigravity/skills/` |
 | Augment | `augment` | `.augment/skills/` | `~/.augment/skills/` |
 | IBM Bob | `bob` | `.bob/skills/` | `~/.bob/skills/` |
-| Claude Code | `claude-code` | `.claude/skills/` | `~/.claude/skills/` |
 | Cline, Warp | `cline`, `warp` | `.agents/skills/` | `~/.agents/skills/` |
 | CodeBuddy | `codebuddy` | `.codebuddy/skills/` | `~/.codebuddy/skills/` |
-| Codex | `codex` | `.agents/skills/` | `~/.codex/skills/` |
 | Command Code | `command-code` | `.commandcode/skills/` | `~/.commandcode/skills/` |
 | Continue | `continue` | `.continue/skills/` | `~/.continue/skills/` |
 | Cortex Code | `cortex` | `.cortex/skills/` | `~/.snowflake/cortex/skills/` |
@@ -321,7 +324,6 @@ Agent 技能是可复用的指令集，用于扩展编程 Agent 的能力。它�
 | Gemini CLI | `gemini-cli` | `.agents/skills/` | `~/.gemini/skills/` |
 | GitHub Copilot | `github-copilot` | `.agents/skills/` | `~/.copilot/skills/` |
 | Goose | `goose` | `.goose/skills/` | `~/.config/goose/skills/` |
-| Hermes | `hermes` | `skills/` | `~/.hermes/skills/` |
 | iFlow CLI | `iflow-cli` | `.iflow/skills/` | `~/.iflow/skills/` |
 | Junie | `junie` | `.junie/skills/` | `~/.junie/skills/` |
 | Kilo Code | `kilo` | `.kilocode/skills/` | `~/.kilocode/skills/` |
@@ -331,7 +333,6 @@ Agent 技能是可复用的指令集，用于扩展编程 Agent 的能力。它�
 | Mistral Vibe | `mistral-vibe` | `.vibe/skills/` | `~/.vibe/skills/` |
 | Mux | `mux` | `.mux/skills/` | `~/.mux/skills/` |
 | Neovate | `neovate` | `.neovate/skills/` | `~/.neovate/skills/` |
-| OpenClaw | `openclaw` | `skills/` | `~/.openclaw/skills/` |
 | OpenCode | `opencode` | `.agents/skills/` | `~/.config/opencode/skills/` |
 | OpenHands | `openhands` | `.openhands/skills/` | `~/.openhands/skills/` |
 | Pi | `pi` | `.pi/skills/` | `~/.pi/agent/skills/` |
@@ -342,7 +343,6 @@ Agent 技能是可复用的指令集，用于扩展编程 Agent 的能力。它�
 | Trae | `trae` | `.trae/skills/` | `~/.trae/skills/` |
 | Trae CN | `trae-cn` | `.trae/skills/` | `~/.trae-cn/skills/` |
 | Windsurf | `windsurf` | `.windsurf/skills/` | `~/.codeium/windsurf/skills/` |
-| WorkBuddy | `workbuddy` | `.workbuddy/skills/` | `~/.workbuddy/skills/` |
 | Zencoder | `zencoder` | `.zencoder/skills/` | `~/.zencoder/skills/` |
 <!-- supported-agents:end -->
 
@@ -410,11 +410,13 @@ CLI 在仓库中的以下位置搜索技能：
 - `skills/.curated/`
 - `skills/.experimental/`
 - `skills/.system/`
-- `.adal/skills/`
+- `.claude/skills/`
 - `.agents/skills/`
+- `./skills/`
+- `.workbuddy/skills/`
+- `.adal/skills/`
 - `.augment/skills/`
 - `.bob/skills/`
-- `.claude/skills/`
 - `.codebuddy/skills/`
 - `.commandcode/skills/`
 - `.continue/skills/`
@@ -422,7 +424,6 @@ CLI 在仓库中的以下位置搜索技能：
 - `.crush/skills/`
 - `.factory/skills/`
 - `.goose/skills/`
-- `./skills/`
 - `.iflow/skills/`
 - `.junie/skills/`
 - `.kilocode/skills/`
@@ -440,7 +441,6 @@ CLI 在仓库中的以下位置搜索技能：
 - `.roo/skills/`
 - `.trae/skills/`
 - `.windsurf/skills/`
-- `.workbuddy/skills/`
 - `.zencoder/skills/`
 <!-- skill-discovery:end -->
 
