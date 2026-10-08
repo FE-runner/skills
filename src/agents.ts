@@ -49,44 +49,13 @@ export function getWorkbuddyGlobalSkillsDir(
 }
 
 export const agents: Record<AgentType, AgentConfig> = {
-  'claude-code': {
-    name: 'claude-code',
-    displayName: 'Claude Code',
-    skillsDir: '.claude/skills',
-    globalSkillsDir: join(claudeHome, 'skills'),
+  adal: {
+    name: 'adal',
+    displayName: 'AdaL',
+    skillsDir: '.adal/skills',
+    globalSkillsDir: join(home, '.adal/skills'),
     detectInstalled: async () => {
-      return existsSync(claudeHome);
-    },
-  },
-  openclaw: {
-    name: 'openclaw',
-    displayName: 'OpenClaw',
-    skillsDir: 'skills',
-    globalSkillsDir: getOpenClawGlobalSkillsDir(),
-    detectInstalled: async () => {
-      return (
-        existsSync(join(home, '.openclaw')) ||
-        existsSync(join(home, '.clawdbot')) ||
-        existsSync(join(home, '.moltbot'))
-      );
-    },
-  },
-  hermes: {
-    name: 'hermes',
-    displayName: 'Hermes',
-    skillsDir: 'skills',
-    globalSkillsDir: join(home, '.hermes/skills'),
-    detectInstalled: async () => {
-      return existsSync(join(home, '.hermes'));
-    },
-  },
-  workbuddy: {
-    name: 'workbuddy',
-    displayName: 'WorkBuddy',
-    skillsDir: '.workbuddy/skills',
-    globalSkillsDir: getWorkbuddyGlobalSkillsDir(),
-    detectInstalled: async () => {
-      return existsSync(getWorkbuddyConfigDir());
+      return existsSync(join(home, '.adal'));
     },
   },
   amp: {
@@ -123,6 +92,15 @@ export const agents: Record<AgentType, AgentConfig> = {
     globalSkillsDir: join(home, '.bob/skills'),
     detectInstalled: async () => {
       return existsSync(join(home, '.bob'));
+    },
+  },
+  'claude-code': {
+    name: 'claude-code',
+    displayName: 'Claude Code',
+    skillsDir: '.claude/skills',
+    globalSkillsDir: join(claudeHome, 'skills'),
+    detectInstalled: async () => {
+      return existsSync(claudeHome);
     },
   },
   cline: {
@@ -251,13 +229,13 @@ export const agents: Record<AgentType, AgentConfig> = {
       return existsSync(join(configHome, 'goose'));
     },
   },
-  junie: {
-    name: 'junie',
-    displayName: 'Junie',
-    skillsDir: '.junie/skills',
-    globalSkillsDir: join(home, '.junie/skills'),
+  hermes: {
+    name: 'hermes',
+    displayName: 'Hermes',
+    skillsDir: 'skills',
+    globalSkillsDir: join(home, '.hermes/skills'),
     detectInstalled: async () => {
-      return existsSync(join(home, '.junie'));
+      return existsSync(join(home, '.hermes'));
     },
   },
   'iflow-cli': {
@@ -267,6 +245,15 @@ export const agents: Record<AgentType, AgentConfig> = {
     globalSkillsDir: join(home, '.iflow/skills'),
     detectInstalled: async () => {
       return existsSync(join(home, '.iflow'));
+    },
+  },
+  junie: {
+    name: 'junie',
+    displayName: 'Junie',
+    skillsDir: '.junie/skills',
+    globalSkillsDir: join(home, '.junie/skills'),
+    detectInstalled: async () => {
+      return existsSync(join(home, '.junie'));
     },
   },
   kilo: {
@@ -332,6 +319,28 @@ export const agents: Record<AgentType, AgentConfig> = {
       return existsSync(join(home, '.mux'));
     },
   },
+  neovate: {
+    name: 'neovate',
+    displayName: 'Neovate',
+    skillsDir: '.neovate/skills',
+    globalSkillsDir: join(home, '.neovate/skills'),
+    detectInstalled: async () => {
+      return existsSync(join(home, '.neovate'));
+    },
+  },
+  openclaw: {
+    name: 'openclaw',
+    displayName: 'OpenClaw',
+    skillsDir: 'skills',
+    globalSkillsDir: getOpenClawGlobalSkillsDir(),
+    detectInstalled: async () => {
+      return (
+        existsSync(join(home, '.openclaw')) ||
+        existsSync(join(home, '.clawdbot')) ||
+        existsSync(join(home, '.moltbot'))
+      );
+    },
+  },
   opencode: {
     name: 'opencode',
     displayName: 'OpenCode',
@@ -357,6 +366,15 @@ export const agents: Record<AgentType, AgentConfig> = {
     globalSkillsDir: join(home, '.pi/agent/skills'),
     detectInstalled: async () => {
       return existsSync(join(home, '.pi/agent'));
+    },
+  },
+  pochi: {
+    name: 'pochi',
+    displayName: 'Pochi',
+    skillsDir: '.pochi/skills',
+    globalSkillsDir: join(home, '.pochi/skills'),
+    detectInstalled: async () => {
+      return existsSync(join(home, '.pochi'));
     },
   },
   qoder: {
@@ -432,6 +450,15 @@ export const agents: Record<AgentType, AgentConfig> = {
       return existsSync(join(home, '.codeium/windsurf'));
     },
   },
+  workbuddy: {
+    name: 'workbuddy',
+    displayName: 'WorkBuddy',
+    skillsDir: '.workbuddy/skills',
+    globalSkillsDir: getWorkbuddyGlobalSkillsDir(),
+    detectInstalled: async () => {
+      return existsSync(getWorkbuddyConfigDir());
+    },
+  },
   zencoder: {
     name: 'zencoder',
     displayName: 'Zencoder',
@@ -439,33 +466,6 @@ export const agents: Record<AgentType, AgentConfig> = {
     globalSkillsDir: join(home, '.zencoder/skills'),
     detectInstalled: async () => {
       return existsSync(join(home, '.zencoder'));
-    },
-  },
-  neovate: {
-    name: 'neovate',
-    displayName: 'Neovate',
-    skillsDir: '.neovate/skills',
-    globalSkillsDir: join(home, '.neovate/skills'),
-    detectInstalled: async () => {
-      return existsSync(join(home, '.neovate'));
-    },
-  },
-  pochi: {
-    name: 'pochi',
-    displayName: 'Pochi',
-    skillsDir: '.pochi/skills',
-    globalSkillsDir: join(home, '.pochi/skills'),
-    detectInstalled: async () => {
-      return existsSync(join(home, '.pochi'));
-    },
-  },
-  adal: {
-    name: 'adal',
-    displayName: 'AdaL',
-    skillsDir: '.adal/skills',
-    globalSkillsDir: join(home, '.adal/skills'),
-    detectInstalled: async () => {
-      return existsSync(join(home, '.adal'));
     },
   },
   universal: {
