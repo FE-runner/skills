@@ -49,6 +49,46 @@ export function getWorkbuddyGlobalSkillsDir(
 }
 
 export const agents: Record<AgentType, AgentConfig> = {
+  'claude-code': {
+    name: 'claude-code',
+    displayName: 'Claude Code',
+    skillsDir: '.claude/skills',
+    globalSkillsDir: join(claudeHome, 'skills'),
+    detectInstalled: async () => {
+      return existsSync(claudeHome);
+    },
+  },
+  openclaw: {
+    name: 'openclaw',
+    displayName: 'OpenClaw',
+    skillsDir: 'skills',
+    globalSkillsDir: getOpenClawGlobalSkillsDir(),
+    detectInstalled: async () => {
+      return (
+        existsSync(join(home, '.openclaw')) ||
+        existsSync(join(home, '.clawdbot')) ||
+        existsSync(join(home, '.moltbot'))
+      );
+    },
+  },
+  hermes: {
+    name: 'hermes',
+    displayName: 'Hermes',
+    skillsDir: 'skills',
+    globalSkillsDir: join(home, '.hermes/skills'),
+    detectInstalled: async () => {
+      return existsSync(join(home, '.hermes'));
+    },
+  },
+  workbuddy: {
+    name: 'workbuddy',
+    displayName: 'WorkBuddy',
+    skillsDir: '.workbuddy/skills',
+    globalSkillsDir: getWorkbuddyGlobalSkillsDir(),
+    detectInstalled: async () => {
+      return existsSync(getWorkbuddyConfigDir());
+    },
+  },
   amp: {
     name: 'amp',
     displayName: 'Amp',
@@ -83,37 +123,6 @@ export const agents: Record<AgentType, AgentConfig> = {
     globalSkillsDir: join(home, '.bob/skills'),
     detectInstalled: async () => {
       return existsSync(join(home, '.bob'));
-    },
-  },
-  'claude-code': {
-    name: 'claude-code',
-    displayName: 'Claude Code',
-    skillsDir: '.claude/skills',
-    globalSkillsDir: join(claudeHome, 'skills'),
-    detectInstalled: async () => {
-      return existsSync(claudeHome);
-    },
-  },
-  openclaw: {
-    name: 'openclaw',
-    displayName: 'OpenClaw',
-    skillsDir: 'skills',
-    globalSkillsDir: getOpenClawGlobalSkillsDir(),
-    detectInstalled: async () => {
-      return (
-        existsSync(join(home, '.openclaw')) ||
-        existsSync(join(home, '.clawdbot')) ||
-        existsSync(join(home, '.moltbot'))
-      );
-    },
-  },
-  hermes: {
-    name: 'hermes',
-    displayName: 'Hermes',
-    skillsDir: 'skills',
-    globalSkillsDir: join(home, '.hermes/skills'),
-    detectInstalled: async () => {
-      return existsSync(join(home, '.hermes'));
     },
   },
   cline: {
@@ -457,15 +466,6 @@ export const agents: Record<AgentType, AgentConfig> = {
     globalSkillsDir: join(home, '.adal/skills'),
     detectInstalled: async () => {
       return existsSync(join(home, '.adal'));
-    },
-  },
-  workbuddy: {
-    name: 'workbuddy',
-    displayName: 'WorkBuddy',
-    skillsDir: '.workbuddy/skills',
-    globalSkillsDir: getWorkbuddyGlobalSkillsDir(),
-    detectInstalled: async () => {
-      return existsSync(getWorkbuddyConfigDir());
     },
   },
   universal: {

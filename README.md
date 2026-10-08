@@ -301,13 +301,14 @@ Agent 技能是可复用的指令集，用于扩展编程 Agent 的能力。它�
 <!-- supported-agents:start -->
 | Agent | `--agent` | Project Path | Global Path |
 |-------|-----------|--------------|-------------|
+| Claude Code | `claude-code` | `.claude/skills/` | `~/.claude/skills/` |
+| OpenClaw | `openclaw` | `skills/` | `~/.openclaw/skills/` |
+| Hermes | `hermes` | `skills/` | `~/.hermes/skills/` |
+| WorkBuddy | `workbuddy` | `.workbuddy/skills/` | `~/.workbuddy/skills/` |
 | Amp, Kimi Code CLI, Replit, Universal | `amp`, `kimi-cli`, `replit`, `universal` | `.agents/skills/` | `~/.config/agents/skills/` |
 | Antigravity | `antigravity` | `.agents/skills/` | `~/.gemini/antigravity/skills/` |
 | Augment | `augment` | `.augment/skills/` | `~/.augment/skills/` |
 | IBM Bob | `bob` | `.bob/skills/` | `~/.bob/skills/` |
-| Claude Code | `claude-code` | `.claude/skills/` | `~/.claude/skills/` |
-| OpenClaw | `openclaw` | `skills/` | `~/.openclaw/skills/` |
-| Hermes | `hermes` | `skills/` | `~/.hermes/skills/` |
 | Cline, Warp | `cline`, `warp` | `.agents/skills/` | `~/.agents/skills/` |
 | CodeBuddy | `codebuddy` | `.codebuddy/skills/` | `~/.codebuddy/skills/` |
 | Codex | `codex` | `.agents/skills/` | `~/.codex/skills/` |
@@ -343,7 +344,6 @@ Agent 技能是可复用的指令集，用于扩展编程 Agent 的能力。它�
 | Neovate | `neovate` | `.neovate/skills/` | `~/.neovate/skills/` |
 | Pochi | `pochi` | `.pochi/skills/` | `~/.pochi/skills/` |
 | AdaL | `adal` | `.adal/skills/` | `~/.adal/skills/` |
-| WorkBuddy | `workbuddy` | `.workbuddy/skills/` | `~/.workbuddy/skills/` |
 <!-- supported-agents:end -->
 
 > [!NOTE]
@@ -410,11 +410,12 @@ CLI 在仓库中的以下位置搜索技能：
 - `skills/.curated/`
 - `skills/.experimental/`
 - `skills/.system/`
+- `.claude/skills/`
+- `./skills/`
+- `.workbuddy/skills/`
 - `.agents/skills/`
 - `.augment/skills/`
 - `.bob/skills/`
-- `.claude/skills/`
-- `./skills/`
 - `.codebuddy/skills/`
 - `.commandcode/skills/`
 - `.continue/skills/`
@@ -441,7 +442,6 @@ CLI 在仓库中的以下位置搜索技能：
 - `.neovate/skills/`
 - `.pochi/skills/`
 - `.adal/skills/`
-- `.workbuddy/skills/`
 <!-- skill-discovery:end -->
 
 ### 插件清单发现
