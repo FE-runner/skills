@@ -27,6 +27,27 @@ export function getOpenClawGlobalSkillsDir(
   return join(homeDir, '.openclaw/skills');
 }
 
+/**
+ * 解析 WorkBuddy 配置目录：优先 `WORKBUDDY_CONFIG_DIR`（trim 后非空），否则 `<homeDir>/.workbuddy`。
+ * 与 `codex`(CODEX_HOME) / `claude-code`(CLAUDE_CONFIG_DIR) 的覆盖模式一致。
+ */
+export function getWorkbuddyConfigDir(
+  homeDir = home,
+  env: NodeJS.ProcessEnv = process.env
+): string {
+  const override = env.WORKBUDDY_CONFIG_DIR?.trim();
+  if (override) return override;
+  return join(homeDir, '.workbuddy');
+}
+
+/** WorkBuddy 用户级技能目录 = `<配置目录>/skills`。 */
+export function getWorkbuddyGlobalSkillsDir(
+  homeDir = home,
+  env: NodeJS.ProcessEnv = process.env
+): string {
+  return join(getWorkbuddyConfigDir(homeDir, env), 'skills');
+}
+
 export const agents: Record<AgentType, AgentConfig> = {
   amp: {
     name: 'amp',
@@ -436,6 +457,15 @@ export const agents: Record<AgentType, AgentConfig> = {
     globalSkillsDir: join(home, '.adal/skills'),
     detectInstalled: async () => {
       return existsSync(join(home, '.adal'));
+    },
+  },
+  workbuddy: {
+    name: 'workbuddy',
+    displayName: 'WorkBuddy',
+    skillsDir: '.workbuddy/skills',
+    globalSkillsDir: getWorkbuddyGlobalSkillsDir(),
+    detectInstalled: async () => {
+      return existsSync(getWorkbuddyConfigDir());
     },
   },
   universal: {

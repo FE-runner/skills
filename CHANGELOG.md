@@ -2,6 +2,19 @@
 
 > 本 CHANGELOG 仅记录 BMC 内部 Fork（`-bmc` 标签）自身的改动，不包含上游 `blueai-skills` 原始项目的版本历史。
 
+## [Unreleased]
+
+### 新功能
+
+- 新增 WorkBuddy agent 支持
+  - 项目级安装到 `<工作区>/.workbuddy/skills/`，全局安装到 `~/.workbuddy/skills/`（支持 `WORKBUDDY_CONFIG_DIR` 覆盖配置目录）
+  - `.workbuddy/skills` 纳入技能发现路径
+  - 安装状态探测依据 WorkBuddy 配置目录是否存在
+
+### 修复
+
+- 修复 `src/git.ts` 中 `simpleGit` 的 `env` 误用（`env` 是实例方法而非构造选项），`pnpm type-check` 恢复通过
+
 ## [1.4.7-bmc1.6.2] - 2026-08-11
 
 ### 修复
