@@ -47,3 +47,22 @@ spec 更新。
 - **`Retry-After` 需同时支持秒数与 HTTP-date**，且单次等待上限 10s。
 - **真机端到端验收依赖 market 侧 `central-openapi-user-auth` 上线**（统一 key → 200）；在此之前
   实现与单测可完成，验收延后，以 503 分支为新增验收点。
+
+## 实施决策（apply 阶段）
+
+- **503 退避细则在实现层定死**（proposal/design 只给了大方向）：
+  - 基线退避 `500ms → 1s`，尝试序号超出后取最后一档 1s；
+  - `Retry-After` 缺失、空白或不可解析 → 回退基线退避；
+  - `Retry-After` 为已过期的 HTTP-date → 视为立即重试（0）；
+  - 单次等待先按 10s 封顶，再叠加 `0~250ms` 抖动（故上限为 10.25s）；
+  - 判定与计算抽成 `parseRetryAfterMs` / `computeRetryDelayMs` 两个纯函数，便于单测锚定。
+- **`--api-key` 只做读取侧覆盖**：不打印、不写 telemetry、不进错误输出，也不落盘；因此该 flag
+  的安全边界与 `SKILLS_API_KEY` 一致，仅有的额外暴露面是 shell history / process listing，
+  生产环境仍推荐 env 或 credentials 文件。
+- **`whoami` 参数解析保持"忽略未知参数"的既有行为**，只额外识别 `--api-key`，不引入新的未知选项
+  报错分支（其 spec 未要求）。
+- **`retryAfterSeconds` 作为 `ApiResult` 失败分支的可选字段暴露**，供 `reportApiFailure` 在 503
+  提示中附带"建议 N 秒后重试"。
+- **真机校验（已在开发机执行）**：`BLUEAI_CONFIG_DIR` 设置时跳过工作区、未设置时工作区优先均符合
+  预期；本机同时存在 `secrets.json` 与 `BLUEAI_API_KEY` 时解析到 `secrets.json`（35 位市场 key），
+  确认"原生优先"零回归。

@@ -8,6 +8,8 @@ vi.mock('./providers/market.ts', () => ({
 }));
 vi.mock('./auth.ts', () => ({
   getApiKey: vi.fn(),
+  API_KEY_MISSING_HINT:
+    '请先运行 `skills login <api-key>`，或设置 SKILLS_API_KEY / BLUEAI_API_KEY 环境变量',
 }));
 
 import { marketProvider } from './providers/market.ts';
@@ -43,6 +45,52 @@ describe('withdraw', () => {
         unknownOption: '--team',
       });
     });
+
+    it('accepts --api-key as a single-call override', () => {
+      expect(parseWithdrawOptions(['my-skill', '--api-key', 'sk-flag'])).toEqual({
+        name: 'my-skill',
+        apiKey: 'sk-flag',
+      });
+    });
+
+    it('still reports other unknown -- options after --api-key', () => {
+      expect(parseWithdrawOptions(['my-skill', '--api-key', 'sk-flag', '--team', 'x'])).toEqual({
+        name: 'my-skill',
+        apiKey: 'sk-flag',
+        unknownOption: '--team',
+      });
+    });
+  });
+
+  it('passes --api-key through to the resolver as a single-call override', async () => {
+    vi.mocked(marketProvider.resolveMine).mockResolvedValue({
+      ok: false,
+      status: 404,
+      message: 'Skill不存在',
+    });
+
+    await runWithdraw(['my-skill', '--api-key', 'sk-flag']);
+
+    expect(vi.mocked(getApiKey)).toHaveBeenCalledWith({ flagKey: 'sk-flag' });
+    expect(marketProvider.resolveMine).toHaveBeenCalledWith('my-skill', 'sk-test');
+  });
+
+  it('treats a 503 from resolveMine as service-unavailable, not "not found" or "auth failed"', async () => {
+    vi.mocked(marketProvider.resolveMine).mockResolvedValue({
+      ok: false,
+      status: 503,
+      message: '中央解析不可用',
+      retryAfterSeconds: 3,
+    });
+
+    await runWithdraw(['my-skill']);
+
+    expect(process.exitCode).toBe(1);
+    expect(errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('服务暂不可用'))).toBe(
+      true
+    );
+    expect(errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('未找到'))).toBe(false);
+    expect(errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('login'))).toBe(false);
   });
 
   it('withdraws successfully: resolves then withdraws, printing the new state', async () => {

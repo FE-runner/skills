@@ -11,6 +11,8 @@ vi.mock('./providers/market.ts', () => ({
 }));
 vi.mock('./auth.ts', () => ({
   getApiKey: vi.fn(),
+  API_KEY_MISSING_HINT:
+    '请先运行 `skills login <api-key>`，或设置 SKILLS_API_KEY / BLUEAI_API_KEY 环境变量',
 }));
 
 // 模拟 TOCTOU 场景：文件在 lstat 判断后被替换为指向根目录外的符号链接，
@@ -92,6 +94,15 @@ describe('publish', () => {
       const opts = parsePublishOptions(['--public', '--team', 'team-a']);
       expect(opts.public).toBe(true);
       expect(opts.teamIds).toEqual(['team-a']);
+    });
+
+    it('parses --api-key as a single-call override', () => {
+      const opts = parsePublishOptions(['--api-key', 'sk-flag']);
+      expect(opts.apiKey).toBe('sk-flag');
+    });
+
+    it('leaves apiKey undefined when --api-key is absent', () => {
+      expect(parsePublishOptions([]).apiKey).toBeUndefined();
     });
   });
 
@@ -315,6 +326,26 @@ describe('publish', () => {
 
       expect(process.exitCode).toBe(1);
       expect(marketProvider.push).not.toHaveBeenCalled();
+    });
+
+    it('passes --api-key through to the resolver as a single-call override', async () => {
+      writeSkillMd();
+      vi.mocked(marketProvider.push).mockResolvedValue({
+        ok: true,
+        data: {
+          skillId: 's1',
+          name: 'my-skill',
+          currentVersion: '0.0.1',
+          visibility: 'PRIVATE',
+          status: 'APPROVED',
+        },
+      });
+
+      await runPublish([dir, '--api-key', 'sk-flag']);
+
+      expect(vi.mocked(getApiKey)).toHaveBeenCalledWith({ flagKey: 'sk-flag' });
+      expect(marketProvider.push).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(marketProvider.push).mock.calls[0]![3]).toBe('sk-test');
     });
   });
 

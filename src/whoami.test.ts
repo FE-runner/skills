@@ -7,6 +7,8 @@ vi.mock('./providers/market.ts', () => ({
 }));
 vi.mock('./auth.ts', () => ({
   getApiKey: vi.fn(),
+  API_KEY_MISSING_HINT:
+    '请先运行 `skills login <api-key>`，或设置 SKILLS_API_KEY / BLUEAI_API_KEY 环境变量',
 }));
 
 import { marketProvider } from './providers/market.ts';
@@ -116,5 +118,63 @@ describe('whoami', () => {
     expect(errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('fetch failed'))).toBe(
       true
     );
+  });
+
+  it('passes --api-key through to the resolver as a single-call override', async () => {
+    vi.mocked(getApiKey).mockReturnValue('sk-test');
+    vi.mocked(marketProvider.whoami).mockResolvedValue({
+      ok: true,
+      data: { name: '张三', email: null, role: 'USER', isSuperAdmin: false },
+    });
+
+    await runWhoami(['--api-key', 'sk-flag']);
+
+    expect(vi.mocked(getApiKey)).toHaveBeenCalledWith({ flagKey: 'sk-flag' });
+    expect(marketProvider.whoami).toHaveBeenCalledWith('sk-test');
+  });
+
+  it('keeps the existing resolver call shape when --api-key is absent', async () => {
+    vi.mocked(getApiKey).mockReturnValue('sk-test');
+    vi.mocked(marketProvider.whoami).mockResolvedValue({
+      ok: true,
+      data: { name: '张三', email: null, role: 'USER', isSuperAdmin: false },
+    });
+
+    await runWhoami();
+
+    expect(vi.mocked(getApiKey)).toHaveBeenCalledWith({ flagKey: undefined });
+  });
+
+  it('reports 503 as service-unavailable, not as an auth failure', async () => {
+    vi.mocked(getApiKey).mockReturnValue('sk-test');
+    vi.mocked(marketProvider.whoami).mockResolvedValue({
+      ok: false,
+      status: 503,
+      message: '中央解析不可用',
+      retryAfterSeconds: 5,
+    });
+
+    await runWhoami();
+
+    expect(process.exitCode).toBe(1);
+    expect(errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('服务暂不可用'))).toBe(
+      true
+    );
+    expect(errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('login'))).toBe(false);
+  });
+
+  it('reports 500 as a server error, not a key problem', async () => {
+    vi.mocked(getApiKey).mockReturnValue('sk-test');
+    vi.mocked(marketProvider.whoami).mockResolvedValue({
+      ok: false,
+      status: 500,
+      message: 'boom',
+    });
+
+    await runWhoami();
+
+    expect(process.exitCode).toBe(1);
+    expect(errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('500'))).toBe(true);
+    expect(errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('login'))).toBe(false);
   });
 });

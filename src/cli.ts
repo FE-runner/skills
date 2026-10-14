@@ -830,7 +830,7 @@ async function main(): Promise<void> {
       await runWithdraw(restArgs);
       break;
     case 'whoami':
-      await runWhoami();
+      await runWhoami(restArgs);
       break;
     case 'experimental_install': {
       showLogo();
