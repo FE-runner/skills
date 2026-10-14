@@ -68,6 +68,11 @@ market 侧 central-openapi-user-auth 已冻结契约：客户端契约零变化�
 **理由**：与既有"只有这三个命令读 Key"的边界一致；全局 flag 会被其他命令静默忽略，语义模糊。
 `cli.ts` 需要把 `restArgs` 透传给 `whoami`（当前 `runWhoami()` 不接收参数）。
 
+**安全边界**：`--api-key` 的值 SHALL NOT 被打印、SHALL NOT 写入 telemetry、SHALL NOT 出现在错误
+输出中，也不落盘。它相比环境变量的额外暴露面只有 shell history 与 process listing，因此生产环境
+仍推荐优先使用环境变量或 credentials 文件。解析时要求值存在、非空且不以 `--` 开头，避免把后续
+选项误当作凭证。
+
 ### D4 503 重试下沉到 provider 层（`requestApiResult`）
 
 在 `src/providers/market.ts` 的 `requestApiResult` 内对 `503` 做有界重试（2 次 / 共 3 次尝试，
@@ -80,10 +85,18 @@ market 侧 central-openapi-user-auth 已冻结契约：客户端契约零变化�
 **否决的备选**：在命令层实现重试。否决原因是重复三份且容易漂移。`requestApiResult` 目前只返回
 `ApiResult`，需要额外暴露 `Retry-After`（从 `Response.headers` 读）。
 
+**退避细则**（避免实现与测试漂移）：基线退避 `500ms → 1s`，尝试序号超出后取最后一档；`Retry-After`
+缺失、空白或不可解析时回退基线；已过期的 HTTP-date 视为立即重试（0）；单次等待先按 10s 封顶，再
+叠加 `0~250ms` 抖动。判定与计算抽成 `parseRetryAfterMs` / `computeRetryDelayMs` 两个纯函数，便于
+单测锚定。
+
 ### D5 错误分级统一在 `reportApiFailure` 扩展
 
 `src/api-error.ts` 的 `reportApiFailure` 扩展：401 → 保留 login 提示；503 重试耗尽 → "服务暂不可用，
 请稍后重试"；500 → 标注服务端错误；其余保持通用输出。
+
+`403` 统一输出 `HTTP 403` 与服务端 message 且 SHALL NOT 追加登录提示；`--public` 场景的角色权限提示
+由 `cli-publish` 在此基础上追加，非 `--public` 场景不加该提示。
 
 **理由**：`publish` / `withdraw` / `whoami` 已共用该函数，扩展单点即覆盖三处，且不改变既有 401 行为。
 

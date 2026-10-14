@@ -7,8 +7,8 @@
 
 ## 2. `--api-key` flag（cli-auth）
 
-- [x] 2.1 `cli.ts` 将 `restArgs` 透传给 `runWhoami`；`publish` / `withdraw` 参数解析接受 `--api-key <key>`（单次覆盖、不落盘），其中 `withdraw` 仍须拒绝 `--api-key` 之外的未声明选项；验证：命令级单测覆盖"接受 `--api-key`"与"仍拒绝 `--team`"两种输入
-- [x] 2.2 单测覆盖"传入 `--api-key` 时忽略所有持久化来源"，并确认未传时行为与现状一致；验证：相关单测通过
+- [x] 2.1 `cli.ts` 将 `restArgs` 透传给 `runWhoami`，由 `whoami` 自行解析 `--api-key`（其余参数沿用既有忽略行为）；`publish` / `withdraw` 参数解析接受 `--api-key <key>`（单次覆盖、不落盘），其中 `withdraw` 仍须拒绝 `--api-key` 之外的未声明选项；验证：命令级单测覆盖"接受 `--api-key`"、"`withdraw` 仍拒绝 `--team`"、"`--api-key` 缺值或后接选项时报参数错误"
+- [x] 2.2 单测覆盖"传入 `--api-key` 时忽略所有持久化来源"、"透传后在解析层生效"（`getApiKey({ flagKey })`）与"未传时行为与现状一致"（三个命令各一组）；验证：相关单测通过
 
 ## 3. 503 有界重试与错误分级（cli-auth / cli-publish / cli-withdraw）
 
