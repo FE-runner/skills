@@ -1,0 +1,7 @@
+schema: spec-driven
+created: 2026-10-14
+lyx:
+  isolation: branch
+  sourceBranch: master
+  developmentBranch: feature/blueai-central-auth
+  worktreePath: null

@@ -94,7 +94,15 @@ export interface ParsedSource {
  */
 export type ApiResult<T> =
   | { ok: true; data: T }
-  | { ok: false; status: number; code?: string; message: string; issues?: unknown };
+  | {
+      ok: false;
+      status: number;
+      code?: string;
+      message: string;
+      issues?: unknown;
+      /** 服务端 503 响应携带的 `Retry-After` 提示（秒），仅在 503 且解析成功时存在 */
+      retryAfterSeconds?: number;
+    };
 
 /**
  * Represents a skill fetched from a remote host provider.

@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, lstatSync, realpathSync, existsSync } from 'fs';
 import { join, resolve, sep } from 'path';
 import { marketProvider } from './providers/market.ts';
-import { getApiKey } from './auth.ts';
+import { getApiKey, API_KEY_MISSING_HINT } from './auth.ts';
 import { reportApiFailure } from './api-error.ts';
 import { BIN_NAME } from './branding.ts';
 
@@ -109,19 +109,30 @@ export interface PublishOptions {
   version?: string;
   teamIds?: string[];
   public?: boolean;
+  /** `--api-key` flag：单次调用临时覆盖凭证，不落盘 */
+  apiKey?: string;
+  /** 参数解析错误（如 `--api-key` 缺值）；命中时应直接报错退出 */
+  error?: string;
 }
 
-/** 解析 `publish` 命令参数：`path`（位置参数，缺省 cwd）、`--version`、`--team`、`--public` */
+/** 解析 `publish` 命令参数：`path`（位置参数，缺省 cwd）、`--version`、`--team`、`--public`、`--api-key` */
 export function parsePublishOptions(args: string[]): PublishOptions {
   let path: string | undefined;
   let version: string | undefined;
   let teamIds: string[] | undefined;
   let isPublic: boolean | undefined;
+  let apiKey: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--version') {
       version = args[++i];
+    } else if (arg === '--api-key') {
+      const value = args[++i];
+      if (!value || value.startsWith('--')) {
+        return { path: resolve(path ?? process.cwd()), error: '--api-key 需要一个非空的值' };
+      }
+      apiKey = value;
     } else if (arg === '--team') {
       const value = args[++i];
       teamIds = value
@@ -137,16 +148,29 @@ export function parsePublishOptions(args: string[]): PublishOptions {
     }
   }
 
-  return { path: resolve(path ?? process.cwd()), version, teamIds, public: isPublic };
+  return { path: resolve(path ?? process.cwd()), version, teamIds, public: isPublic, apiKey };
 }
 
 /**
- * `skills publish [path] [--version x.y.z] [--team a,b] [--public]` 命令：
+ * `skills publish [path] [--version x.y.z] [--team a,b] [--public] [--api-key <key>]` 命令：
  * 读取本地 SKILL.md + 附属文本文件，调用 `/api/skill/push` upsert 到私有（默认）或公开（`--public`）Skill；
  * 提供 `--team` 时随 push 请求一起发布到多个团队（服务端同请求内完成，与 `--public` 可叠加，互不影响）。
  */
 export async function runPublish(args: string[]): Promise<void> {
-  const { path: targetDir, version, teamIds, public: isPublic } = parsePublishOptions(args);
+  const {
+    path: targetDir,
+    version,
+    teamIds,
+    public: isPublic,
+    apiKey: flagApiKey,
+    error: optionsError,
+  } = parsePublishOptions(args);
+
+  if (optionsError) {
+    console.error(`错误: ${optionsError}`);
+    process.exitCode = 1;
+    return;
+  }
 
   const skillMdPath = join(targetDir, SKILL_MD_FILENAME);
   if (!existsSync(skillMdPath)) {
@@ -155,9 +179,9 @@ export async function runPublish(args: string[]): Promise<void> {
     return;
   }
 
-  const apiKey = getApiKey();
+  const apiKey = getApiKey({ flagKey: flagApiKey });
   if (!apiKey) {
-    console.error(`请先运行 \`${BIN_NAME} login <api-key>\` 或设置 SKILLS_API_KEY 环境变量`);
+    console.error(API_KEY_MISSING_HINT);
     process.exitCode = 1;
     return;
   }

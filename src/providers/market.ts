@@ -21,37 +21,109 @@ interface ApiEnvelope {
   details?: unknown;
 }
 
+/** 中央身份解析不可用/限流时市场返回的状态码 */
+const SERVICE_UNAVAILABLE_STATUS = 503;
+
+/** 503 最多重试次数（共 MAX_503_RETRIES + 1 次尝试） */
+const MAX_503_RETRIES = 2;
+
+/** 无 Retry-After 时的默认退避基线（按尝试序号取，超出后取最后一档） */
+const BACKOFF_BASE_MS = [500, 1000];
+
+/** 单次等待上限：Retry-After 再大也不超过它 */
+const RETRY_AFTER_CAP_MS = 10_000;
+
+/** 叠加的抖动上限（0 与上限之间的随机值），避免重试同步化 */
+const JITTER_MAX_MS = 250;
+
+/**
+ * 解析 `Retry-After` 头，返回等待毫秒数；缺失或非法返回 null。
+ * 同时支持秒数（按 HTTP 规范允许的 delay-seconds）与 HTTP-date。
+ * 已过期的 HTTP-date 返回 0（立即重试）。
+ */
+export function parseRetryAfterMs(header: string | null | undefined): number | null {
+  if (!header) return null;
+  const trimmed = header.trim();
+  if (!trimmed) return null;
+
+  if (/^\d+$/.test(trimmed)) {
+    const seconds = Number(trimmed);
+    return Number.isFinite(seconds) ? seconds * 1000 : null;
+  }
+
+  const timestamp = Date.parse(trimmed);
+  if (Number.isNaN(timestamp)) return null;
+  return Math.max(0, timestamp - Date.now());
+}
+
+/**
+ * 计算第 `attempt` 次重试前的等待毫秒数（attempt 从 0 起）：
+ * 优先按 `retryAfterMs`，缺失/非法时回退到基线退避，两者都受 10s 上限约束，
+ * 最后叠加 0~250ms 抖动。
+ */
+export function computeRetryDelayMs(attempt: number, retryAfterMs: number | null): number {
+  const base = BACKOFF_BASE_MS[Math.min(attempt, BACKOFF_BASE_MS.length - 1)]!;
+  const preferred = retryAfterMs !== null && Number.isFinite(retryAfterMs) ? retryAfterMs : base;
+  const capped = Math.min(Math.max(preferred, 0), RETRY_AFTER_CAP_MS);
+  const jitter = Math.floor(Math.random() * (JITTER_MAX_MS + 1));
+  return capped + jitter;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * 统一发起请求并解析为 `ApiResult<T>`。
  * 与既有只读方法（`resolve`/`fetchById`/`check`）的 `catch { return null }` 模式不同，
  * 这里保留 HTTP 状态码、服务端 code/message/校验详情，供命令层区分 401/404/网络异常。
+ *
+ * 对 `503`（中央身份解析不可用/限流）做有界重试：最多 `MAX_503_RETRIES` 次，
+ * 退避优先按 `Retry-After`、否则按基线，单次等待上限 10s，重试期间在 stderr 提示进度。
+ * `401`/`403` 等其它状态不重试。市场侧 503 发生在鉴权守卫中（业务处理之前），
+ * 因此包含非幂等写请求在内的重试都是安全的。
  */
 async function requestApiResult<T>(url: string, init: RequestInit): Promise<ApiResult<T>> {
-  let res: Response;
-  try {
-    res = await fetch(url, init);
-  } catch (err) {
-    return { ok: false, status: 0, message: err instanceof Error ? err.message : String(err) };
-  }
+  for (let attempt = 0; ; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch(url, init);
+    } catch (err) {
+      return { ok: false, status: 0, message: err instanceof Error ? err.message : String(err) };
+    }
 
-  let json: ApiEnvelope | undefined;
-  try {
-    json = (await res.json()) as ApiEnvelope;
-  } catch {
-    // 响应体非 JSON（如服务不可达返回的 HTML 错误页）
-  }
+    let json: ApiEnvelope | undefined;
+    try {
+      json = (await res.json()) as ApiEnvelope;
+    } catch {
+      // 响应体非 JSON（如服务不可达返回的 HTML 错误页）
+    }
 
-  if (res.ok && json?.code === 'SUCCESS') {
-    return { ok: true, data: json.data as T };
-  }
+    if (res.ok && json?.code === 'SUCCESS') {
+      return { ok: true, data: json.data as T };
+    }
 
-  return {
-    ok: false,
-    status: res.status,
-    code: json?.code,
-    message: json?.message ?? `HTTP ${res.status}`,
-    issues: json?.details,
-  };
+    // 防御性读取：测试替身/异构 Response 可能没有 headers 字段
+    const retryAfterMs = parseRetryAfterMs(res.headers?.get?.('retry-after') ?? null);
+
+    if (res.status === SERVICE_UNAVAILABLE_STATUS && attempt < MAX_503_RETRIES) {
+      const delayMs = computeRetryDelayMs(attempt, retryAfterMs);
+      console.error(
+        `服务暂不可用，正在重试 (${attempt + 1}/${MAX_503_RETRIES})…（${Math.round(delayMs / 1000)}s 后）`
+      );
+      await sleep(delayMs);
+      continue;
+    }
+
+    return {
+      ok: false,
+      status: res.status,
+      code: json?.code,
+      message: json?.message ?? `HTTP ${res.status}`,
+      issues: json?.details,
+      retryAfterSeconds: retryAfterMs === null ? undefined : Math.round(retryAfterMs / 1000),
+    };
+  }
 }
 
 /**
