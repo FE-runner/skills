@@ -2,7 +2,7 @@
 
 ### Requirement: 带鉴权的名称解析
 
-系统 SHALL 使用携带 `Authorization: Bearer <api-key>` header 的名称解析方法（`resolveMine`），不复用现有无鉴权的 `resolve()` 方法。该方法 SHALL 返回 `ApiResult<T>` 判别联合结果，区分"未鉴权（401）"、"未找到（404 或服务端语义上的不存在）"、"服务不可用（503）"、"网络异常"四种失败情况，不将四者统一折叠成单一的"查不到"。
+系统 SHALL 使用携带 `Authorization: Bearer <api-key>` header 的名称解析方法（`resolveMine`），不复用现有无鉴权的 `resolve()` 方法。该方法 SHALL 返回 `ApiResult<T>` 判别联合结果，区分"未鉴权（401）"、"权限失败（403）"、"未找到（404 或服务端语义上的不存在）"、"服务端错误（500）"、"服务不可用（503）"、"网络异常"六种失败情况，不将它们统一折叠成单一的"查不到"；其中只有 404 输出"名称不存在"，其余非网络失败 SHALL 走 `cli-auth` 定义的分级输出。
 
 对 `503`，SHALL 遵循 `cli-auth` capability 定义的 `503` 有界重试与最终提示语义；重试耗尽后 SHALL 提示"服务暂不可用，请稍后重试"，SHALL NOT 误判为"技能名称不存在"或"鉴权失败"。
 
@@ -19,6 +19,16 @@
 
 - **WHEN** `resolveMine` 返回 `{ ok: false, status: 404, ... }` 或服务端语义上表示未找到
 - **THEN** 系统提示该名称对应的技能不存在
+
+#### Scenario: 权限失败（403）时不误判为名称不存在
+
+- **WHEN** `resolveMine` 返回 `{ ok: false, status: 403, ... }`
+- **THEN** 系统输出 `HTTP 403` 与服务端 message，设置 `process.exitCode = 1`，不提示"技能名称不存在"、也不提示重新登录
+
+#### Scenario: 服务端错误（500）时不误判为名称不存在
+
+- **WHEN** `resolveMine` 返回 `{ ok: false, status: 500, ... }`
+- **THEN** 系统输出 `HTTP 500` 与服务端 message 并标注为服务端错误，设置 `process.exitCode = 1`，不提示"技能名称不存在"
 
 #### Scenario: 服务不可用时明确提示，不误判为不存在
 

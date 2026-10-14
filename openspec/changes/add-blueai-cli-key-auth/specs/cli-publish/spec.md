@@ -36,6 +36,11 @@
 - **WHEN** 用户执行 `skills publish --public`，且请求返回 `{ ok: false, status: 403, ... }`
 - **THEN** 系统在通用错误输出之外，额外提示当前账号角色无权发布公开 Skill
 
+#### Scenario: 未带 --public 的 403 按通用鉴权失败输出
+
+- **WHEN** 用户执行 `skills publish`（不带 `--public`），且请求返回 `{ ok: false, status: 403, ... }`
+- **THEN** 系统输出 `HTTP 403: <message>`，设置 `process.exitCode = 1`，不追加 `--public` 专属的角色权限提示，也不提示重新登录
+
 #### Scenario: --public 命中 409 冲突（同名 PRIVATE 或全局同名 PUBLIC）
 
 - **WHEN** 用户执行 `skills publish --public`，且请求返回 `{ ok: false, status: 409, ... }`（可能是命中同名 PRIVATE Skill，也可能是全局同名 PUBLIC Skill 冲突——两种原因均返回相同 HTTP 409，服务端未提供可区分的结构化 code）

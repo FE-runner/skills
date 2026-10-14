@@ -66,3 +66,13 @@ spec 更新。
 - **真机校验（已在开发机执行）**：`BLUEAI_CONFIG_DIR` 设置时跳过工作区、未设置时工作区优先均符合
   预期；本机同时存在 `secrets.json` 与 `BLUEAI_API_KEY` 时解析到 `secrets.json`（35 位市场 key），
   确认"原生优先"零回归。
+
+## 审查后修复（review 之后、归档之前）
+
+- **代码审查 Warning 1（`--api-key` 取值）**：解析要求值存在、非空且不以 `--` 开头，否则输出参数
+  错误并以 `exitCode=1` 退出，不发起网络请求（commit `bdb4b82`）。
+- **代码审查 Warning 2（`withdraw` 的 403/500 误报"未找到"）**：`resolveMine` 失败分支收敛为
+  "404 → 名称不存在、0 → 网络异常、其余（含 401/403/500/503）→ `reportApiFailure` 分级输出"
+  （commit `bdb4b82`）。
+- **方案审查 Warning 2 的 spec 部分**：在 `cli-auth` / `cli-publish` / `cli-withdraw` 三份 delta spec
+  中补写非 `--public` 场景下 403（以及 `withdraw` 的 500）的输出语义，使 spec 与实现一致。
