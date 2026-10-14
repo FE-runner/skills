@@ -118,6 +118,8 @@ TBD - created by archiving change add-publish-command. Update Purpose after arch
 
 `marketProvider.push`/`publishToTeam` SHALL 返回统一的 `ApiResult<T>` 判别联合结果（`{ ok: true, data } | { ok: false, status, code?, message, issues? }`），不使用现有只读方法那种"失败即返回 `null`、错误信息被吞掉"的模式。命令层 SHALL 在 `ok: false` 时输出 HTTP 状态码与服务端 `message`（如存在 `issues` 字段，一并输出），并通过设置 `process.exitCode = 1` 标记失败退出（不使用 `process.exit()` 硬退出）。当 `status === 401` 时，SHALL 额外提示用户运行 `skills login <api-key>`。当请求携带 `visibility: PUBLIC` 且返回已知的 403/409/400 场景时，SHALL 在通用输出之外追加一行针对该场景的提示。
 
+对 `503`，命令层 SHALL 遵循 `cli-auth` capability 定义的 `503` 有界重试与最终提示语义（重试耗尽后输出"服务暂不可用，请稍后重试"），不将其并入"通用错误"分支、不提示重新登录。对 `500`，命令层 SHALL 标注为服务端错误，SHALL NOT 表述为"Key 无效"。
+
 #### Scenario: 通用错误（非 401，非下列已知 PUBLIC 场景）
 
 - **WHEN** 请求返回 `{ ok: false, status, message: "..." }`，且不属于下列已知 PUBLIC 场景
@@ -133,10 +135,25 @@ TBD - created by archiving change add-publish-command. Update Purpose after arch
 - **WHEN** 请求因网络原因失败，返回 `{ ok: false, status: 0, message: "..." }`
 - **THEN** 系统输出异常信息，设置 `process.exitCode = 1`
 
+#### Scenario: 503 重试耗尽
+
+- **WHEN** `/api/skill/push` 连续返回 `{ ok: false, status: 503, ... }`，重试次数达到上限
+- **THEN** 系统输出"服务暂不可用，请稍后重试"，设置 `process.exitCode = 1`，不提示"请运行 `skills login <api-key>`"
+
+#### Scenario: 500 服务端错误
+
+- **WHEN** 请求返回 `{ ok: false, status: 500, ... }`
+- **THEN** 系统输出 `HTTP 500: <message>`，标注为服务端错误，设置 `process.exitCode = 1`，不提示重新登录
+
 #### Scenario: --public 请求因角色权限被拒绝（403）
 
 - **WHEN** 用户执行 `skills publish --public`，且请求返回 `{ ok: false, status: 403, ... }`
 - **THEN** 系统在通用错误输出之外，额外提示当前账号角色无权发布公开 Skill
+
+#### Scenario: 未带 --public 的 403 按通用鉴权失败输出
+
+- **WHEN** 用户执行 `skills publish`（不带 `--public`），且请求返回 `{ ok: false, status: 403, ... }`
+- **THEN** 系统输出 `HTTP 403: <message>`，设置 `process.exitCode = 1`，不追加 `--public` 专属的角色权限提示，也不提示重新登录
 
 #### Scenario: --public 命中 409 冲突（同名 PRIVATE 或全局同名 PUBLIC）
 
@@ -175,4 +192,3 @@ TBD - created by archiving change add-publish-command. Update Purpose after arch
 
 - **WHEN** 用户执行 `skills publish`（不带 `--public`），请求成功
 - **THEN** 系统按现有格式输出"推送成功"及名称/版本/状态，不受本次变更影响
-
