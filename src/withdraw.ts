@@ -7,6 +7,8 @@ export interface WithdrawOptions {
   name?: string;
   /** `--api-key` flag：单次调用临时覆盖凭证，不落盘 */
   apiKey?: string;
+  /** 参数解析错误（如 `--api-key` 缺值）；命中时应直接报错退出 */
+  error?: string;
   /** 遇到的第一个未声明选项（`--` 开头），命中时应直接报错，不静默忽略 */
   unknownOption?: string;
 }
@@ -23,7 +25,11 @@ export function parseWithdrawOptions(args: string[]): WithdrawOptions {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--api-key') {
-      apiKey = args[++i];
+      const value = args[++i];
+      if (!value || value.startsWith('--')) {
+        return { name, error: '--api-key 需要一个非空的值' };
+      }
+      apiKey = value;
       continue;
     }
     if (arg && arg.startsWith('--')) {
@@ -44,7 +50,18 @@ export function parseWithdrawOptions(args: string[]): WithdrawOptions {
  * 由服务端按既有逻辑自动处理。
  */
 export async function runWithdraw(args: string[]): Promise<void> {
-  const { name, unknownOption, apiKey: flagApiKey } = parseWithdrawOptions(args);
+  const {
+    name,
+    unknownOption,
+    apiKey: flagApiKey,
+    error: optionsError,
+  } = parseWithdrawOptions(args);
+
+  if (optionsError) {
+    console.error(`错误: ${optionsError}`);
+    process.exitCode = 1;
+    return;
+  }
 
   if (unknownOption) {
     console.error(`错误: withdraw 命令不支持选项 ${unknownOption}`);
@@ -67,17 +84,16 @@ export async function runWithdraw(args: string[]): Promise<void> {
 
   const resolveResult = await marketProvider.resolveMine(name, apiKey);
   if (!resolveResult.ok) {
-    if (resolveResult.status === 401) {
-      reportApiFailure(resolveResult);
-    } else if (resolveResult.status === 0) {
+    if (resolveResult.status === 0) {
       console.error(`网络异常: ${resolveResult.message}`);
       process.exitCode = 1;
-    } else if (resolveResult.status === 503) {
-      // 中央身份解析不可用（重试已耗尽）：既不是"鉴权失败"，也不能误判为"技能不存在"
-      reportApiFailure(resolveResult);
-    } else {
+    } else if (resolveResult.status === 404) {
       console.error(`错误: 未找到名为 "${name}" 的技能（${resolveResult.message}）`);
       process.exitCode = 1;
+    } else {
+      // 401/403 鉴权与权限失败、500 服务端异常、503 服务不可用：统一走分级处理，
+      // 不误判为“技能不存在”（401 仍由 reportApiFailure 追加登录提示）
+      reportApiFailure(resolveResult);
     }
     return;
   }

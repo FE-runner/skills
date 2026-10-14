@@ -111,6 +111,8 @@ export interface PublishOptions {
   public?: boolean;
   /** `--api-key` flag：单次调用临时覆盖凭证，不落盘 */
   apiKey?: string;
+  /** 参数解析错误（如 `--api-key` 缺值）；命中时应直接报错退出 */
+  error?: string;
 }
 
 /** 解析 `publish` 命令参数：`path`（位置参数，缺省 cwd）、`--version`、`--team`、`--public`、`--api-key` */
@@ -126,7 +128,11 @@ export function parsePublishOptions(args: string[]): PublishOptions {
     if (arg === '--version') {
       version = args[++i];
     } else if (arg === '--api-key') {
-      apiKey = args[++i];
+      const value = args[++i];
+      if (!value || value.startsWith('--')) {
+        return { path: resolve(path ?? process.cwd()), error: '--api-key 需要一个非空的值' };
+      }
+      apiKey = value;
     } else if (arg === '--team') {
       const value = args[++i];
       teamIds = value
@@ -157,7 +163,14 @@ export async function runPublish(args: string[]): Promise<void> {
     teamIds,
     public: isPublic,
     apiKey: flagApiKey,
+    error: optionsError,
   } = parsePublishOptions(args);
+
+  if (optionsError) {
+    console.error(`错误: ${optionsError}`);
+    process.exitCode = 1;
+    return;
+  }
 
   const skillMdPath = join(targetDir, SKILL_MD_FILENAME);
   if (!existsSync(skillMdPath)) {

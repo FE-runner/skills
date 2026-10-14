@@ -104,6 +104,17 @@ describe('publish', () => {
     it('leaves apiKey undefined when --api-key is absent', () => {
       expect(parsePublishOptions([]).apiKey).toBeUndefined();
     });
+
+    it('reports an error when --api-key has no value', () => {
+      expect(parsePublishOptions(['--api-key']).error).toBeDefined();
+      expect(parsePublishOptions(['--api-key']).apiKey).toBeUndefined();
+    });
+
+    it('reports an error when --api-key is followed by another option', () => {
+      const opts = parsePublishOptions(['--api-key', '--public']);
+      expect(opts.error).toBeDefined();
+      expect(opts.apiKey).toBeUndefined();
+    });
   });
 
   describe('directory traversal', () => {
@@ -346,6 +357,15 @@ describe('publish', () => {
       expect(vi.mocked(getApiKey)).toHaveBeenCalledWith({ flagKey: 'sk-flag' });
       expect(marketProvider.push).toHaveBeenCalledTimes(1);
       expect(vi.mocked(marketProvider.push).mock.calls[0]![3]).toBe('sk-test');
+    });
+
+    it('rejects a malformed --api-key before any network request', async () => {
+      writeSkillMd();
+
+      await runPublish([dir, '--api-key']);
+
+      expect(process.exitCode).toBe(1);
+      expect(marketProvider.push).not.toHaveBeenCalled();
     });
   });
 

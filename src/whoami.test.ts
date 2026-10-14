@@ -145,6 +145,13 @@ describe('whoami', () => {
     expect(vi.mocked(getApiKey)).toHaveBeenCalledWith({ flagKey: undefined });
   });
 
+  it('rejects a malformed --api-key before any network request', async () => {
+    await runWhoami(['--api-key']);
+
+    expect(process.exitCode).toBe(1);
+    expect(marketProvider.whoami).not.toHaveBeenCalled();
+  });
+
   it('reports 503 as service-unavailable, not as an auth failure', async () => {
     vi.mocked(getApiKey).mockReturnValue('sk-test');
     vi.mocked(marketProvider.whoami).mockResolvedValue({

@@ -60,6 +60,54 @@ describe('withdraw', () => {
         unknownOption: '--team',
       });
     });
+
+    it('reports an error when --api-key has no value', () => {
+      const opts = parseWithdrawOptions(['my-skill', '--api-key']);
+      expect(opts.error).toBeDefined();
+      expect(opts.apiKey).toBeUndefined();
+    });
+
+    it('reports an error when --api-key is followed by another option', () => {
+      const opts = parseWithdrawOptions(['my-skill', '--api-key', '--team', 'x']);
+      expect(opts.error).toBeDefined();
+      expect(opts.apiKey).toBeUndefined();
+    });
+  });
+
+  it('rejects a malformed --api-key before any network request', async () => {
+    await runWithdraw(['my-skill', '--api-key']);
+
+    expect(process.exitCode).toBe(1);
+    expect(marketProvider.resolveMine).not.toHaveBeenCalled();
+  });
+
+  it('treats a 403 from resolveMine as an auth/permission failure, not "not found"', async () => {
+    vi.mocked(marketProvider.resolveMine).mockResolvedValue({
+      ok: false,
+      status: 403,
+      message: 'Key 已撤销',
+    });
+
+    await runWithdraw(['my-skill']);
+
+    expect(process.exitCode).toBe(1);
+    expect(errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('403'))).toBe(true);
+    expect(errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('未找到'))).toBe(false);
+  });
+
+  it('treats a 500 from resolveMine as a server error, not "not found" or "auth failed"', async () => {
+    vi.mocked(marketProvider.resolveMine).mockResolvedValue({
+      ok: false,
+      status: 500,
+      message: 'boom',
+    });
+
+    await runWithdraw(['my-skill']);
+
+    expect(process.exitCode).toBe(1);
+    expect(errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('500'))).toBe(true);
+    expect(errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('未找到'))).toBe(false);
+    expect(errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('login'))).toBe(false);
   });
 
   it('passes --api-key through to the resolver as a single-call override', async () => {

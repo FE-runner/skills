@@ -6,11 +6,15 @@ import { reportApiFailure } from './api-error.ts';
  * 解析 `whoami` 命令参数：接受 `--api-key <key>`（单次调用临时覆盖凭证）。
  * 其余参数沿用既有行为，忽略不解析。
  */
-export function parseWhoamiOptions(args: string[]): { apiKey?: string } {
+export function parseWhoamiOptions(args: string[]): { apiKey?: string; error?: string } {
   let apiKey: string | undefined;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--api-key') {
-      apiKey = args[++i];
+      const value = args[++i];
+      if (!value || value.startsWith('--')) {
+        return { error: '--api-key 需要一个非空的值' };
+      }
+      apiKey = value;
     }
   }
   return { apiKey };
@@ -21,7 +25,13 @@ export function parseWhoamiOptions(args: string[]): { apiKey?: string } {
  * 不修改任何本地/远端状态。
  */
 export async function runWhoami(args: string[] = []): Promise<void> {
-  const { apiKey: flagApiKey } = parseWhoamiOptions(args);
+  const { apiKey: flagApiKey, error: optionsError } = parseWhoamiOptions(args);
+
+  if (optionsError) {
+    console.error(`错误: ${optionsError}`);
+    process.exitCode = 1;
+    return;
+  }
 
   const apiKey = getApiKey({ flagKey: flagApiKey });
   if (!apiKey) {
