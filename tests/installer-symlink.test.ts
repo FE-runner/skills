@@ -16,7 +16,7 @@ import {
 } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { installSkillForAgent } from '../src/installer.ts';
+import { installSkillForAgent, installWellKnownSkillForAgent } from '../src/installer.ts';
 
 async function makeSkillSource(root: string, name: string): Promise<string> {
   const dir = join(root, 'source-skill');
@@ -183,6 +183,122 @@ describe('installer symlink regression', () => {
       const stats = await lstat(installedPath);
       expect(stats.isDirectory()).toBe(true);
       expect(stats.isSymbolicLink()).toBe(false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('installer file content', () => {
+  it('writes binary files byte-for-byte and text files as UTF-8', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'install-binary-'));
+    const projectDir = join(root, 'project');
+    await mkdir(projectDir, { recursive: true });
+
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0xff, 0x00]);
+    const skillMd = '---\nname: binary-skill\ndescription: test\n---\n';
+    const skill = {
+      installName: 'binary-skill',
+      files: new Map<string, string | Uint8Array>([
+        ['SKILL.md', skillMd],
+        ['assets/BlueFocusAI.png', png],
+      ]),
+    };
+
+    try {
+      const result = await installWellKnownSkillForAgent(skill, 'amp', {
+        cwd: projectDir,
+        mode: 'copy',
+        global: false,
+      });
+
+      expect(result.success).toBe(true);
+
+      // 二进制：按 Buffer 读回逐字节比对（不要用 'utf-8' 读）
+      const written = await readFile(join(result.path, 'assets', 'BlueFocusAI.png'));
+      expect(Buffer.isBuffer(written)).toBe(true);
+      expect(Array.from(written)).toEqual(Array.from(png));
+      // 首字节即 PNG magic number
+      expect(written[0]).toBe(0x89);
+      expect(written.subarray(1, 4).toString('latin1')).toBe('PNG');
+
+      // 文本：仍按 UTF-8 写入
+      const text = await readFile(join(result.path, 'SKILL.md'), 'utf-8');
+      expect(text).toBe(skillMd);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('fails before touching disk when binary content failed validation', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'install-binary-bad-'));
+    const projectDir = join(root, 'project');
+    await mkdir(projectDir, { recursive: true });
+
+    const skill = {
+      installName: 'bad-binary-skill',
+      files: new Map<string, string | Uint8Array>([
+        ['SKILL.md', '---\nname: bad-binary-skill\ndescription: test\n---\n'],
+      ]),
+      binaryFileErrors: ['assets/broken.png: 不是合法的标准 Base64，或解码结果为空'],
+    };
+
+    try {
+      const result = await installWellKnownSkillForAgent(skill, 'amp', {
+        cwd: projectDir,
+        mode: 'copy',
+        global: false,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('assets/broken.png');
+
+      // 目标目录既没有被创建，也没有被清空
+      await expect(lstat(result.path)).rejects.toThrow();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('leaves pre-existing installed content untouched when validation fails', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'install-binary-existing-'));
+    const projectDir = join(root, 'project');
+    await mkdir(projectDir, { recursive: true });
+
+    const good = {
+      installName: 'keep-existing-skill',
+      files: new Map<string, string | Uint8Array>([
+        ['SKILL.md', '---\nname: keep-existing-skill\ndescription: v1\n---\n'],
+      ]),
+    };
+    const bad = {
+      installName: 'keep-existing-skill',
+      files: new Map<string, string | Uint8Array>([
+        ['SKILL.md', '---\nname: keep-existing-skill\ndescription: v2\n---\n'],
+      ]),
+      binaryFileErrors: ['assets/broken.png: 不是合法的标准 Base64，或解码结果为空'],
+    };
+
+    try {
+      const first = await installWellKnownSkillForAgent(good, 'amp', {
+        cwd: projectDir,
+        mode: 'copy',
+        global: false,
+      });
+      expect(first.success).toBe(true);
+      const before = await readFile(join(first.path, 'SKILL.md'), 'utf-8');
+
+      const second = await installWellKnownSkillForAgent(bad, 'amp', {
+        cwd: projectDir,
+        mode: 'copy',
+        global: false,
+      });
+
+      expect(second.success).toBe(false);
+      // 已存在的旧版本内容逐字节不变
+      const after = await readFile(join(first.path, 'SKILL.md'), 'utf-8');
+      expect(after).toBe(before);
+      expect(after).toContain('v1');
     } finally {
       await rm(root, { recursive: true, force: true });
     }

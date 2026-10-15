@@ -45,3 +45,23 @@ cos/wellknown provider；目录级原子写入；服务端任何代码。
   CLI 重算会与服务端漂移，导致 `check`/`update` 误判。
 - **验收样本**：`cmmluoqvz000034faosun4oec/jq-research-mcp-suite`（含 `assets/BlueFocusAI.png` 与
   `scripts/__pycache__/*.pyc`）。
+
+## 实施决策（apply 阶段）
+
+- **严格 Base64 校验的落点与批准方案有一处偏差，原因必须记录**：批准方案写的是"`toMarketSkill` 只解码、
+  校验放 installer 入口"。但**解码之后 Base64 合法性已不可复原**（`Buffer.from` 的宽松解码丢掉了原始
+  字符串，回编码只能验证字节本身、无法判断输入是否合法），installer 拿不到可校验的原始值。因此实际落法为：
+  - `toMarketSkill` 在**解码的同时**做严格校验（这是唯一还能看到原始字符串的地方）；不合法或解码为空的
+    条目**不放进 map**，而是把 `"<path>: <原因>"` 记进新增字段 `MarketSkill.binaryFileErrors`。
+  - `installWellKnownSkillForAgent` **入口**读取该字段：非空即
+    `return { success: false, path, mode, error }`，位置与既有的 `isPathSafe` 早返回并列，**早于第一次
+    `cleanAndCreateDirectory()`**。批准方案要的"失败在 installer 入口判定、不落半成品"这条语义完整保留。
+  - `add.ts` 的两处整表替换（`probed` / `monitored`）各补一行 `skill.binaryFileErrors = …`，否则采集同意
+    分支换表时会把校验失败信息丢掉、静默装成缺文件。
+  - `fetchById` 的 `catch { return null }` 与返回类型未改动，调用点未新增 try/catch。
+- **"解码结果非空"按任务要求保留**（方案审查 Warning 2 提到合法的 0 字节文件会被判失败）：0 字节内容在服务端
+  会走文本分支（`isTextFileContent`），不会出现在 `binaryFiles`，因此不构成真实误伤。
+- **新增了一条"目标目录已有旧内容时校验失败"的用例**（方案审查 Warning 1 关注的歧义）：断言失败时旧版本文件
+  逐字节不变，即"不新增、不清空、不改写"，而不是"磁盘上不存在该技能的任何文件"。
+- **`cos.ts` / `wellknown.ts` 实测无需改动**：`Map<string, string>` 赋给
+  `Map<string, string | Uint8Array>` 在 TS 下通过（方法参数双变），`pnpm type-check` 无报错。

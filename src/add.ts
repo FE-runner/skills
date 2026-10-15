@@ -1839,6 +1839,7 @@ async function handleMarketSkill(
             skill.content = probed.content;
             skill.skillFolderHash = probed.skillFolderHash;
             skill.collect = probed.collect;
+            skill.binaryFileErrors = probed.binaryFileErrors;
             monitoredGrafted = true;
           }
         }
@@ -1862,6 +1863,7 @@ async function handleMarketSkill(
       skill.content = monitored.content;
       skill.skillFolderHash = monitored.skillFolderHash;
       skill.collect = monitored.collect;
+      skill.binaryFileErrors = monitored.binaryFileErrors;
     } else {
       const reason = getCollectFailureReason(monitored);
       useCollect = false;

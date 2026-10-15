@@ -74,6 +74,24 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
+ * 严格校验并解码服务端 `binaryFiles` 的标准 Base64 值。
+ *
+ * `Buffer.from(value, 'base64')` 不会抛错——非法字符会被静默忽略、可能返回被截断甚至为空的
+ * 结果，所以必须自己判定：字符集、`=` padding、长度 `% 4 === 0`、回编码与输入一致、且解码非空。
+ * 任一不满足返回 `null`（调用方据此判定安装失败，不落任何文件）。
+ */
+export function decodeBinaryFileContent(value: string): Uint8Array | null {
+  if (value.length === 0 || value.length % 4 !== 0) return null;
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(value)) return null;
+
+  const bytes = Buffer.from(value, 'base64');
+  if (bytes.length === 0) return null;
+  if (bytes.toString('base64') !== value) return null;
+
+  return bytes;
+}
+
+/**
  * 统一发起请求并解析为 `ApiResult<T>`。
  * 与既有只读方法（`resolve`/`fetchById`/`check`）的 `catch { return null }` 模式不同，
  * 这里保留 HTTP 状态码、服务端 code/message/校验详情，供命令层区分 401/404/网络异常。
@@ -130,8 +148,12 @@ async function requestApiResult<T>(url: string, init: RequestInit): Promise<ApiR
  * Represents a skill fetched from the Skills Market.
  */
 export interface MarketSkill extends RemoteSkill {
-  /** All files in the skill, keyed by relative path */
-  files: Map<string, string>;
+  /**
+   * All files in the skill, keyed by relative path.
+   * 文本文件为 `string`（UTF-8），二进制文件为原始字节（`Uint8Array`）；
+   * 两类内容共用同一张 map，`add.ts` 里的整表替换（probed/monitored）才不会漏掉二进制。
+   */
+  files: Map<string, string | Uint8Array>;
   /** The skill ID on the market */
   skillId: string;
   /** The resolved version string */
@@ -140,6 +162,11 @@ export interface MarketSkill extends RemoteSkill {
   skillFolderHash: string;
   /** 采集改造信息（fetchById 传 report=true 且作者开启时带返） */
   collect?: unknown;
+  /**
+   * `binaryFiles` 中未通过严格 Base64 校验的条目（`<path>: <原因>`）。
+   * 非空时安装必须失败且不得写盘（由 installer 入口判定）。
+   */
+  binaryFileErrors?: string[];
 }
 
 /**
@@ -153,6 +180,8 @@ interface InstallResponse {
   sourceUrl: string;
   version: string;
   files: Record<string, string>;
+  /** 二进制文件（标准 Base64，无 data URI 前缀）；没有二进制文件时该字段不出现 */
+  binaryFiles?: Record<string, string>;
   skillFolderHash: string;
   /** 采集改造信息：report=true 且作者开启采集时返回（含 config.meta 签名与改造版 files） */
   collect?: unknown;
@@ -477,9 +506,21 @@ export class MarketProvider {
   // ─── Private Helpers ───
 
   private toMarketSkill(data: InstallResponse, skillId: string): MarketSkill {
-    const files = new Map<string, string>();
+    const files = new Map<string, string | Uint8Array>();
     for (const [path, content] of Object.entries(data.files)) {
       files.set(path, content);
+    }
+
+    // 二进制与文本共用同一张 map；先 files 后 binaryFiles，同名以字节版本为准。
+    // 服务端按文件内容二选一（互斥），这里按覆盖语义处理只作防御。
+    const binaryFileErrors: string[] = [];
+    for (const [path, base64] of Object.entries(data.binaryFiles ?? {})) {
+      const bytes = decodeBinaryFileContent(base64);
+      if (bytes === null) {
+        binaryFileErrors.push(`${path}: 不是合法的标准 Base64，或解码结果为空`);
+        continue;
+      }
+      files.set(path, bytes);
     }
 
     return {
@@ -493,6 +534,7 @@ export class MarketProvider {
       skillId,
       skillFolderHash: data.skillFolderHash,
       ...(data.collect !== undefined ? { collect: data.collect } : {}),
+      ...(binaryFileErrors.length > 0 ? { binaryFileErrors } : {}),
     };
   }
 }

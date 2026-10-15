@@ -20,7 +20,13 @@ import type { WellKnownSkill } from './providers/wellknown.ts';
 /** Minimal interface for skills that carry their files in-memory (WellKnownSkill, CosSkill, etc.) */
 export interface FileBasedSkill {
   installName: string;
-  files: Map<string, string>;
+  /** 文本文件为 `string`（UTF-8），二进制文件为原始字节 */
+  files: Map<string, string | Uint8Array>;
+  /**
+   * 二进制内容校验失败的条目（由 provider 的严格 Base64 校验产出）。
+   * 非空时安装必须失败，且 SHALL 在清空/创建目标目录之前返回。
+   */
+  binaryFileErrors?: string[];
 }
 import { agents, detectInstalledAgents, isUniversalAgent } from './agents.ts';
 import { AGENTS_DIR, SKILLS_SUBDIR } from './constants.ts';
@@ -623,6 +629,16 @@ export async function installWellKnownSkillForAgent(
     };
   }
 
+  // 二进制内容校验未通过：必须在任何清空/创建目录之前失败，否则会留下半成品
+  if (skill.binaryFileErrors && skill.binaryFileErrors.length > 0) {
+    return {
+      success: false,
+      path: agentDir,
+      mode: installMode,
+      error: `二进制文件内容校验失败，已中止安装：${skill.binaryFileErrors.join('; ')}`,
+    };
+  }
+
   /**
    * Write all skill files to a directory (assumes directory already exists)
    */
@@ -640,7 +656,12 @@ export async function installWellKnownSkillForAgent(
         await mkdir(parentDir, { recursive: true });
       }
 
-      await writeFile(fullPath, content, 'utf-8');
+      if (typeof content === 'string') {
+        await writeFile(fullPath, content, 'utf-8');
+      } else {
+        // 二进制内容按原始字节写入，不传 encoding
+        await writeFile(fullPath, content);
+      }
     }
   }
 
