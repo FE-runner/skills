@@ -430,6 +430,8 @@ export interface AddOptions {
   copy?: boolean;
   /** 采集知情同意：true=同意监测版 / false=拒绝（原版）。仅首次询问、团队询问后带有；已定夺走 lock 不设 */
   collectConsent?: boolean;
+  /** 本次通过 --observability 显式请求使用可观测版本；未设置时沿用 lock 与交互询问 */
+  observability?: true;
   /** 团队流程已统一处理监测插件状态，跳过单 Skill 的重复检查 */
   skipPilotStatus?: boolean;
 }
@@ -1594,6 +1596,7 @@ async function preflightTeamCollectConsent(
   options: AddOptions
 ): Promise<TeamCollectDecision> {
   const collectSkillNames = new Set<string>();
+  const forceObservability = options.observability === true;
   let pendingCollectCount = 0;
   let lockedOnCount = 0;
 
@@ -1610,19 +1613,27 @@ async function preflightTeamCollectConsent(
       if (!skill || !hasValidCollect(skill)) continue;
 
       collectSkillNames.add(installName);
-      const locked = await getSkillConsent(installName);
-      if (locked === true) {
-        lockedOnCount++;
-      } else if (locked === 'missing') {
-        pendingCollectCount++;
+      if (!forceObservability) {
+        const locked = await getSkillConsent(installName);
+        if (locked === true) {
+          lockedOnCount++;
+        } else if (locked === 'missing') {
+          pendingCollectCount++;
+        }
       }
     } catch {
       // 单个 skill 探测失败忽略，不阻断安装
     }
   }
 
-  let consent = options.collectConsent;
-  if (consent === undefined && pendingCollectCount > 0 && !options.yes && process.stdin.isTTY) {
+  let consent = forceObservability ? true : options.collectConsent;
+  if (
+    !forceObservability &&
+    consent === undefined &&
+    pendingCollectCount > 0 &&
+    !options.yes &&
+    process.stdin.isTTY
+  ) {
     const confirmed = await p.confirm({
       message: `本团队有 ${pendingCollectCount} 个 skill 待确认数据采集，是否同意采集并安装监测版？（拒绝则安装原版，可稍后单独 track on）`,
     });
@@ -1633,11 +1644,15 @@ async function preflightTeamCollectConsent(
     consent = confirmed;
   }
 
-  const collectionEnabled = lockedOnCount > 0 || (consent === true && collectSkillNames.size > 0);
+  const collectionEnabled = forceObservability
+    ? collectSkillNames.size > 0
+    : lockedOnCount > 0 || (consent === true && collectSkillNames.size > 0);
   return {
     collectSkillNames,
     consent,
-    showPilotStatus: collectionEnabled || (consent === undefined && pendingCollectCount > 0),
+    showPilotStatus: forceObservability
+      ? collectionEnabled
+      : collectionEnabled || (consent === undefined && pendingCollectCount > 0),
     allowPilotPrompt: collectionEnabled && !options.yes && !!process.stdin.isTTY,
   };
 }
@@ -1878,19 +1893,7 @@ async function handleMarketSkill(
   let monitoredGrafted = false;
 
   if (installGlobally) {
-    const locked = await getSkillConsent(skill.installName);
-    if (locked === true) {
-      useCollect = true; // 已同意：装监测版
-      collectCapable = true;
-    } else if (locked === false) {
-      useCollect = false; // 已拒绝：装原版
-    } else if (options.collectConsent !== undefined) {
-      // 团队一次询问结果（D5，探测已在团队流程完成）
-      useCollect = options.collectConsent;
-      writeCollectConsent = options.collectConsent;
-      collectCapable = options.collectConsent;
-    } else {
-      // 首次未定夺：先以 report=true 探测是否带采集配置，再询问
+    if (options.observability === true) {
       spinner.start('Checking data-collection config...');
       const probed = await marketProvider.fetchById(
         resolved.id,
@@ -1900,35 +1903,85 @@ async function handleMarketSkill(
         true
       );
       const probedValid = probed !== null && hasValidCollect(probed);
-      collectCapable = probedValid;
+      collectCapable = probedValid && options.observability;
       if (probedValid) {
         spinner.stop(`「${skill.installName}」带数据采集配置`);
-        if (options.yes /* 非交互：-y/--all/update/非 TTY */) {
-          useCollect = false; // 默认拒绝（隐私缺省）
-          writeCollectConsent = false;
-          p.log.message(
-            pc.dim(
-              `「${skill.installName}」带数据采集，非交互安装默认不采集；可稍后运行 ${pc.cyan('track on ' + skill.installName)} 开启。`
-            )
-          );
-        } else {
-          const confirmed = await p.confirm({
-            message: `「${skill.installName}」带数据采集，是否同意采集并安装监测版？(同意=采集上报，拒绝=原版，可稍后 track 切换)`,
-          });
-          useCollect = !p.isCancel(confirmed) && !!confirmed;
-          writeCollectConsent = useCollect;
-          // 同意：直接复用探测到的监测版产物，省一次拉取
-          if (useCollect && probed) {
-            skill.files = probed.files;
-            skill.content = probed.content;
-            skill.skillFolderHash = probed.skillFolderHash;
-            skill.collect = probed.collect;
-            skill.binaryFileErrors = probed.binaryFileErrors;
-            monitoredGrafted = true;
-          }
+        useCollect = options.observability;
+        writeCollectConsent = options.observability;
+        if (options.observability && probed) {
+          skill.files = probed.files;
+          skill.content = probed.content;
+          skill.skillFolderHash = probed.skillFolderHash;
+          skill.collect = probed.collect;
+          skill.binaryFileErrors = probed.binaryFileErrors;
+          monitoredGrafted = true;
         }
       } else {
         spinner.stop();
+        if (options.observability) {
+          const reason = getCollectFailureReason(probed);
+          p.log.message(
+            pc.yellow(
+              reason
+                ? `「${skill.installName}」可观测改造失败：${reason}；本次安装原版。`
+                : `「${skill.installName}」未做可观测改造，无有效监测版；本次安装原版。`
+            )
+          );
+        }
+      }
+    } else {
+      const locked = await getSkillConsent(skill.installName);
+      if (locked === true) {
+        useCollect = true; // 已同意：装监测版
+        collectCapable = true;
+      } else if (locked === false) {
+        useCollect = false; // 已拒绝：装原版
+      } else if (options.collectConsent !== undefined) {
+        // 团队一次询问结果（D5，探测已在团队流程完成）
+        useCollect = options.collectConsent;
+        writeCollectConsent = options.collectConsent;
+        collectCapable = options.collectConsent;
+      } else {
+        // 首次未定夺：先以 report=true 探测是否带采集配置，再询问
+        spinner.start('Checking data-collection config...');
+        const probed = await marketProvider.fetchById(
+          resolved.id,
+          version,
+          author,
+          resolved.teamId,
+          true
+        );
+        const probedValid = probed !== null && hasValidCollect(probed);
+        collectCapable = probedValid;
+        if (probedValid) {
+          spinner.stop(`「${skill.installName}」带数据采集配置`);
+          if (options.yes /* 非交互：-y/--all/update/非 TTY */) {
+            useCollect = false; // 默认拒绝（隐私缺省）
+            writeCollectConsent = false;
+            p.log.message(
+              pc.dim(
+                `「${skill.installName}」带数据采集，非交互安装默认不采集；可稍后运行 ${pc.cyan('track on ' + skill.installName)} 开启。`
+              )
+            );
+          } else {
+            const confirmed = await p.confirm({
+              message: `「${skill.installName}」带数据采集，是否同意采集并安装监测版？(同意=采集上报，拒绝=原版，可稍后 track 切换)`,
+            });
+            useCollect = !p.isCancel(confirmed) && !!confirmed;
+            writeCollectConsent = useCollect;
+            // 同意：直接复用探测到的监测版产物，省一次拉取
+            if (useCollect && probed) {
+              skill.files = probed.files;
+              skill.content = probed.content;
+              skill.skillFolderHash = probed.skillFolderHash;
+              skill.collect = probed.collect;
+              skill.binaryFileErrors = probed.binaryFileErrors;
+              monitoredGrafted = true;
+            }
+          }
+        } else {
+          spinner.stop();
+        }
       }
     }
   }
@@ -3100,6 +3153,8 @@ export function parseAddOptions(args: string[]): { source: string[]; options: Ad
       options.fullDepth = true;
     } else if (arg === '--copy') {
       options.copy = true;
+    } else if (arg === '--observability') {
+      options.observability = true;
     } else if (arg && !arg.startsWith('-')) {
       source.push(arg);
     }

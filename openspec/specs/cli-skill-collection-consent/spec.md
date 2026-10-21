@@ -54,6 +54,30 @@ CLI SHALL 仅在安装响应中的 `collect` 同时包含 `config` 与非空字�
 - **WHEN** 用户以项目级方式（非 `--global`）`add` 安装带采集的 Skill
 - **THEN** CLI 不询问、安装原版、不写入 collectConsent；项目级 `skills-lock.json` 不含该字段
 
+### Requirement: add 命令的可观测版本开关
+
+`skills add` SHALL 支持无值开关 `--observability`。未传该开关时 SHALL NOT 强制指定本次版本，继续按既有 lock 三态与首次安装询问流程处理；传入该开关且为**全局安装**时，CLI SHALL 以 `report=true` 探测安装响应，并在 `collect` 有效时直接安装监测版、跳过本次采集询问、写入 `collectConsent=true`，该显式选择 SHALL 覆盖此前的 `collectConsent=false`。若响应无有效 `collect`，CLI SHALL 安装原版、SHALL NOT 写入 `collectConsent`，并明确提示用户该 Skill 未做可观测改造或改造失败。项目级安装传该开关时 SHALL NOT 记录采集状态或安装监测版。团队批量安装传该开关时 SHALL 以这一次选择覆盖团队内全部带有效 `collect` 的 Skill，SHALL NOT 再逐个询问；团队内未改造的 Skill SHALL 回退原版并提示用户。`--observability` 只决定本次安装产物；LoongSuite Pilot 的自动安装仍遵循交互登录与本机状态规则，`-y`/非 TTY SHALL NOT 自动执行安装脚本。
+
+#### Scenario: 显式使用可观测版本
+
+- **WHEN** 用户执行全局 `add --observability`，该 Skill 返回有效 `collect`，且 lock 中此前为 `collectConsent=false` 或缺失
+- **THEN** CLI 直接安装监测版、不询问采集，并写入 `collectConsent=true`
+
+#### Scenario: 显式使用但服务端无监测版
+
+- **WHEN** 用户执行全局 `add --observability`，但安装响应无有效 `collect`
+- **THEN** CLI 安装原版、不写入 `collectConsent`，并提示该 Skill 未做可观测改造或改造失败
+
+#### Scenario: 团队显式使用可观测版本
+
+- **WHEN** 用户执行团队全局安装并传入 `--observability`
+- **THEN** 团队内每个带有效 `collect` 的 Skill 安装监测版并写入 `collectConsent=true`，本次安装不再出现采集同意询问；未改造的 Skill 回退原版并提示用户
+
+#### Scenario: 项目级传入可观测开关
+
+- **WHEN** 用户在非全局安装中传入 `--observability`
+- **THEN** CLI 不安装监测版、不询问采集、不写入采集状态
+
 ### Requirement: 监测插件状态与自动安装
 
 全局安装带采集 Skill 时（采集询问已触发，或 lock 已定夺为同意），CLI SHALL 在采集询问之后展示本机 LoongSuite Pilot 监测插件状态（分层检测契约见 `cli-observability-agent`），并按状态分流：

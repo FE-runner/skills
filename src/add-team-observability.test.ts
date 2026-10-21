@@ -219,4 +219,50 @@ describe('team install observability confirmation', () => {
     expect(p.confirm).not.toHaveBeenCalled();
     expect(createRecordAndInstallPilot).not.toHaveBeenCalled();
   });
+
+  it('uses monitored builds when observability=true is explicit', async () => {
+    vi.mocked(p.confirm).mockReset();
+
+    await runAdd(['t_team-id/team-name'], {
+      agent: ['claude-code'],
+      global: true,
+      copy: true,
+      yes: true,
+      observability: true,
+    });
+
+    expect(p.confirm).not.toHaveBeenCalled();
+    expect(addSkillToLock).toHaveBeenCalledWith(
+      'skill-a',
+      expect.objectContaining({ collectConsent: true })
+    );
+    expect(addSkillToLock).toHaveBeenCalledWith(
+      'skill-b',
+      expect.objectContaining({ collectConsent: true })
+    );
+  });
+
+  it('warns and falls back when an explicit team skill has no observability build', async () => {
+    vi.mocked(p.confirm).mockReset();
+    vi.mocked(marketProvider.fetchById).mockImplementation(
+      async (id: string, _version?: string, _author?: string) =>
+        String(id) === 'id-skill-b'
+          ? (teamSkill(id, 'skill-b', false) as never)
+          : (teamSkill(id, String(id).replace(/^id-/, '')) as never)
+    );
+
+    await runAdd(['t_team-id/team-name'], {
+      agent: ['claude-code'],
+      global: true,
+      copy: true,
+      yes: true,
+      observability: true,
+    });
+
+    const messages = vi.mocked(p.log.message).mock.calls.map(([message]) => String(message));
+    const noCollectCall = vi.mocked(addSkillToLock).mock.calls.find(([name]) => name === 'skill-b');
+
+    expect(messages.some((message) => message.includes('未做可观测改造'))).toBe(true);
+    expect(noCollectCall?.[1]).not.toHaveProperty('collectConsent');
+  });
 });

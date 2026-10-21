@@ -175,6 +175,7 @@ ${BOLD}Add Options:${RESET}
   --copy                 Copy files instead of symlinking to agent directories
   --all                  Shorthand for --skill '*' --agent '*' -y
   --full-depth           Search all subdirectories even when a root SKILL.md exists
+  --observability        Use the monitored build for global installs
 
 ${BOLD}Remove Options:${RESET}
   -g, --global           Remove from global scope
