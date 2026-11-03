@@ -18,6 +18,13 @@ CLI SHALL 读取 `/api/team/installAll` 返回的每个 Skill 标识、名称、
 - **WHEN** 团队安装列表未返回 `installVersion` 但返回 `currentVersion=1.0.0`
 - **THEN** CLI 使用 `1.0.0` 作为兼容版本
 
+#### Scenario: Both release versions are missing
+
+- **WHEN** 团队安装列表的 `installVersion` 和 `currentVersion` 都缺失
+- **THEN** CLI 输出 Skill 与 Team 上下文警告
+- **AND** 不发起名称 resolve 或安装请求
+- **AND** 该 Skill 不计入 installable 列表
+
 ### Requirement: Team Skill installs by explicit identifier and team
 
 团队批量安装中的每个 Skill SHALL 使用列表返回的 Skill ID、teamId 和生效版本直接请求 Market 安装接口，SHALL NOT 先经过 `resolve(name)`、裸名公开安装或 author/name 私有安装。请求体 MUST 包含 `id`、`team` 和 `version`，且 `team` 优先于 author 或公开解析。
@@ -54,6 +61,36 @@ CLI SHALL 读取 `/api/team/installAll` 返回的每个 Skill 标识、名称、
 
 - **WHEN** 探测请求与正式安装请求的 teamId 或 installVersion 不一致
 - **THEN** CLI MUST NOT 复用该探测结果
+
+### Requirement: Team lock context supports collection toggles
+
+团队全局安装 SHALL 在现有 `SkillLockEntry` 中写入可选 `teamId`，不提升 lock schema version。`track on/off` SHALL 读取该字段，并以相同 Skill ID、teamId 和版本调用 Market 安装接口。旧 lock entry 缺少 `teamId` 时 SHALL 保持原有公开/私有重取行为。
+
+#### Scenario: Team install writes team context
+
+- **WHEN** 团队全局安装成功
+- **THEN** lock entry 保存 Skill ID、teamId 和 version
+- **AND** 仅当该 Skill 带有效采集配置且团队级采集决定已应用时保存 collectConsent
+- **AND** source 标识包含 teamId
+
+#### Scenario: Team skill without collect does not write consent
+
+- **WHEN** 团队全局安装成功但该 Skill 无有效采集配置
+- **THEN** lock entry 保存 teamId
+- **AND** 不写 collectConsent 字段
+
+#### Scenario: Track toggles a team skill
+
+- **WHEN** 用户对带 teamId 的团队 lock entry 执行 `track on` 或 `track off`
+- **THEN** CLI 请求 Market 时携带同一 teamId
+- **AND** 使用 lock 中记录的 Skill ID 和 version
+- **AND** 不重新走公开/私有名称解析
+
+#### Scenario: Legacy lock without teamId
+
+- **WHEN** lock entry 没有 teamId
+- **THEN** `track on/off` 保持原有行为
+- **AND** lock schema 不迁移、不清空
 
 ### Requirement: Existing single Skill install remains unchanged
 

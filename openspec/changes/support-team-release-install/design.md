@@ -11,11 +11,12 @@
 - 团队批量安装直接使用 Skill ID、teamId 和生效版本，不依赖名称重新解析。
 - 采集预检和正式安装使用同一个团队 release 上下文。
 - 兼容旧 Market 列表缺少 `installVersion` 的情况。
+- 团队全局安装保存 teamId，使 `track on/off` 可以恢复同一团队 release。
 - 保持普通公开、私有和 GitHub 安装路径不变。
 
 **Non-Goals:**
 
-- 不修改 `skills-lock` 文件结构或全局安装路径规则。
+- 不提升 `skills-lock` schema version，也不改变普通技能已有字段语义；只增加可选 `teamId`。
 - 不新增 Team 身份鉴权协议；仍使用 Market 现有 teamId 契约。
 - 不并行安装团队 Skill，也不改变现有 agent/scope/采集交互顺序。
 - 不处理团队 Skill 与公开 Skill 同名时的本地目录冲突策略。
@@ -41,12 +42,11 @@ TeamInstallSkill
 
 ### 2. 显式团队上下文通过 ParsedSource 内部字段传递
 
-在 `ParsedSource` 增加内部可选字段：
+复用现有 `marketVersion`，并在 `ParsedSource` 增加内部可选字段：
 
 ```text
 marketSkillId?
 marketTeamId?
-marketVersion?
 ```
 
 团队循环为每个 Skill 构造：
@@ -73,9 +73,13 @@ fetchById(id, version, undefined, teamId)
 
 ### 4. 采集预检和正式安装共用上下文
 
+`handleTeamInstall` 在进入 agent/scope 选择前先过滤出具备 `installVersion ?? currentVersion` 的 installable 列表。缺失版本的条目输出团队/Skill 上下文警告且不进入后续流程；空列表直接结束。agent/scope 选择、采集预检、安装循环和完成计数都只使用过滤后的列表。
+
 `preflightTeamCollectConsent` 增加 teamId 参数，并以每个 Skill 的 `id + teamId + installVersion + report=true` 探测。返回的 consent 集合按稳定的团队 Skill 标识索引，循环内据此传递给正式安装。
 
-正式安装仍复用 `handleMarketSkill` 的 agent、scope、symlink/copy、lock 写入和 Pilot 处理，避免复制整套安装逻辑。
+正式安装仍复用 `handleMarketSkill` 的 agent、scope、symlink/copy、lock 写入和 Pilot 处理，避免复制整套安装逻辑。团队全局安装向 `SkillLockEntry` 写入可选 `teamId`，source 使用 `market/team/<teamId>/<name>`；lock schema version 不变。
+
+`track.resolveTarget()` 读取可选 `teamId`，`track on/off` 调用 `fetchById` 时传入 teamId。写回 lock 时 MUST 保留原 teamId 和包含 teamId 的 source；连续 `track on -> off -> on` 不得丢失团队上下文。旧 lock 没有 teamId 时继续按普通公开/私有逻辑工作；团队 lock 不再用裸名公开请求重取版本。
 
 ### 5. 兼容与失败策略
 
@@ -90,6 +94,8 @@ fetchById(id, version, undefined, teamId)
 - [团队 release 的本地 installName 仍可能与同名公开 Skill 冲突] → 保持现有目录与 lock 语义，不在本 change 改路径规则；后续如需隔离单独变更。
 - [预检和正式安装使用不同上下文会探测错版本] → 两处共享同一个 teamId/installVersion 生成函数，并添加测试断言请求体完全一致。
 - [失败时不再回退可能减少可用性] → 团队语义必须保证安装正确版本，宁可报错也不安装同名公开或旧缓存内容。
+- [旧 lock 缺少 team 上下文] → 保持旧行为兼容；新团队安装写入 teamId，后续 track 才切换到团队 release。
+- [同名团队/公开 Skill 可能共享目录] → 保持既有本地路径规则，不在本 change 改变目录冲突；lock entry 通过 teamId 区分 Market 重取来源。
 
 ## Migration Plan
 
