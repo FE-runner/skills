@@ -109,46 +109,103 @@ export interface PublishOptions {
   version?: string;
   teamIds?: string[];
   public?: boolean;
+  displayName?: string;
+  brief?: string;
+  skillType?: string;
+  category?: string;
+  changelog?: string;
+  /** 三态：undefined=不修改/使用服务端默认，true=开启，false=关闭 */
+  collectEnabled?: boolean;
   /** `--api-key` flag：单次调用临时覆盖凭证，不落盘 */
   apiKey?: string;
   /** 参数解析错误（如 `--api-key` 缺值）；命中时应直接报错退出 */
   error?: string;
 }
 
-/** 解析 `publish` 命令参数：`path`（位置参数，缺省 cwd）、`--version`、`--team`、`--public`、`--api-key` */
+/** 解析 `publish` 命令参数：路径、市场元数据、可见性、团队和鉴权选项 */
 export function parsePublishOptions(args: string[]): PublishOptions {
   let path: string | undefined;
   let version: string | undefined;
   let teamIds: string[] | undefined;
   let isPublic: boolean | undefined;
+  let displayName: string | undefined;
+  let brief: string | undefined;
+  let skillType: string | undefined;
+  let category: string | undefined;
+  let changelog: string | undefined;
+  let collectEnabled: boolean | undefined;
   let apiKey: string | undefined;
+  let error: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (arg === '--version') {
-      version = args[++i];
-    } else if (arg === '--api-key') {
+    if (
+      arg === '--version' ||
+      arg === '--team' ||
+      arg === '--display-name' ||
+      arg === '--brief' ||
+      arg === '--skill-type' ||
+      arg === '--category' ||
+      arg === '--changelog' ||
+      arg === '--api-key'
+    ) {
       const value = args[++i];
-      if (!value || value.startsWith('--')) {
-        return { path: resolve(path ?? process.cwd()), error: '--api-key 需要一个非空的值' };
+      if (!value || value.startsWith('-')) {
+        error = `${arg} 需要一个非空的值`;
+        break;
       }
-      apiKey = value;
-    } else if (arg === '--team') {
-      const value = args[++i];
-      teamIds = value
-        ? value
-            .split(',')
-            .map((id) => id.trim())
-            .filter(Boolean)
-        : undefined;
+      if (arg === '--version') {
+        version = value;
+      } else if (arg === '--team') {
+        teamIds = value
+          .split(',')
+          .map((id) => id.trim())
+          .filter(Boolean);
+        if (teamIds.length === 0) {
+          error = '--team 至少需要一个团队 ID';
+          break;
+        }
+      } else if (arg === '--display-name') {
+        displayName = value;
+      } else if (arg === '--brief') {
+        brief = value;
+      } else if (arg === '--skill-type') {
+        skillType = value;
+      } else if (arg === '--category') {
+        category = value;
+      } else if (arg === '--changelog') {
+        changelog = value;
+      } else {
+        apiKey = value;
+      }
     } else if (arg === '--public') {
       isPublic = true;
+    } else if (arg === '--collect') {
+      collectEnabled = true;
+    } else if (arg === '--no-collect') {
+      collectEnabled = false;
+    } else if (arg && arg.startsWith('-')) {
+      error = `publish 不支持选项 ${arg}`;
+      break;
     } else if (arg && !arg.startsWith('--')) {
       path = arg;
     }
   }
 
-  return { path: resolve(path ?? process.cwd()), version, teamIds, public: isPublic, apiKey };
+  return {
+    path: resolve(path ?? process.cwd()),
+    version,
+    teamIds,
+    public: isPublic,
+    displayName,
+    brief,
+    skillType,
+    category,
+    changelog,
+    collectEnabled,
+    apiKey,
+    ...(error ? { error } : {}),
+  };
 }
 
 /**
@@ -162,6 +219,12 @@ export async function runPublish(args: string[]): Promise<void> {
     version,
     teamIds,
     public: isPublic,
+    displayName,
+    brief,
+    skillType,
+    category,
+    changelog,
+    collectEnabled,
     apiKey: flagApiKey,
     error: optionsError,
   } = parsePublishOptions(args);
@@ -204,7 +267,15 @@ export async function runPublish(args: string[]): Promise<void> {
     version,
     apiKey,
     isPublic ? 'PUBLIC' : undefined,
-    teamIds
+    teamIds,
+    {
+      displayName,
+      brief,
+      skillType,
+      category,
+      changelog,
+      collectEnabled,
+    }
   );
   if (!pushResult.ok) {
     reportApiFailure(pushResult);

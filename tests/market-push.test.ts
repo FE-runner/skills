@@ -55,4 +55,38 @@ describe('MarketProvider.push', () => {
     const sentBody = JSON.parse((init as RequestInit).body as string);
     expect(sentBody.visibility).toBe('PUBLIC');
   });
+
+  it('includes upload metadata and explicit false collection state', async () => {
+    const fetchMock = mockFetchOnce({
+      code: 'SUCCESS',
+      data: {
+        id: 's1',
+        name: 'my-skill',
+        currentVersion: '1.0.0',
+        visibility: 'PRIVATE',
+        status: 'APPROVED',
+      },
+    });
+    const provider = new MarketProvider();
+
+    await provider.push('---\nname: my-skill\n---\nbody', [], '1.0.0', 'sk-test', undefined, [], {
+      displayName: '我的技能',
+      brief: '技能简介',
+      skillType: 'TOOL',
+      category: 'DEVELOPMENT',
+      changelog: '首次发布',
+      collectEnabled: false,
+    });
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    const sentBody = JSON.parse((init as RequestInit).body as string);
+    expect(sentBody).toMatchObject({
+      displayName: '我的技能',
+      brief: '技能简介',
+      skillType: 'TOOL',
+      category: 'DEVELOPMENT',
+      changelog: '首次发布',
+      collectEnabled: false,
+    });
+  });
 });

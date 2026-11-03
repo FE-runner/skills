@@ -201,15 +201,43 @@ npx blueai-skills publish
 # 指定目录、覆盖版本号
 npx blueai-skills publish ./my-skill --version 2.0.0
 
+# 设置市场展示信息
+npx blueai-skills publish ./my-skill \
+  --display-name "我的技能" \
+  --brief "技能简介" \
+  --skill-type CMD \
+  --category AUTOMATION \
+  --changelog "首次发布"
+
 # 推送后分发到多个团队审核
 npx blueai-skills publish --team team-a,team-b
 
 # 推送为公开 Skill（新建/更新均走审核，非立即生效；--public 与 --team 可叠加）
 npx blueai-skills publish --public
 
+# 开启或关闭数据采集改造
+npx blueai-skills publish --collect
+npx blueai-skills publish --no-collect
+
 # 撤回处于 PENDING 状态的公开 Skill
 npx blueai-skills withdraw my-skill
 ```
+
+`publish` 支持的参数：
+
+| 参数                         | 说明                                                      |
+| ---------------------------- | --------------------------------------------------------- |
+| `[path]`                     | 本地技能目录，缺省为当前目录                              |
+| `--display-name <name>`      | 市场展示名称，不修改 `SKILL.md` 的 `name`                 |
+| `--brief <text>`             | 技能简介，最多 128 个字符；不传时由服务端 AI 生成         |
+| `--skill-type <type>`        | `SKILL`、`TOOL`、`CMD`、`MCP` 或 `PLUGIN`；不传时自动推断 |
+| `--category <name>`          | 技能分类；不传时更新继承原值、新建默认为 `OTHER`          |
+| `--version <x.y.z>`          | 覆盖版本号；不传时由服务端自动递增                        |
+| `--changelog <text>`         | 变更日志，最多 512 个字符；不传时由服务端 AI 生成         |
+| `--public`                   | 发布为公开 Skill，进入审核；默认私有                      |
+| `--collect` / `--no-collect` | 开启或关闭数据采集改造；更新时不传则保持原值              |
+| `--team <id1,id2>`           | 发布到指定团队，多个团队 ID 用逗号分隔                    |
+| `--api-key <key>`            | 本次请求临时使用指定 API Key                              |
 
 ### Agent 可观测（obs）
 
