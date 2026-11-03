@@ -131,4 +131,47 @@ describe('track command', () => {
     expect((lock.skills['demo'] as { collectConsent?: unknown }).collectConsent).toBe(false);
     expect(installWellKnownSkillForAgent).not.toHaveBeenCalled();
   });
+
+  it('track list shows team context', () => {
+    writeLock({
+      demo: marketSkillEntry({
+        teamId: 'team-a',
+        source: 'market/team/team-a/demo',
+      }),
+    });
+    const out = runCli(['track', 'list'], process.cwd());
+    expect(out.stdout).toContain('t_team-a/demo');
+  });
+
+  it('track on -> off -> on keeps teamId and team source', async () => {
+    writeLock({
+      demo: marketSkillEntry({
+        teamId: 'team-a',
+        source: 'market/team/team-a/demo',
+      }),
+    });
+    fetchMock.mockResolvedValue(
+      marketSkillResult({
+        collect: { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } },
+      })
+    );
+
+    await runTrack(['on', 'demo']);
+    await runTrack(['off', 'demo']);
+    await runTrack(['on', 'demo']);
+
+    for (const call of fetchMock.mock.calls) {
+      expect(call[0]).toBe('skill-123');
+      expect(call[1]).toBe('1.0.0');
+      expect(call[3]).toBe('team-a');
+    }
+    const entry = readLock().skills.demo as {
+      teamId?: string;
+      source?: string;
+      collectConsent?: boolean;
+    };
+    expect(entry.teamId).toBe('team-a');
+    expect(entry.source).toBe('market/team/team-a/demo');
+    expect(entry.collectConsent).toBe(true);
+  });
 });

@@ -135,17 +135,21 @@ describe('team install observability confirmation', () => {
               skills: [
                 {
                   id: 'id-skill-a',
+                  teamId: 'team-id',
                   name: 'skill-a',
                   displayName: 'Skill A',
                   currentVersion: '1.0.0',
+                  installVersion: '1.0.0',
                   visibility: 'PUBLIC',
                   authorId: 'author-a',
                 },
                 {
                   id: 'id-skill-b',
+                  teamId: 'team-id',
                   name: 'skill-b',
                   displayName: 'Skill B',
                   currentVersion: '1.0.0',
+                  installVersion: '1.0.0',
                   visibility: 'PUBLIC',
                   authorId: 'author-b',
                 },
@@ -177,6 +181,11 @@ describe('team install observability confirmation', () => {
     expect(messages.some((message) => message.includes('数据采集'))).toBe(true);
     expect(messages.some((message) => message.includes('LoongSuite Pilot'))).toBe(true);
     expect(createRecordAndInstallPilot).toHaveBeenCalledTimes(1);
+    expect(marketProvider.resolve).not.toHaveBeenCalled();
+    for (const call of vi.mocked(marketProvider.fetchById).mock.calls) {
+      expect(call[1]).toBe('1.0.0');
+      expect(call[3]).toBe('team-id');
+    }
   });
 
   it('writes collect consent only to collect-capable team skills', async () => {
@@ -197,6 +206,7 @@ describe('team install observability confirmation', () => {
     const noCollectCall = vi.mocked(addSkillToLock).mock.calls.find(([name]) => name === 'skill-b');
 
     expect(collectCall?.[1]).toMatchObject({ collectConsent: true });
+    expect(noCollectCall?.[1]).toMatchObject({ teamId: 'team-id' });
     expect(noCollectCall?.[1]).not.toHaveProperty('collectConsent');
   });
 
@@ -264,5 +274,45 @@ describe('team install observability confirmation', () => {
 
     expect(messages.some((message) => message.includes('未做可观测改造'))).toBe(true);
     expect(noCollectCall?.[1]).not.toHaveProperty('collectConsent');
+  });
+
+  it('skips team skill when both install versions are missing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              data: {
+                teamName: 'Team',
+                skills: [
+                  {
+                    id: 'id-missing-version',
+                    name: 'missing-version',
+                    displayName: 'Missing',
+                    currentVersion: null,
+                    visibility: 'PUBLIC',
+                    authorId: 'author-a',
+                  },
+                ],
+              },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          )
+      )
+    );
+
+    await runAdd(['t_team-id/team-name'], {
+      agent: ['claude-code'],
+      global: true,
+      copy: true,
+      yes: true,
+    });
+
+    expect(marketProvider.fetchById).not.toHaveBeenCalled();
+    const messages = vi.mocked(p.log.warn).mock.calls.map(([message]) => String(message));
+    expect(
+      messages.some((message) => message.includes('missing installVersion/currentVersion'))
+    ).toBe(true);
   });
 });

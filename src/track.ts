@@ -24,7 +24,10 @@ async function runTrackList(): Promise<void> {
   for (const [name, entry] of Object.entries(entries)) {
     const consent = entry.collectConsent;
     const status = consent === true ? 'on' : consent === false ? 'off' : '未定夺（首次未询问）';
-    rows.push({ name, status });
+    rows.push({
+      name: entry.teamId ? `t_${entry.teamId}/${name}` : name,
+      status,
+    });
   }
 
   if (rows.length === 0) {
@@ -50,8 +53,10 @@ async function runTrackList(): Promise<void> {
 interface ResolvedTarget {
   skillId: string;
   name: string;
+  source: string;
   version?: string;
   authorId?: string;
+  teamId?: string;
 }
 
 async function resolveTarget(skillName: string): Promise<ResolvedTarget | null> {
@@ -68,8 +73,10 @@ async function resolveTarget(skillName: string): Promise<ResolvedTarget | null> 
   return {
     skillId: entry.skillPath,
     name: skillName,
+    source: entry.source,
     version: entry.version,
     authorId: entry.authorId,
+    teamId: entry.teamId,
   };
 }
 
@@ -88,7 +95,7 @@ async function runTrackToggle(skillName: string, report: boolean): Promise<void>
     target.skillId,
     target.version,
     target.authorId,
-    undefined,
+    target.teamId,
     report
   );
 
@@ -123,13 +130,14 @@ async function runTrackToggle(skillName: string, report: boolean): Promise<void>
 
   // 写回 lock（collectConsent + 覆盖后的 skillFolderHash）
   await addSkillToLock(skillName, {
-    source: `market/${skillName}`,
+    source: target.source || `market/${skillName}`,
     sourceType: 'market',
     sourceUrl: skill.sourceUrl,
     skillFolderHash: skill.skillFolderHash,
     skillPath: skill.skillId,
     version: skill.version,
     authorId: target.authorId,
+    teamId: target.teamId,
     collectConsent: report,
   });
 

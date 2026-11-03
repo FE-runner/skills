@@ -26,3 +26,10 @@
 - `handleMarketSkill` 依赖 resolve 结果；团队上下文必须绕过 resolve 且保留普通 market fallback 不受影响。
 - 采集团队 consent 的 key 不能只依赖裸名，否则同名团队/公开 Skill 会串用状态。
 - track 写回是整个 entry 覆盖，修改时必须显式携带 teamId/source，否则第一次 toggle 后会丢失团队上下文。
+
+## 实施决策
+
+- 团队列表缺少 installVersion/currentVersion 时在进入 agent/scope 选择前过滤并告警，后续流程只使用 installableSkills。
+- 团队安装通过 ParsedSource 的 marketSkillId/marketTeamId 跳过 resolve，并复用 handleMarketSkill 的 agent、scope、采集与 lock 流程。
+- 团队 preflight 以 teamId+skillId+installVersion 探测，正式安装与探测共享同一 release 上下文。
+- lock 新增可选 teamId，不提升 schema version；track 重取和写回都保留 teamId 与团队 source。

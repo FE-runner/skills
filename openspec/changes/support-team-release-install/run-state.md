@@ -1,15 +1,15 @@
 # Run State
 
 - Change: support-team-release-install
-- Stage: review-plan
+- Stage: apply
 - Source branch: master
 - Development branch: feature/team-release-install
-- Last good commit: 59a3a912329b10bc2266631155d40b18751536d9
-- Next safe action: `@lyx-apply support-team-release-install`（需等 Market change 先提供接口）
+- Last good commit: 352edd5
+- Next safe action: 待本次 apply 阶段统一提交后执行 review-code
 
 ## Task Evidence
 
-- Completed tasks: 0/19
+- Completed tasks: 19/19
 
 ## Baseline Eval
 
@@ -17,11 +17,14 @@
 
 ## Modified Eval (intermediate)
 
-- not-executed — propose 阶段尚未修改业务代码
+- targeted-tests: passed — team install、provider、track 和 source parser 测试通过
+- full-vitest: passed — `pnpm test --run` 退出码 0，41 个测试文件、608 个用例通过
 
 ## Modified Eval (final)
 
-- not-executed — 等待 apply 阶段
+- typescript: passed — `pnpm type-check` 退出码 0
+- format: passed — `pnpm format:check` 退出码 0
+- build: passed — `pnpm build` 退出码 0
 
 ## Review State
 

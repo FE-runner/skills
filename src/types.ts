@@ -79,6 +79,8 @@ export interface ParsedSource {
   skillFilter?: string;
   /** Market skill ID resolved from name */
   marketSkillId?: string;
+  /** Team ID for explicit team release installs */
+  marketTeamId?: string;
   /** Market skill name (without author prefix or version suffix) */
   marketName?: string;
   /** Author prefix for private market skills (userId) */

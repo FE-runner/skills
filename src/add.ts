@@ -1381,9 +1381,12 @@ async function handleCosSkills(
  */
 interface TeamInstallSkill {
   id: string;
+  teamId?: string;
   name: string;
   displayName: string | null;
   currentVersion: string | null;
+  installVersion?: string | null;
+  releaseId?: string;
   visibility: string;
   authorId: string;
 }
@@ -1391,6 +1394,14 @@ interface TeamInstallSkill {
 interface TeamInstallData {
   teamName: string;
   skills: TeamInstallSkill[];
+}
+
+function resolveTeamInstallVersion(skill: TeamInstallSkill): string | null {
+  return skill.installVersion || skill.currentVersion || null;
+}
+
+function getTeamCollectKey(teamId: string, skillId: string): string {
+  return `${teamId}:${skillId}`;
 }
 
 async function handleTeamInstall(
@@ -1428,6 +1439,19 @@ async function handleTeamInstall(
     p.outro(pc.yellow(`该团队暂无可安装的 skill`));
     return;
   }
+
+  const installableSkills = teamData.skills.filter((skill) => {
+    const version = resolveTeamInstallVersion(skill);
+    if (version) return true;
+    p.log.warn(`Skipping ${skill.name} from team ${teamId}: missing installVersion/currentVersion`);
+    return false;
+  });
+  if (installableSkills.length === 0) {
+    spinner.stop(pc.yellow('No installable skills'));
+    p.outro(pc.yellow('该团队暂无可安装的 skill（均缺少生效版本）'));
+    return;
+  }
+  teamData = { ...teamData, skills: installableSkills };
 
   const resolvedTeamName = teamData.teamName || teamName;
   spinner.stop(
@@ -1522,7 +1546,7 @@ async function handleTeamInstall(
 
   // 团队批量采集与监测插件状态均在一次预检中处理，避免每个 skill 重复询问或提示。
   const teamCollectDecision = installGlobally
-    ? await preflightTeamCollectConsent(teamData.skills, options)
+    ? await preflightTeamCollectConsent(teamData.skills, teamId, options)
     : undefined;
   if (teamCollectDecision?.showPilotStatus) {
     await promptForPilotInstallation(teamCollectDecision.allowPilotPrompt);
@@ -1532,22 +1556,26 @@ async function handleTeamInstall(
 
   // 依次安装每个 skill，复用 handleMarketSkill 的单 skill 安装逻辑
   for (const skill of teamData.skills) {
-    const installName =
-      skill.visibility === 'PRIVATE' ? `${skill.authorId}/${skill.name}` : skill.name;
+    const installVersion = resolveTeamInstallVersion(skill);
+    if (!installVersion) continue;
     const skillOptions: AddOptions = {
       ...sharedOptions,
-      collectConsent: teamCollectDecision?.collectSkillNames.has(installName)
+      collectConsent: teamCollectDecision?.collectSkillNames.has(
+        getTeamCollectKey(teamId, skill.id)
+      )
         ? teamCollectDecision.consent
         : undefined,
     };
 
     await handleMarketSkill(
-      installName,
+      `t_${teamId}/${skill.name}`,
       {
         type: 'market',
-        url: installName,
+        url: `t_${teamId}/${skill.name}`,
+        marketSkillId: skill.id,
+        marketTeamId: teamId,
         marketName: skill.name,
-        marketAuthor: skill.visibility === 'PRIVATE' ? skill.authorId : undefined,
+        marketVersion: installVersion,
       },
       skillOptions,
       p.spinner()
@@ -1593,6 +1621,7 @@ interface TeamCollectDecision {
 
 async function preflightTeamCollectConsent(
   skills: TeamInstallSkill[],
+  teamId: string,
   options: AddOptions
 ): Promise<TeamCollectDecision> {
   const collectSkillNames = new Set<string>();
@@ -1601,20 +1630,15 @@ async function preflightTeamCollectConsent(
   let lockedOnCount = 0;
 
   for (const s of skills) {
-    const installName = s.visibility === 'PRIVATE' ? `${s.authorId}/${s.name}` : s.name;
+    const version = resolveTeamInstallVersion(s);
+    if (!version) continue;
     try {
-      const skill = await marketProvider.fetchById(
-        s.id,
-        s.currentVersion ?? undefined,
-        s.visibility === 'PRIVATE' ? s.authorId : undefined,
-        undefined,
-        true
-      );
+      const skill = await marketProvider.fetchById(s.id, version, undefined, teamId, true);
       if (!skill || !hasValidCollect(skill)) continue;
 
-      collectSkillNames.add(installName);
+      collectSkillNames.add(getTeamCollectKey(teamId, s.id));
       if (!forceObservability) {
-        const locked = await getSkillConsent(installName);
+        const locked = await getSkillConsent(skill.installName);
         if (locked === true) {
           lockedOnCount++;
         } else if (locked === 'missing') {
@@ -1716,10 +1740,32 @@ async function handleMarketSkill(
   const skillName = parsed.marketName || source;
   const author = parsed.marketAuthor;
   const version = parsed.marketVersion;
+  const teamId = parsed.marketTeamId;
 
-  const displayName = author ? `${author}/${skillName}` : skillName;
-  spinner.start(`Resolving "${displayName}" from Skills Market...`);
-  const resolved = await marketProvider.resolve(skillName, author);
+  const displayName = teamId
+    ? `t_${teamId}/${skillName}`
+    : author
+      ? `${author}/${skillName}`
+      : skillName;
+  let resolved: {
+    id: string;
+    name: string;
+    currentVersion: string;
+    authorId: string;
+    teamId?: string;
+  } | null = null;
+  if (parsed.marketSkillId && teamId) {
+    resolved = {
+      id: parsed.marketSkillId,
+      name: skillName,
+      currentVersion: version || '',
+      authorId: '',
+      teamId,
+    };
+  } else {
+    spinner.start(`Resolving "${displayName}" from Skills Market...`);
+    resolved = await marketProvider.resolve(skillName, author);
+  }
 
   if (!resolved) {
     // Market 找不到，如果输入是 author/name 格式，回退到 GitHub shorthand
@@ -1737,7 +1783,12 @@ async function handleMarketSkill(
   spinner.start('Downloading skill files...');
   // 采集知情同意（D2）：现用「原版先行」策略——先以 report=false 拿原版（确定性），
   //   若命中规则（已定夺 true / 首次询问同意 / 团队同意）再以 report=true 拉监测版替换。
-  const skill = await marketProvider.fetchById(resolved.id, version, author, resolved.teamId);
+  const skill = await marketProvider.fetchById(
+    resolved.id,
+    version,
+    author,
+    teamId || resolved.teamId
+  );
 
   if (!skill) {
     spinner.stop(pc.red('Failed to fetch skill'));
@@ -2074,9 +2125,11 @@ async function handleMarketSkill(
   const failed = results.filter((r) => !r.success);
 
   // Track installation
-  const sourceIdentifier = parsed.marketAuthor
-    ? `market/${parsed.marketAuthor}/${skill.installName}`
-    : `market/${skill.installName}`;
+  const sourceIdentifier = teamId
+    ? `market/team/${teamId}/${skill.installName}`
+    : parsed.marketAuthor
+      ? `market/${parsed.marketAuthor}/${skill.installName}`
+      : `market/${skill.installName}`;
 
   track({
     event: 'install',
@@ -2097,7 +2150,8 @@ async function handleMarketSkill(
         skillFolderHash: skill.skillFolderHash,
         skillPath: skill.skillId,
         version: skill.version,
-        authorId: resolved.authorId,
+        authorId: teamId ? undefined : resolved.authorId,
+        ...(teamId ? { teamId } : {}),
         ...(writeCollectConsent !== undefined ? { collectConsent: writeCollectConsent } : {}),
       });
     } catch {
