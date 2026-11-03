@@ -15,3 +15,10 @@ Test mode: normal（来源：宿主默认配置）
 - `CI=1 pnpm test`：退出码 0；40 个测试文件、604 个测试全部通过。
 - `pnpm type-check`：退出码 0；无 TypeScript 错误。
 - `pnpm build`：退出码 0；生成 licenses 并完成 obuild，产物总计 770 kB。
+
+## Spec Sync
+
+- `openspec instructions specs --change support-binary-file-install --json`：退出码 0，获取 specs artifact 规则。
+- 创建主 spec `openspec/specs/skill-install-file-content/spec.md`，合并 4 个 Requirement、7 个 Scenario。
+- `openspec validate --specs`：退出码 0，10 个 spec 全部通过。
+- delta 与主 spec 的 Requirement/Scenario 内容逐字比对无差异，主 spec 不含 delta 操作头。
