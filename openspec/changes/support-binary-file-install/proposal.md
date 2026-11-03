@@ -13,13 +13,14 @@
 - `InstallResponse` 新增可选字段 `binaryFiles?: Record<string, string>`（标准 Base64，带 `=` padding，无
   data URI 前缀）。
 - `MarketSkill.files` 与 `FileBasedSkill.files` 的值类型从 `string` 放宽为 `string | Uint8Array`。
-- `toMarketSkill()` 只做「解码 + 存字节」：先按现有逻辑写入 `files`，再把 `binaryFiles` 的每项
-  `Buffer.from(content, 'base64')` 合并进**同一张 map**（同名覆盖，作防御式写法）。保持单 map 是为了让
-  `add.ts` 中 `skill.files = probed.files` / `monitored.files` 这类整表替换不会漏掉二进制。
-- `installWellKnownSkillForAgent()` **入口**新增一次前置校验：整张 map 一次校验完毕，任一不通过即
-  `return { success: false, error }`，**早于**第一次 `cleanAndCreateDirectory()`，因此失败时不碰磁盘、
-  不留半成品。校验口径为严格 Base64：`^[A-Za-z0-9+/]*={0,2}$`、长度 `% 4 === 0`、解码后回编码与输入
-  一致、解码结果非空。
+- `toMarketSkill()` 在解析响应时严格校验并解码 `binaryFiles`：合法项按原始字节合并进 `files` 所在的
+  **同一张 map**（同名覆盖，作防御式写法）；非法项不进入 map，并记录到 `binaryFileErrors`。保持单 map
+  是为了让 `add.ts` 中 `skill.files = probed.files` / `monitored.files` 这类整表替换不会漏掉二进制。
+  校验口径为严格 Base64：`^[A-Za-z0-9+/]*={0,2}$`、长度 `% 4 === 0`、解码后回编码与输入一致、
+  解码结果非空。
+- `installWellKnownSkillForAgent()` **入口**读取 `binaryFileErrors`，非空即 `return { success: false,
+  error }`，**早于**第一次 `cleanAndCreateDirectory()`，因此不新增、不清空、不改写任何文件；已有旧版本
+  内容保持原状，也不会留下本次安装的半成品。
 - `writeSkillFiles()` 按值类型写盘：字符串按 `'utf-8'` 写；字节直接 `writeFile(fullPath, bytes)`，不传
   encoding。
 - `skillFolderHash` 原样写入 lock，不做二次计算或改写。
