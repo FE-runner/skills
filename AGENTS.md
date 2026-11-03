@@ -6,6 +6,14 @@ This file provides guidance to AI coding agents working on the `skills` CLI code
 
 `skills` is the CLI for the open agent skills ecosystem.
 
+## Companion Skill
+
+The user-facing usage guide for this CLI is maintained as the `blueai-skills-cli` skill:
+
+`/Users/ly/codes/learn/liyang-skills/src/blueai-skills-cli/SKILL.md`
+
+When changing commands, flags, output, installation behavior, or user workflows, also review and update this skill and its `references/` documents when applicable.
+
 ## Commands
 
 | Command                       | Description                                         |
