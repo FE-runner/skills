@@ -1,11 +1,11 @@
 # Run State
 
 - Change: support-team-release-install
-- Stage: review-code-fix
+- Stage: archive-ready
 - Source branch: master
 - Development branch: feature/team-release-install
-- Last good commit: 352edd5
-- Next safe action: 统一提交 review-code 修复后进入 lyx-archive
+- Last good commit: db3475f
+- Next safe action: 同步 specs、移动 change 到 archive 并提交归档
 
 ## Task Evidence
 
@@ -38,13 +38,19 @@
 - review-code Round 2: 1 Critical, 0 Warning, 0 Info；Critical 已修复，发现相邻 consent 回写问题
 - review-code Round 3: 0 Critical, 0 Warning, 0 Info；正常清零
 - Termination type: normal
-- Review-code fix commit: 待统一提交归属
+- Review-code fix commit: 8160118
 
 ## Verification
 
 - OpenSpec validation: passed — `openspec validate --changes support-team-release-install`
 - OpenSpec strict: passed — `openspec validate support-team-release-install --strict`
 - review-code diff check: passed — `git diff --check ced881494f72732307e234e1212fd3a3bbf263e6`
+- final testMode: normal（source: host default）
+- full tests: passed — `pnpm test --run`，42 files / 616 tests
+- typecheck: passed — `pnpm type-check`
+- format: passed — `pnpm format:check`
+- build: passed — `pnpm build`
+- archive verification fix: passed — 补齐 getAllLockedSkills import 与 test null 契约后，全部门禁复跑通过
 
 ## Rulings
 
