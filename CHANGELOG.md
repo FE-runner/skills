@@ -2,12 +2,15 @@
 
 > 本 CHANGELOG 仅记录 BMC 内部 Fork（`-bmc` 标签）自身的改动，不包含上游 `blueai-skills` 原始项目的版本历史。
 
-## [Unreleased]
+## [1.4.7-bmc1.8.0] - 2026-11-04
 
 ### 新功能
 
 - **开发版（内测）分发**：新增 `dev-v*` 标签触发的 CI 发布通道（`npm publish --tag dev`，不影响 `latest`，且不为开发版创建 GitHub Release）；开发版构建与正式版只有两处差异——默认市场为内网 `https://blueai-skills-market.domob-inc.cn`、npx 提示为 `@dev`；凭证、全局锁、技能目录与真实 agent 目录均与正式版共用，开发版安装的技能可被 Claude / Codex 直接使用（LoongSuite Pilot 保持 `~/.loongsuite-pilot`）。正式构建的默认值不变。
 - **开发版隔离范围收窄**：移除上一版开发构建引入的状态根隔离与 `BLUEAI_SKILLS_HOME` / `BLUEAI_SKILLS_DEV` 两个临时开关；共用本地状态后，开发版与正式版的登录态、技能清单、全局锁统一，已知代价是两个市场的 `skillId` 不互通（正式版 `check` 对开发版装的技能匹配不上）与同名技能互相覆盖。
+- **团队 Skill 集合安装**：新增 `t_<teamId>/<teamName>` 入口，按团队生效 release 的 Skill ID、teamId 和 `installVersion` 批量安装；待审新版不会阻塞团队已批准旧版，采集预检与实际安装使用同一版本，全局 lock 保存 teamId 以支持 `track on/off`。
+- **二进制资产无损安装**：Market 安装响应中的 `binaryFiles` 会与文本文件合并处理，二进制内容按原始字节落盘；写入前统一校验标准 Base64，校验失败不会创建、清空或改写目标目录。
+- **`publish` 上传元数据**：新增 `--display-name`、`--brief`、`--skill-type`、`--category`、`--changelog`、`--collect` / `--no-collect` 和 `--api-key`，并支持在一次 push 请求内完成 `--team` 分发。
 - **`obs` 命令对齐 LoongSuite Pilot（替换 hermes/openclaw 双探针）**：
   - 删除 `--agent <hermes|openclaw>`：创建改为 `obs <agentName> [--note …]`（`add` 仍为 create 别名），create 请求体不再携带 `agentType`
   - 双平台命令消费：create/renewToken 响应字段改为 `installCommand: { unix, windows }`，`obs refresh` 打印两条命令，`obs install` 按宿主平台（`process.platform`）选择对应命令执行（unix 走 `/bin/sh -c`，Windows 走 `powershell.exe -ExecutionPolicy Bypass`）
@@ -31,6 +34,7 @@
 - **采集同意 spec 产物文件名对齐 market 硬切**：跨仓契约 spec 中残留的旧文件名 `.blueai-skills-market/obs-manifest.yaml` / `.blueai-skills-market/obs-run` 更正为 `.blueai-skills-market/bsm-obs-manifest.yaml` / `.blueai-skills-market/bsm-obs-run.cjs`；CLI 行为不变，仍只按响应 `files` 目录结构落盘、不解析文件名
 - **采集同意询问从未触发**：Market 端仅 `report=true` 携带 `collect`，原版（`report=false`）先行拉取后判 collect 恒为 false——首次未定夺时改为先 `report=true` 探测再询问，同意后复用探测产物省一次拉取
 - **`report` 参数类型错误**：`fetchById` 发字符串 `'true'`，Market 契约为布尔（路由 `body.report === true` 判定）——改发 `true`，修复单装探测、同意询问、团队批量探测全链路拿不到 collect 的问题
+- **开发版 dry-run 误发布**：`pnpm publish:dev -- --dry-run` 传入的分隔符此前会被当作普通参数，导致预检实际创建并推送 `dev-v*` 标签；现在脚本会剥离首个 `--`，未知或多余参数直接失败，不再落入发布路径。
 
 ## [1.4.7-bmc1.6.5] - 2026-10-08
 
