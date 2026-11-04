@@ -6,6 +6,7 @@ import { runTrack } from './track.ts';
 import { runCli } from './test-utils.ts';
 import { marketProvider } from './providers/market.ts';
 import { installWellKnownSkillForAgent } from './installer.ts';
+import * as p from '@clack/prompts';
 
 vi.mock('./installer.ts', () => ({
   installWellKnownSkillForAgent: vi.fn().mockResolvedValue({
@@ -247,11 +248,15 @@ describe('track command', () => {
       }),
     });
     fetchMock.mockResolvedValue(null);
+    const errorSpy = vi.spyOn(p.log, 'error');
 
     await runTrack(['on', 'ts_skill-team-a/demo']);
 
     const entry = readLock().skills.demo as { collectConsent?: boolean };
     expect(entry.collectConsent).toBe(false);
     expect(installWellKnownSkillForAgent).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('团队版本不可用：ts_skill-team-a/demo v1.0.0')
+    );
   });
 });

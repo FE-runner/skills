@@ -1,11 +1,11 @@
 # Run State
 
 - Change: add-team-skill-install-command
-- Stage: apply
+- Stage: review-code
 - Source branch: develop
 - Development branch: feature/team-skill-install-command
-- Last good commit: dc4bdf32f9a9d7220f5e7c5067f9d374faf250e6
-- Next safe action: commit apply changes
+- Last good commit: fef4907b11f266879ac9c05b07dd45b7a7d66d90
+- Next safe action: commit review-code fixes, then await `@lyx-archive` verification
 
 ## Task Evidence
 
@@ -35,14 +35,19 @@
 - review-plan: Round 1: 1 Critical, 3 Warning, 1 Info; Critical accepted/fixed, file-path and explicit-version Warnings fixed, release-boundary Warning clarified and impact annotation to be reclassified, Info wording accepted
 - review-plan: Round 2: 0 Critical, 0 Warning, 0 Info; all prior Critical/Warnings resolved and normal clear
 - review-plan termination type: normal
-- review-code: not-started
+- review-code: Round 1: 0 Critical, 1 Warning, 0 Info; team release error-message Warning accepted/fixed
+- review-code: Round 2: 0 Critical, 0 Warning, 0 Info; Warning resolved
+- review-code termination type: normal
 
 ## Verification
 
 - `openspec validate --changes add-team-skill-install-command`: passed
 - review-plan Round 1 fixes: `npx prettier --write` exit 0, `openspec validate` exit 0, `git diff --check` exit 0
 - review-plan Round 2: subagent confirmed six-file diff set, validate exit 0, diff check exit 0, no untracked files
-- apply verification completed; apply commit attribution pending
+- apply verification completed
+- apply commit: `fef4907b11f266879ac9c05b07dd45b7a7d66d90`
+- review-code Round 1 fix: `npx prettier --write` exit 0 and `git diff --check` exit 0; tests/typecheck/build deferred to archive gate
+- review-code Round 2: subagent confirmed three-file incremental fix, no undeclared changes, no new Critical
 
 ## Rulings
 

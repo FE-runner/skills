@@ -128,7 +128,11 @@ async function runTrackToggle(skillName: string, report: boolean): Promise<void>
   );
 
   if (!skill) {
-    p.log.error(`无法从 Market 获取「${target.name}」（HTTP 失败或未找到）`);
+    p.log.error(
+      target.skillTeamId
+        ? `团队版本不可用：ts_${target.skillTeamId}/${target.teamSkillName || target.name} v${target.version ?? 'unknown'}`
+        : `无法从 Market 获取「${target.name}」（HTTP 失败或未找到）`
+    );
     return;
   }
 
