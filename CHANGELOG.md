@@ -2,6 +2,12 @@
 
 > 本 CHANGELOG 仅记录 BMC 内部 Fork（`-bmc` 标签）自身的改动，不包含上游 `blueai-skills` 原始项目的版本历史。
 
+## [1.4.7-bmc1.8.1] - 2026-11-04
+
+### 修复
+
+- **团队 Skill 批量安装首个 Skill 失败**：团队安装会预解析 Skill ID、teamId 和版本，因此跳过 `handleMarketSkill` 的 spinner 启动；原逻辑仍无条件停止 spinner，触发 `s is not a function` 并中止全部 Skill。现在解析前后统一配对 spinner 生命周期，`t_<teamId>/<teamName>` 可继续逐个下载并安装，普通公开 Skill 与私有 Skill 安装行为不变。
+
 ## [1.4.7-bmc1.8.0] - 2026-11-04
 
 ### 新功能
