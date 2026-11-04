@@ -7,12 +7,27 @@ set -euo pipefail
 # 用法:
 #   ./scripts/publish-dev.sh            # 计算版本 + 预检 + 打标签 + 推送
 #   ./scripts/publish-dev.sh --dry-run  # 只计算与预检，不创建/推送标签
+#   pnpm publish:dev -- --dry-run       # pnpm 会保留 --，脚本会先剥离再解析
 #
 # 可覆盖的环境变量:
 #   DEV_PUBLISH_REMOTE  推送目标远端（默认 old-origin，即 GitHub 镜像）
 #   DEV_PUBLISH_BRANCH  允许发布的分支（默认 develop）
 
+if [[ "${1:-}" == "--" ]]; then
+  shift
+fi
+
+if [[ "$#" -gt 1 ]]; then
+  echo "错误: 参数过多，只接受可选的 --dry-run" >&2
+  exit 1
+fi
+
 MODE="${1:-}"
+if [[ -n "$MODE" && "$MODE" != "--dry-run" ]]; then
+  echo "错误: 未知参数 '$MODE'，只接受可选的 --dry-run" >&2
+  exit 1
+fi
+
 REMOTE="${DEV_PUBLISH_REMOTE:-old-origin}"
 EXPECTED_BRANCH="${DEV_PUBLISH_BRANCH:-develop}"
 
