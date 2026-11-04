@@ -1,11 +1,11 @@
 # Run State
 
 - Change: add-team-skill-install-command
-- Stage: review-code
+- Stage: archive-ready
 - Source branch: develop
 - Development branch: feature/team-skill-install-command
 - Last good commit: fef4907b11f266879ac9c05b07dd45b7a7d66d90
-- Next safe action: commit review-code fixes, then await `@lyx-archive` verification
+- Next safe action: archive OpenSpec change
 
 ## Task Evidence
 
@@ -41,6 +41,10 @@
 
 ## Verification
 
+- final testMode: normal（来源：宿主默认 `/Users/ly/.codex/lyx/config.toml`）
+- archive verification: passed — `pnpm test -- --run` exit 0; 43 files, 641 tests
+- archive verification: passed — `pnpm type-check` exit 0
+- archive verification: passed — `pnpm build` exit 0; dist generated, 776 kB total
 - `openspec validate --changes add-team-skill-install-command`: passed
 - review-plan Round 1 fixes: `npx prettier --write` exit 0, `openspec validate` exit 0, `git diff --check` exit 0
 - review-plan Round 2: subagent confirmed six-file diff set, validate exit 0, diff check exit 0, no untracked files
