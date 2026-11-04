@@ -24,7 +24,10 @@ async function runTrackList(): Promise<void> {
   for (const [name, entry] of Object.entries(entries)) {
     const consent = entry.collectConsent;
     const status = consent === true ? 'on' : consent === false ? 'off' : '未定夺（首次未询问）';
-    rows.push({ name, status });
+    rows.push({
+      name: entry.teamId ? `t_${entry.teamId}/${name}` : name,
+      status,
+    });
   }
 
   if (rows.length === 0) {
@@ -49,13 +52,27 @@ async function runTrackList(): Promise<void> {
 
 interface ResolvedTarget {
   skillId: string;
+  lockKey: string;
   name: string;
+  source: string;
   version?: string;
   authorId?: string;
+  teamId?: string;
 }
 
 async function resolveTarget(skillName: string): Promise<ResolvedTarget | null> {
-  const entry = await getSkillFromLock(skillName);
+  let lockKey = skillName;
+  let entry = await getSkillFromLock(skillName);
+  if (!entry) {
+    const entries = await getAllLockedSkills();
+    const matched = Object.entries(entries).find(
+      ([key, candidate]) => candidate.teamId && `t_${candidate.teamId}/${key}` === skillName
+    );
+    if (matched) {
+      lockKey = matched[0];
+      entry = matched[1];
+    }
+  }
   if (!entry || entry.sourceType !== 'market') {
     p.log.error(`未在全局 lock 中找到 market skill「${skillName}」`);
     return null;
@@ -66,10 +83,13 @@ async function resolveTarget(skillName: string): Promise<ResolvedTarget | null> 
     return null;
   }
   return {
+    lockKey,
     skillId: entry.skillPath,
-    name: skillName,
+    name: lockKey,
+    source: entry.source,
     version: entry.version,
     authorId: entry.authorId,
+    teamId: entry.teamId,
   };
 }
 
@@ -88,7 +108,7 @@ async function runTrackToggle(skillName: string, report: boolean): Promise<void>
     target.skillId,
     target.version,
     target.authorId,
-    undefined,
+    target.teamId,
     report
   );
 
@@ -122,14 +142,15 @@ async function runTrackToggle(skillName: string, report: boolean): Promise<void>
   }
 
   // 写回 lock（collectConsent + 覆盖后的 skillFolderHash）
-  await addSkillToLock(skillName, {
-    source: `market/${skillName}`,
+  await addSkillToLock(target.lockKey, {
+    source: target.source || `market/${target.lockKey}`,
     sourceType: 'market',
     sourceUrl: skill.sourceUrl,
     skillFolderHash: skill.skillFolderHash,
     skillPath: skill.skillId,
     version: skill.version,
     authorId: target.authorId,
+    teamId: target.teamId,
     collectConsent: report,
   });
 

@@ -161,9 +161,17 @@ ${BOLD}Publishing:${RESET}
   login <api-key>          Save your Skills Market API Key for publish/withdraw
   whoami                   Show the user your API Key is currently logged in as
   publish [path]           Push a local Skill to the Market (upsert)
+                           --display-name <name> Market display name (does not change SKILL.md name)
+                           --brief <text>      Brief, max 128 characters
+                           --skill-type <type> SKILL, TOOL, CMD, MCP, or PLUGIN
+                           --category <name>   Skill category
                            --version <x.y.z>   Override the version number
+                           --changelog <text>  Change notes, max 512 characters
                            --team <id1,id2>    Distribute to team(s) after push
                            --public            Push as a PUBLIC Skill (goes to PENDING review)
+                           --collect           Enable data collection transformation
+                           --no-collect        Explicitly disable data collection transformation
+                           --api-key <key>     Use an API key for this request only
   withdraw <name>          Withdraw a public Skill stuck in PENDING review
 
 ${BOLD}Add Options:${RESET}
@@ -175,6 +183,7 @@ ${BOLD}Add Options:${RESET}
   --copy                 Copy files instead of symlinking to agent directories
   --all                  Shorthand for --skill '*' --agent '*' -y
   --full-depth           Search all subdirectories even when a root SKILL.md exists
+  --observability        Use the monitored build for global installs
 
 ${BOLD}Remove Options:${RESET}
   -g, --global           Remove from global scope
@@ -229,6 +238,9 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ${BIN_NAME} whoami                         ${DIM}# check who your API Key is logged in as${RESET}
   ${DIM}$${RESET} ${BIN_NAME} publish                        ${DIM}# push cwd Skill to the Market${RESET}
   ${DIM}$${RESET} ${BIN_NAME} publish ./my-skill --version 2.0.0
+  ${DIM}$${RESET} ${BIN_NAME} publish ./my-skill --display-name "我的技能" --category AUTOMATION
+  ${DIM}$${RESET} ${BIN_NAME} publish ./my-skill --brief "技能简介" --changelog "首次发布"
+  ${DIM}$${RESET} ${BIN_NAME} publish ./my-skill --skill-type CMD --collect
   ${DIM}$${RESET} ${BIN_NAME} publish --team team-a,team-b
 
   ${DIM}$${RESET} ${BIN_NAME} withdraw my-skill              ${DIM}# withdraw pending review${RESET}

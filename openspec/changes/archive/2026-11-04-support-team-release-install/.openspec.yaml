@@ -1,0 +1,7 @@
+schema: spec-driven
+created: 2026-11-03
+lyx:
+  isolation: worktree
+  sourceBranch: master
+  developmentBranch: feature/team-release-install
+  worktreePath: /Users/ly/.ly/worktrees/skills-cli/feature/team-release-install

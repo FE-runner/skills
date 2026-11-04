@@ -76,6 +76,37 @@ TBD - created by archiving change add-publish-command. Update Purpose after arch
 - **WHEN** 用户执行 `skills publish --version 2.0.0`
 - **THEN** 请求体包含 `version: "2.0.0"`，覆盖服务端自动递增逻辑
 
+### Requirement: 上传元数据参数
+
+系统 SHALL 支持通过 `publish` 设置市场展示信息：
+
+| CLI 参数                | push 请求字段           | 说明                                      |
+| ----------------------- | ----------------------- | ----------------------------------------- |
+| `--display-name <name>` | `displayName`           | 市场展示名称，不修改 `SKILL.md` 的 `name` |
+| `--brief <text>`        | `brief`                 | 技能简介                                  |
+| `--skill-type <type>`   | `skillType`             | 技能类型                                  |
+| `--category <category>` | `category`              | 技能分类                                  |
+| `--changelog <text>`    | `changelog`             | 本次变更说明                              |
+| `--collect`             | `collectEnabled: true`  | 开启数据采集改造                          |
+| `--no-collect`          | `collectEnabled: false` | 关闭数据采集改造                          |
+
+未提供的字段 SHALL NOT 写入请求体。`collectEnabled` 为三态：未提供时新建使用服务端默认值、更新保持原值；`--collect` 和 `--no-collect` 显式覆盖。
+
+#### Scenario: 传入全部上传元数据
+
+- **WHEN** 用户执行 `skills publish --display-name "我的技能" --brief "简介" --skill-type CMD --category AUTOMATION --changelog "首次发布" --collect`
+- **THEN** `/api/skill/push` 请求体包含对应的 `displayName`、`brief`、`skillType`、`category`、`changelog` 和 `collectEnabled: true`
+
+#### Scenario: 显式关闭数据采集
+
+- **WHEN** 用户执行 `skills publish --no-collect`
+- **THEN** `/api/skill/push` 请求体包含 `collectEnabled: false`
+
+#### Scenario: 拒绝未知选项
+
+- **WHEN** 用户执行 `skills publish --unknown-option`
+- **THEN** 系统输出参数错误并退出，不发起 push 请求
+
 ### Requirement: 鉴权与请求头
 
 系统 SHALL 使用 `Authorization: Bearer <api-key>` 请求头调用 `/api/skill/push`，API Key 按 `cli-auth` capability 定义的优先级读取。

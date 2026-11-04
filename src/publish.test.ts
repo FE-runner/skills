@@ -96,6 +96,37 @@ describe('publish', () => {
       expect(opts.teamIds).toEqual(['team-a']);
     });
 
+    it('parses upload metadata options', () => {
+      const opts = parsePublishOptions([
+        '--display-name',
+        '飞书助手',
+        '--brief',
+        '处理飞书消息',
+        '--skill-type',
+        'CMD',
+        '--category',
+        'AUTOMATION',
+        '--changelog',
+        '首次发布',
+        '--collect',
+      ]);
+
+      expect(opts.displayName).toBe('飞书助手');
+      expect(opts.brief).toBe('处理飞书消息');
+      expect(opts.skillType).toBe('CMD');
+      expect(opts.category).toBe('AUTOMATION');
+      expect(opts.changelog).toBe('首次发布');
+      expect(opts.collectEnabled).toBe(true);
+    });
+
+    it('parses --no-collect as an explicit false value', () => {
+      expect(parsePublishOptions(['--no-collect']).collectEnabled).toBe(false);
+    });
+
+    it('rejects unsupported options instead of silently publishing', () => {
+      expect(parsePublishOptions(['--chanelog', 'typo']).error).toContain('--chanelog');
+    });
+
     it('parses --api-key as a single-call override', () => {
       const opts = parsePublishOptions(['--api-key', 'sk-flag']);
       expect(opts.apiKey).toBe('sk-flag');
@@ -268,6 +299,44 @@ describe('publish', () => {
       const [, , , , , teamIds] = vi.mocked(marketProvider.push).mock.calls[0]!;
       expect(teamIds).toEqual(['team-a', 'team-b']);
       expect(process.exitCode).toBeUndefined();
+    });
+
+    it('passes upload metadata through to marketProvider.push', async () => {
+      vi.mocked(marketProvider.push).mockResolvedValue({
+        ok: true,
+        data: {
+          skillId: 's1',
+          name: 'my-skill',
+          currentVersion: '1.0.0',
+          visibility: 'PRIVATE',
+          status: 'APPROVED',
+        },
+      });
+
+      await runPublish([
+        dir,
+        '--display-name',
+        '我的技能',
+        '--brief',
+        '技能简介',
+        '--skill-type',
+        'TOOL',
+        '--category',
+        'DEVELOPMENT',
+        '--changelog',
+        '首次发布',
+        '--collect',
+      ]);
+
+      const [, , , , , , metadata] = vi.mocked(marketProvider.push).mock.calls[0]!;
+      expect(metadata).toEqual({
+        displayName: '我的技能',
+        brief: '技能简介',
+        skillType: 'TOOL',
+        category: 'DEVELOPMENT',
+        changelog: '首次发布',
+        collectEnabled: true,
+      });
     });
 
     it('does not pass team ids to push when push args omit --team', async () => {

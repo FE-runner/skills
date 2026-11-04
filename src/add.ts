@@ -58,6 +58,7 @@ import { getApiKey } from './auth.ts';
 import {
   addSkillToLock,
   fetchSkillFolderHash,
+  getAllLockedSkills,
   getSkillFromLock,
   getGitHubToken,
   isPromptDismissed,
@@ -430,6 +431,10 @@ export interface AddOptions {
   copy?: boolean;
   /** 采集知情同意：true=同意监测版 / false=拒绝（原版）。仅首次询问、团队询问后带有；已定夺走 lock 不设 */
   collectConsent?: boolean;
+  /** 本次通过 --observability 显式请求使用可观测版本；未设置时沿用 lock 与交互询问 */
+  observability?: true;
+  /** 团队流程已统一处理监测插件状态，跳过单 Skill 的重复检查 */
+  skipPilotStatus?: boolean;
 }
 
 /**
@@ -1377,9 +1382,12 @@ async function handleCosSkills(
  */
 interface TeamInstallSkill {
   id: string;
+  teamId?: string;
   name: string;
   displayName: string | null;
   currentVersion: string | null;
+  installVersion?: string | null;
+  releaseId?: string;
   visibility: string;
   authorId: string;
 }
@@ -1387,6 +1395,14 @@ interface TeamInstallSkill {
 interface TeamInstallData {
   teamName: string;
   skills: TeamInstallSkill[];
+}
+
+function resolveTeamInstallVersion(skill: TeamInstallSkill): string | null {
+  return skill.installVersion || skill.currentVersion || null;
+}
+
+function getTeamCollectKey(teamId: string, skillId: string): string {
+  return `${teamId}:${skillId}`;
 }
 
 async function handleTeamInstall(
@@ -1424,6 +1440,19 @@ async function handleTeamInstall(
     p.outro(pc.yellow(`该团队暂无可安装的 skill`));
     return;
   }
+
+  const installableSkills = teamData.skills.filter((skill) => {
+    const version = resolveTeamInstallVersion(skill);
+    if (version) return true;
+    p.log.warn(`Skipping ${skill.name} from team ${teamId}: missing installVersion/currentVersion`);
+    return false;
+  });
+  if (installableSkills.length === 0) {
+    spinner.stop(pc.yellow('No installable skills'));
+    p.outro(pc.yellow('该团队暂无可安装的 skill（均缺少生效版本）'));
+    return;
+  }
+  teamData = { ...teamData, skills: installableSkills };
 
   const resolvedTeamName = teamData.teamName || teamName;
   spinner.stop(
@@ -1513,31 +1542,43 @@ async function handleTeamInstall(
     global: installGlobally,
     copy: useCopy,
     yes: true, // agent + scope + installMode 已选定，跳过每个 skill 的重复交互
+    skipPilotStatus: true,
   };
 
-  // 团队批量采集同意（D5）：全局安装且既有已定夺之外，对团队带采集 skill 做一次覆盖全队的询问。
-  //   collectConsent 沿用 options（per-skill 独立写入，后续单 skill add/track 遵循各自 lock）。
-  if (installGlobally && options.collectConsent === undefined) {
-    const consented = await promptTeamCollectConsent(teamData.skills, options);
-    if (consented !== undefined) sharedOptions.collectConsent = consented;
+  // 团队批量采集与监测插件状态均在一次预检中处理，避免每个 skill 重复询问或提示。
+  const teamCollectDecision = installGlobally
+    ? await preflightTeamCollectConsent(teamData.skills, teamId, options)
+    : undefined;
+  if (teamCollectDecision?.showPilotStatus) {
+    await promptForPilotInstallation(teamCollectDecision.allowPilotPrompt);
   }
 
   p.log.info(`Installing ${teamData.skills.length} skills from team "${resolvedTeamName}"...`);
 
   // 依次安装每个 skill，复用 handleMarketSkill 的单 skill 安装逻辑
   for (const skill of teamData.skills) {
-    const installName =
-      skill.visibility === 'PRIVATE' ? `${skill.authorId}/${skill.name}` : skill.name;
+    const installVersion = resolveTeamInstallVersion(skill);
+    if (!installVersion) continue;
+    const skillOptions: AddOptions = {
+      ...sharedOptions,
+      collectConsent: teamCollectDecision?.collectSkillNames.has(
+        getTeamCollectKey(teamId, skill.id)
+      )
+        ? teamCollectDecision.consent
+        : undefined,
+    };
 
     await handleMarketSkill(
-      installName,
+      `t_${teamId}/${skill.name}`,
       {
         type: 'market',
-        url: installName,
+        url: `t_${teamId}/${skill.name}`,
+        marketSkillId: skill.id,
+        marketTeamId: teamId,
         marketName: skill.name,
-        marketAuthor: skill.visibility === 'PRIVATE' ? skill.authorId : undefined,
+        marketVersion: installVersion,
       },
-      sharedOptions,
+      skillOptions,
       p.spinner()
     );
   }
@@ -1566,48 +1607,148 @@ async function getSkillConsent(skillName: string): Promise<boolean | 'missing'> 
   }
 }
 
-/**
- * 团队批量安装的采集一次询问（D5）：预探测团队中各 skill 是否带有效采集配置，
- * 命中有效 collect 的个数 > 0 时做一次覆盖全队的确认；仅全局安装触发。
- * @returns true=同意监测版 / false=拒绝（原版）/ undefined=团队无带采集 skill 或无需询问
- */
-async function promptTeamCollectConsent(
-  skills: TeamInstallSkill[],
-  options: AddOptions
-): Promise<boolean | undefined> {
-  // 非交互（-y/--all/非 TTY）：团队场景不静默决定，仍由调用方按默认拒绝/同意策略处理；
-  // 这里仅在交互环境询问。非交互由 handleMarketSkill 的 options.yes 分支兜底（默认拒绝）。
-  if (options.yes || !process.stdin.isTTY) return undefined;
+export async function getTeamSkillConsent(
+  teamId: string,
+  installName: string
+): Promise<boolean | 'missing'> {
+  try {
+    const entries = await getAllLockedSkills();
+    const matched = Object.entries(entries).find(
+      ([name, entry]) => name === installName && entry.teamId === teamId
+    );
+    if (matched?.[1].collectConsent === true) return true;
+    if (matched?.[1].collectConsent === false) return false;
+    return 'missing';
+  } catch {
+    return 'missing';
+  }
+}
 
-  let collectCount = 0;
+/**
+ * 团队批量安装的采集与监测插件预检（D5）：
+ * - 预探测哪些 skill 带有效采集配置；
+ * - 仅对首次未定夺的 skill 做一次覆盖全队的采集确认；
+ * - 返回是否需要在安装循环前统一处理 LoongSuite Pilot。
+ */
+interface TeamCollectDecision {
+  collectSkillNames: Set<string>;
+  consent?: boolean;
+  showPilotStatus: boolean;
+  allowPilotPrompt: boolean;
+}
+
+async function preflightTeamCollectConsent(
+  skills: TeamInstallSkill[],
+  teamId: string,
+  options: AddOptions
+): Promise<TeamCollectDecision> {
+  const collectSkillNames = new Set<string>();
+  const forceObservability = options.observability === true;
+  let pendingCollectCount = 0;
+  let lockedOnCount = 0;
+
   for (const s of skills) {
+    const version = resolveTeamInstallVersion(s);
+    if (!version) continue;
     try {
-      const skill = await marketProvider.fetchById(
-        s.id,
-        s.currentVersion ?? undefined,
-        s.visibility === 'PRIVATE' ? s.authorId : undefined,
-        undefined,
-        true
-      );
-      if (skill && hasValidCollect(skill)) collectCount++;
+      const skill = await marketProvider.fetchById(s.id, version, undefined, teamId, true);
+      if (!skill || !hasValidCollect(skill)) continue;
+
+      collectSkillNames.add(getTeamCollectKey(teamId, s.id));
+      if (!forceObservability) {
+        const locked = await getTeamSkillConsent(teamId, skill.installName);
+        if (locked === true) {
+          lockedOnCount++;
+        } else if (locked === 'missing') {
+          pendingCollectCount++;
+        }
+      }
     } catch {
       // 单个 skill 探测失败忽略，不阻断安装
     }
   }
 
-  if (collectCount === 0) return undefined;
-
-  const confirmed = await p.confirm({
-    message: `本团队有 ${collectCount} 个 skill 带数据采集，是否同意采集并安装监测版？（拒绝则全部装原版，可稍后单独 track on）`,
-  });
-  if (p.isCancel(confirmed)) {
-    p.cancel('Installation cancelled');
-    process.exit(0);
+  let consent = forceObservability ? true : options.collectConsent;
+  if (
+    !forceObservability &&
+    consent === undefined &&
+    pendingCollectCount > 0 &&
+    !options.yes &&
+    process.stdin.isTTY
+  ) {
+    const confirmed = await p.confirm({
+      message: `本团队有 ${pendingCollectCount} 个 skill 待确认数据采集，是否同意采集并安装监测版？（拒绝则安装原版，可稍后单独 track on）`,
+    });
+    if (p.isCancel(confirmed)) {
+      p.cancel('Installation cancelled');
+      process.exit(0);
+    }
+    consent = confirmed;
   }
-  return confirmed;
+
+  const collectionEnabled = forceObservability
+    ? collectSkillNames.size > 0
+    : lockedOnCount > 0 || (consent === true && collectSkillNames.size > 0);
+  return {
+    collectSkillNames,
+    consent,
+    showPilotStatus: forceObservability
+      ? collectionEnabled
+      : collectionEnabled || (consent === undefined && pendingCollectCount > 0),
+    allowPilotPrompt: collectionEnabled && !options.yes && !!process.stdin.isTTY,
+  };
 }
 
-async function handleMarketSkill(
+/**
+ * 统一处理 LoongSuite Pilot 本机状态：完整安装仅提示；缺失/残留时按交互能力
+ * 决定是否询问并自动安装，否则保留一次手动安装指引。
+ */
+async function promptForPilotInstallation(allowPrompt: boolean): Promise<void> {
+  const pilot = readLocalPilotStatus();
+  const missingReason =
+    pilot.serviceName != null
+      ? '检测到监测插件配置残留（未发现程序文件）'
+      : '未检测到 LoongSuite Pilot 监测插件';
+
+  if (pilot.serviceName != null && pilot.hasBinary) {
+    const running = pilot.isRunning === false ? '，服务未运行' : '';
+    p.log.message(pc.dim(`本机监测插件: 已安装 LoongSuite Pilot (${pilot.serviceName}${running})`));
+    return;
+  }
+
+  if (!allowPrompt || !process.stdin.isTTY) {
+    p.log.message(
+      pc.yellow(
+        `本机监测插件: ${missingReason}，采集数据不会实际上报；可稍后运行 ${pc.cyan(`${BIN_NAME} obs <接入名>`)} 创建接入并安装监测插件`
+      )
+    );
+    return;
+  }
+
+  if (!getApiKey()) {
+    p.log.message(
+      pc.yellow(
+        `本机监测插件: ${missingReason}，采集数据不会实际上报；先运行 ${pc.cyan(`${BIN_NAME} login <api-key>`)} 登录，下次安装带监测的 skill 时可自动安装`
+      )
+    );
+    return;
+  }
+
+  p.log.message(pc.yellow(`本机监测插件: ${missingReason}，采集数据不会实际上报`));
+  const installPilot = await p.confirm({
+    message: '是否现在创建接入记录并自动安装 LoongSuite Pilot 监测插件？',
+    initialValue: true,
+  });
+  if (!p.isCancel(installPilot) && installPilot) {
+    await createRecordAndInstallPilot(getApiKey()!);
+  } else {
+    p.log.message(
+      pc.dim(`已跳过；可稍后运行 ${pc.cyan(`${BIN_NAME} obs <接入名>`)} 创建接入并安装监测插件`)
+    );
+  }
+}
+
+export async function handleMarketSkill(
   source: string,
   parsed: ParsedSource,
   options: AddOptions,
@@ -1617,10 +1758,32 @@ async function handleMarketSkill(
   const skillName = parsed.marketName || source;
   const author = parsed.marketAuthor;
   const version = parsed.marketVersion;
+  const teamId = parsed.marketTeamId;
 
-  const displayName = author ? `${author}/${skillName}` : skillName;
-  spinner.start(`Resolving "${displayName}" from Skills Market...`);
-  const resolved = await marketProvider.resolve(skillName, author);
+  const displayName = teamId
+    ? `t_${teamId}/${skillName}`
+    : author
+      ? `${author}/${skillName}`
+      : skillName;
+  let resolved: {
+    id: string;
+    name: string;
+    currentVersion: string;
+    authorId: string;
+    teamId?: string;
+  } | null = null;
+  if (parsed.marketSkillId && teamId) {
+    resolved = {
+      id: parsed.marketSkillId,
+      name: skillName,
+      currentVersion: version || '',
+      authorId: '',
+      teamId,
+    };
+  } else {
+    spinner.start(`Resolving "${displayName}" from Skills Market...`);
+    resolved = await marketProvider.resolve(skillName, author);
+  }
 
   if (!resolved) {
     // Market 找不到，如果输入是 author/name 格式，回退到 GitHub shorthand
@@ -1638,11 +1801,22 @@ async function handleMarketSkill(
   spinner.start('Downloading skill files...');
   // 采集知情同意（D2）：现用「原版先行」策略——先以 report=false 拿原版（确定性），
   //   若命中规则（已定夺 true / 首次询问同意 / 团队同意）再以 report=true 拉监测版替换。
-  const skill = await marketProvider.fetchById(resolved.id, version, author, resolved.teamId);
+  const skill = await marketProvider.fetchById(
+    resolved.id,
+    version,
+    author,
+    teamId || resolved.teamId
+  );
 
   if (!skill) {
     spinner.stop(pc.red('Failed to fetch skill'));
-    p.outro(pc.red('Could not download skill from Skills Market'));
+    p.outro(
+      pc.red(
+        teamId
+          ? `团队版本不可用：${displayName} v${version ?? 'unknown'}（teamId: ${teamId}）`
+          : 'Could not download skill from Skills Market'
+      )
+    );
     process.exit(1);
   }
 
@@ -1794,19 +1968,7 @@ async function handleMarketSkill(
   let monitoredGrafted = false;
 
   if (installGlobally) {
-    const locked = await getSkillConsent(skill.installName);
-    if (locked === true) {
-      useCollect = true; // 已同意：装监测版
-      collectCapable = true;
-    } else if (locked === false) {
-      useCollect = false; // 已拒绝：装原版
-    } else if (options.collectConsent !== undefined) {
-      // 团队一次询问结果（D5，探测已在团队流程完成）
-      useCollect = options.collectConsent;
-      writeCollectConsent = options.collectConsent;
-      collectCapable = options.collectConsent;
-    } else {
-      // 首次未定夺：先以 report=true 探测是否带采集配置，再询问
+    if (options.observability === true) {
       spinner.start('Checking data-collection config...');
       const probed = await marketProvider.fetchById(
         resolved.id,
@@ -1816,35 +1978,90 @@ async function handleMarketSkill(
         true
       );
       const probedValid = probed !== null && hasValidCollect(probed);
-      collectCapable = probedValid;
+      collectCapable = probedValid && options.observability;
       if (probedValid) {
         spinner.stop(`「${skill.installName}」带数据采集配置`);
-        if (options.yes /* 非交互：-y/--all/update/非 TTY */) {
-          useCollect = false; // 默认拒绝（隐私缺省）
-          writeCollectConsent = false;
-          p.log.message(
-            pc.dim(
-              `「${skill.installName}」带数据采集，非交互安装默认不采集；可稍后运行 ${pc.cyan('track on ' + skill.installName)} 开启。`
-            )
-          );
-        } else {
-          const confirmed = await p.confirm({
-            message: `「${skill.installName}」带数据采集，是否同意采集并安装监测版？(同意=采集上报，拒绝=原版，可稍后 track 切换)`,
-          });
-          useCollect = !p.isCancel(confirmed) && !!confirmed;
-          writeCollectConsent = useCollect;
-          // 同意：直接复用探测到的监测版产物，省一次拉取
-          if (useCollect && probed) {
-            skill.files = probed.files;
-            skill.content = probed.content;
-            skill.skillFolderHash = probed.skillFolderHash;
-            skill.collect = probed.collect;
-            skill.binaryFileErrors = probed.binaryFileErrors;
-            monitoredGrafted = true;
-          }
+        useCollect = options.observability;
+        writeCollectConsent = options.observability;
+        if (options.observability && probed) {
+          skill.files = probed.files;
+          skill.content = probed.content;
+          skill.skillFolderHash = probed.skillFolderHash;
+          skill.collect = probed.collect;
+          skill.binaryFileErrors = probed.binaryFileErrors;
+          monitoredGrafted = true;
         }
       } else {
         spinner.stop();
+        if (options.observability) {
+          const reason = getCollectFailureReason(probed);
+          p.log.message(
+            pc.yellow(
+              reason
+                ? `「${skill.installName}」可观测改造失败：${reason}；本次安装原版。`
+                : `「${skill.installName}」未做可观测改造，无有效监测版；本次安装原版。`
+            )
+          );
+        }
+      }
+    } else {
+      const consentTeamId = teamId || resolved.teamId;
+      const locked = consentTeamId
+        ? await getTeamSkillConsent(consentTeamId, skill.installName)
+        : await getSkillConsent(skill.installName);
+      if (locked === true) {
+        useCollect = true; // 已同意：装监测版
+        collectCapable = true;
+        if (consentTeamId) writeCollectConsent = true;
+      } else if (locked === false) {
+        useCollect = false; // 已拒绝：装原版
+        if (consentTeamId) writeCollectConsent = false;
+      } else if (options.collectConsent !== undefined) {
+        // 团队一次询问结果（D5，探测已在团队流程完成）
+        useCollect = options.collectConsent;
+        writeCollectConsent = options.collectConsent;
+        collectCapable = options.collectConsent;
+      } else {
+        // 首次未定夺：先以 report=true 探测是否带采集配置，再询问
+        spinner.start('Checking data-collection config...');
+        const probed = await marketProvider.fetchById(
+          resolved.id,
+          version,
+          author,
+          resolved.teamId,
+          true
+        );
+        const probedValid = probed !== null && hasValidCollect(probed);
+        collectCapable = probedValid;
+        if (probedValid) {
+          spinner.stop(`「${skill.installName}」带数据采集配置`);
+          if (options.yes /* 非交互：-y/--all/update/非 TTY */) {
+            useCollect = false; // 默认拒绝（隐私缺省）
+            writeCollectConsent = false;
+            p.log.message(
+              pc.dim(
+                `「${skill.installName}」带数据采集，非交互安装默认不采集；可稍后运行 ${pc.cyan('track on ' + skill.installName)} 开启。`
+              )
+            );
+          } else {
+            const confirmed = await p.confirm({
+              message: `「${skill.installName}」带数据采集，是否同意采集并安装监测版？(同意=采集上报，拒绝=原版，可稍后 track 切换)`,
+            });
+            useCollect = !p.isCancel(confirmed) && !!confirmed;
+            writeCollectConsent = useCollect;
+            // 同意：直接复用探测到的监测版产物，省一次拉取
+            if (useCollect && probed) {
+              skill.files = probed.files;
+              skill.content = probed.content;
+              skill.skillFolderHash = probed.skillFolderHash;
+              skill.collect = probed.collect;
+              skill.binaryFileErrors = probed.binaryFileErrors;
+              monitoredGrafted = true;
+            }
+          }
+        } else {
+          spinner.stop();
+        }
       }
     }
   }
@@ -1879,44 +2096,8 @@ async function handleMarketSkill(
   }
 
   // 监测插件（LoongSuite Pilot）本机状态：完整安装只做提示；缺失/残留时引导自动安装（未登录除外）
-  if (collectCapable && installGlobally) {
-    const pilot = readLocalPilotStatus();
-    const missingReason =
-      pilot.serviceName != null
-        ? '检测到监测插件配置残留（未发现程序文件）'
-        : '未检测到 LoongSuite Pilot 监测插件';
-    if (pilot.serviceName != null && pilot.hasBinary) {
-      const running = pilot.isRunning === false ? '，服务未运行' : '';
-      p.log.message(
-        pc.dim(`本机监测插件: 已安装 LoongSuite Pilot (${pilot.serviceName}${running})`)
-      );
-    } else if (options.yes || !process.stdin.isTTY) {
-      // 非交互环境不自动安装（避免静默执行远程脚本），保留提示
-      p.log.message(
-        pc.yellow(
-          `本机监测插件: ${missingReason}，采集数据不会实际上报；可稍后运行 ${pc.cyan(`${BIN_NAME} obs <接入名>`)} 创建接入并安装监测插件`
-        )
-      );
-    } else if (!getApiKey()) {
-      p.log.message(
-        pc.yellow(
-          `本机监测插件: ${missingReason}，采集数据不会实际上报；先运行 ${pc.cyan(`${BIN_NAME} login <api-key>`)} 登录，下次安装带监测的 skill 时可自动安装`
-        )
-      );
-    } else {
-      p.log.message(pc.yellow(`本机监测插件: ${missingReason}，采集数据不会实际上报`));
-      const installPilot = await p.confirm({
-        message: '是否现在创建接入记录并自动安装 LoongSuite Pilot 监测插件？',
-        initialValue: true,
-      });
-      if (!p.isCancel(installPilot) && installPilot) {
-        await createRecordAndInstallPilot(getApiKey()!);
-      } else {
-        p.log.message(
-          pc.dim(`已跳过；可稍后运行 ${pc.cyan(`${BIN_NAME} obs <接入名>`)} 创建接入并安装监测插件`)
-        );
-      }
-    }
+  if (collectCapable && installGlobally && !options.skipPilotStatus) {
+    await promptForPilotInstallation(!options.yes);
   }
 
   // Build installation summary
@@ -1973,9 +2154,11 @@ async function handleMarketSkill(
   const failed = results.filter((r) => !r.success);
 
   // Track installation
-  const sourceIdentifier = parsed.marketAuthor
-    ? `market/${parsed.marketAuthor}/${skill.installName}`
-    : `market/${skill.installName}`;
+  const sourceIdentifier = teamId
+    ? `market/team/${teamId}/${skill.installName}`
+    : parsed.marketAuthor
+      ? `market/${parsed.marketAuthor}/${skill.installName}`
+      : `market/${skill.installName}`;
 
   track({
     event: 'install',
@@ -1996,7 +2179,8 @@ async function handleMarketSkill(
         skillFolderHash: skill.skillFolderHash,
         skillPath: skill.skillId,
         version: skill.version,
-        authorId: resolved.authorId,
+        authorId: teamId ? undefined : resolved.authorId,
+        ...(teamId ? { teamId } : {}),
         ...(writeCollectConsent !== undefined ? { collectConsent: writeCollectConsent } : {}),
       });
     } catch {
@@ -3052,6 +3236,8 @@ export function parseAddOptions(args: string[]): { source: string[]; options: Ad
       options.fullDepth = true;
     } else if (arg === '--copy') {
       options.copy = true;
+    } else if (arg === '--observability') {
+      options.observability = true;
     } else if (arg && !arg.startsWith('-')) {
       source.push(arg);
     }

@@ -65,6 +65,7 @@ npx blueai-skills add ./my-local-skills
 | `--copy`                  | 复制文件到 Agent 目录而非使用符号链接                                                                                         |
 | `-y, --yes`               | 跳过所有确认提示；未指定 `-g` 时默认安装到**项目**，安装方式默认为**符号链接**（多 Agent）或复制（单 Agent）                  |
 | `--all`                   | 将所有技能安装到所有 Agent，无需确认                                                                                          |
+| `--observability`         | 全局安装时本次显式使用可观测版本；未传时沿用已有采集状态与首次询问                                                            |
 
 ### 示例
 
@@ -98,6 +99,12 @@ npx blueai-skills add t_<teamId>/<teamName>
 
 # 安装团队全部技能，指定 Agent 和全局范围，静默执行
 npx blueai-skills add t_<teamId>/<teamName> -a claude-code -g -y
+
+# 全局安装并显式使用可观测版本
+npx blueai-skills add owner/repo -g --observability
+
+# 团队一键安装并显式使用可观测版本
+npx blueai-skills add t_<teamId>/<teamName> -g --observability
 ```
 
 ### 团队安装
@@ -114,7 +121,7 @@ npx blueai-skills add t_<teamId>/<teamName>
 npx blueai-skills add t_<teamId>/<teamName> -a claude-code -g -y
 ```
 
-支持全部 `add` 选项：`--agent`、`--global`、`--copy`、`--yes`。Agent、安装范围和安装方式在循环开始前统一询问一次，后续每个技能静默复用同一配置。
+支持全部 `add` 选项：`--agent`、`--global`、`--copy`、`--yes`、`--observability`。Agent、安装范围和安装方式在循环开始前统一询问一次，后续每个技能静默复用同一配置；传 `--observability` 时，团队中带有效采集配置的 Skill 直接安装可观测版本。
 
 ### 安装范围
 
@@ -194,15 +201,43 @@ npx blueai-skills publish
 # 指定目录、覆盖版本号
 npx blueai-skills publish ./my-skill --version 2.0.0
 
+# 设置市场展示信息
+npx blueai-skills publish ./my-skill \
+  --display-name "我的技能" \
+  --brief "技能简介" \
+  --skill-type CMD \
+  --category AUTOMATION \
+  --changelog "首次发布"
+
 # 推送后分发到多个团队审核
 npx blueai-skills publish --team team-a,team-b
 
 # 推送为公开 Skill（新建/更新均走审核，非立即生效；--public 与 --team 可叠加）
 npx blueai-skills publish --public
 
+# 开启或关闭数据采集改造
+npx blueai-skills publish --collect
+npx blueai-skills publish --no-collect
+
 # 撤回处于 PENDING 状态的公开 Skill
 npx blueai-skills withdraw my-skill
 ```
+
+`publish` 支持的参数：
+
+| 参数                         | 说明                                                      |
+| ---------------------------- | --------------------------------------------------------- |
+| `[path]`                     | 本地技能目录，缺省为当前目录                              |
+| `--display-name <name>`      | 市场展示名称，不修改 `SKILL.md` 的 `name`                 |
+| `--brief <text>`             | 技能简介，最多 128 个字符；不传时由服务端 AI 生成         |
+| `--skill-type <type>`        | `SKILL`、`TOOL`、`CMD`、`MCP` 或 `PLUGIN`；不传时自动推断 |
+| `--category <name>`          | 技能分类；不传时更新继承原值、新建默认为 `OTHER`          |
+| `--version <x.y.z>`          | 覆盖版本号；不传时由服务端自动递增                        |
+| `--changelog <text>`         | 变更日志，最多 512 个字符；不传时由服务端 AI 生成         |
+| `--public`                   | 发布为公开 Skill，进入审核；默认私有                      |
+| `--collect` / `--no-collect` | 开启或关闭数据采集改造；更新时不传则保持原值              |
+| `--team <id1,id2>`           | 发布到指定团队，多个团队 ID 用逗号分隔                    |
+| `--api-key <key>`            | 本次请求临时使用指定 API Key                              |
 
 ### Agent 可观测（obs）
 
@@ -235,7 +270,7 @@ npx blueai-skills obs uninstall [--purge]
 npx blueai-skills obs --help
 ```
 
-安装带采集的 Skill（全局方式）时，若本机未安装监测插件：已登录用户会询问是否**自动创建接入记录（主机名命名）并安装 LoongSuite Pilot**；未登录提示先 `login`；`-y`/非交互环境只保留指引不自动执行。
+全局安装时传 `--observability` 会跳过采集询问并直接选择可观测版本。若本机未安装监测插件：已登录用户会询问是否**自动创建接入记录（主机名命名）并安装 LoongSuite Pilot**；未登录提示先 `login`；`-y`/非交互环境只保留指引不自动执行。
 
 本地联调：默认连生产平台，可用 `SKILLS_SITE` 指向本地服务（如本地平台跑在 3001）：
 

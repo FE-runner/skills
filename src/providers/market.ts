@@ -223,6 +223,16 @@ export interface ObservabilityInstallCommand {
   windows: string;
 }
 
+export interface SkillPushMetadata {
+  displayName?: string;
+  brief?: string;
+  skillType?: string;
+  category?: string;
+  changelog?: string;
+  /** undefined=保持默认/原值，true/false=显式设置 */
+  collectEnabled?: boolean;
+}
+
 /** `/api/observability/create` 返回: 创建后记录 + 双平台安装命令/脚本 */
 export interface CreateObservabilityResponse {
   id: string;
@@ -337,7 +347,8 @@ export class MarketProvider {
     version: string | undefined,
     apiKey: string,
     visibility?: 'PRIVATE' | 'PUBLIC',
-    teamIds?: string[]
+    teamIds?: string[],
+    metadata?: SkillPushMetadata
   ): Promise<
     ApiResult<{
       skillId: string;
@@ -350,6 +361,14 @@ export class MarketProvider {
     const body: Record<string, unknown> = { skillMd };
     if (files.length > 0) body.files = files;
     if (version) body.version = version;
+    if (metadata?.displayName) body.displayName = metadata.displayName;
+    if (metadata?.brief) body.brief = metadata.brief;
+    if (metadata?.skillType) body.skillType = metadata.skillType;
+    if (metadata?.category) body.category = metadata.category;
+    if (metadata?.changelog) body.changelog = metadata.changelog;
+    if (metadata?.collectEnabled !== undefined) {
+      body.collectEnabled = metadata.collectEnabled;
+    }
     if (visibility) body.visibility = visibility;
     if (teamIds && teamIds.length > 0) body.teamIds = teamIds;
 

@@ -389,6 +389,12 @@ describe('parseAddOptions', () => {
     expect(result.options.list).toBe(true);
     expect(result.options.global).toBe(true);
   });
+
+  it('should parse --observability as a flag', () => {
+    const result = parseAddOptions(['source', '--observability']);
+    expect(result.source).toEqual(['source']);
+    expect(result.options.observability).toBe(true);
+  });
 });
 
 describe('find-skills prompt with -y flag', () => {

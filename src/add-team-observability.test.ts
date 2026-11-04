@@ -1,0 +1,470 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { runAdd } from './add.ts';
+import * as p from '@clack/prompts';
+import { marketProvider } from './providers/market.ts';
+import { createRecordAndInstallPilot, readLocalPilotStatus } from './obs.ts';
+import { getApiKey } from './auth.ts';
+import { installWellKnownSkillForAgent } from './installer.ts';
+import { addSkillToLock, getAllLockedSkills, getSkillFromLock } from './skill-lock.ts';
+
+vi.mock('@clack/prompts', () => ({
+  intro: vi.fn(),
+  outro: vi.fn(),
+  cancel: vi.fn(),
+  note: vi.fn(),
+  confirm: vi.fn(),
+  select: vi.fn(),
+  isCancel: vi.fn((value: unknown) => typeof value === 'symbol'),
+  log: {
+    info: vi.fn(),
+    message: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    step: vi.fn(),
+  },
+  spinner: vi.fn(() => ({
+    start: vi.fn(),
+    stop: vi.fn(),
+  })),
+}));
+
+vi.mock('./providers/market.ts', () => ({
+  marketProvider: {
+    resolve: vi.fn(),
+    fetchById: vi.fn(),
+  },
+}));
+
+vi.mock('./obs.ts', () => ({
+  readLocalPilotStatus: vi.fn(),
+  createRecordAndInstallPilot: vi.fn(),
+}));
+
+vi.mock('./auth.ts', () => ({
+  getApiKey: vi.fn(),
+}));
+
+vi.mock('./installer.ts', async () => {
+  const actual = await vi.importActual<typeof import('./installer.ts')>('./installer.ts');
+  return {
+    ...actual,
+    installWellKnownSkillForAgent: vi.fn(),
+  };
+});
+
+vi.mock('./skill-lock.ts', async () => {
+  const actual = await vi.importActual<typeof import('./skill-lock.ts')>('./skill-lock.ts');
+  return {
+    ...actual,
+    addSkillToLock: vi.fn(),
+    getAllLockedSkills: vi.fn(async () => ({})),
+    getSkillFromLock: vi.fn(),
+  };
+});
+
+vi.mock('./telemetry.ts', () => ({
+  setVersion: vi.fn(),
+  track: vi.fn(),
+}));
+
+vi.mock('../package.json', () => ({
+  default: { version: 'test' },
+}));
+
+const collect = {
+  config: { collectEnabled: true },
+  meta: { blueai_signature: 'signature' },
+};
+
+function teamSkill(id: string, name: string, includeCollect = true) {
+  return {
+    name,
+    description: '',
+    content: '',
+    installName: name,
+    sourceUrl: `market://${name}`,
+    version: '1.0.0',
+    files: new Map([['SKILL.md', `# ${name}`]]),
+    skillId: id,
+    skillFolderHash: `hash-${id}`,
+    ...(includeCollect ? { collect } : {}),
+  };
+}
+
+describe('team install observability confirmation', () => {
+  const originalIsTTY = process.stdin.isTTY;
+
+  beforeEach(() => {
+    Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: true });
+    vi.clearAllMocks();
+
+    vi.mocked(p.confirm).mockResolvedValueOnce(true).mockResolvedValueOnce(true);
+    vi.mocked(getApiKey).mockReturnValue('sk-test');
+    vi.mocked(getAllLockedSkills).mockResolvedValue({});
+    vi.mocked(getSkillFromLock).mockResolvedValue(null);
+    vi.mocked(readLocalPilotStatus).mockReturnValue({
+      serviceName: null,
+      hasBinary: false,
+      isRunning: null,
+    });
+    vi.mocked(createRecordAndInstallPilot).mockResolvedValue(true);
+    vi.mocked(installWellKnownSkillForAgent).mockResolvedValue({
+      success: true,
+      path: '/tmp/skill',
+      mode: 'copy',
+    });
+
+    vi.mocked(marketProvider.resolve).mockImplementation(
+      async (name: string) =>
+        ({
+          id: `id-${name}`,
+          name,
+          currentVersion: '1.0.0',
+          authorId: 'author-id',
+        }) as never
+    );
+    vi.mocked(marketProvider.fetchById).mockImplementation(
+      async (id: string, _version?: string, _author?: string) =>
+        teamSkill(id, String(id).replace(/^id-/, '')) as never
+    );
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        return new Response(
+          JSON.stringify({
+            data: {
+              teamName: 'Team',
+              skills: [
+                {
+                  id: 'id-skill-a',
+                  teamId: 'team-id',
+                  name: 'skill-a',
+                  displayName: 'Skill A',
+                  currentVersion: '1.0.0',
+                  installVersion: '1.0.0',
+                  visibility: 'PUBLIC',
+                  authorId: 'author-a',
+                },
+                {
+                  id: 'id-skill-b',
+                  teamId: 'team-id',
+                  name: 'skill-b',
+                  displayName: 'Skill B',
+                  currentVersion: '1.0.0',
+                  installVersion: '1.0.0',
+                  visibility: 'PUBLIC',
+                  authorId: 'author-b',
+                },
+              ],
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      })
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    Object.defineProperty(process.stdin, 'isTTY', {
+      configurable: true,
+      value: originalIsTTY,
+    });
+  });
+
+  it('asks once after team collection consent and installs Pilot once', async () => {
+    await runAdd(['t_team-id/team-name'], {
+      agent: ['claude-code'],
+      global: true,
+      copy: true,
+    });
+
+    const messages = vi.mocked(p.confirm).mock.calls.map(([options]) => options.message);
+    expect(messages.some((message) => message.includes('数据采集'))).toBe(true);
+    expect(messages.some((message) => message.includes('LoongSuite Pilot'))).toBe(true);
+    expect(createRecordAndInstallPilot).toHaveBeenCalledTimes(1);
+    expect(marketProvider.resolve).not.toHaveBeenCalled();
+    for (const call of vi.mocked(marketProvider.fetchById).mock.calls) {
+      expect(call[1]).toBe('1.0.0');
+      expect(call[3]).toBe('team-id');
+    }
+  });
+
+  it('writes collect consent only to collect-capable team skills', async () => {
+    vi.mocked(marketProvider.fetchById).mockImplementation(
+      async (id: string, _version?: string, _author?: string) =>
+        String(id) === 'id-skill-b'
+          ? (teamSkill(id, 'skill-b', false) as never)
+          : (teamSkill(id, String(id).replace(/^id-/, '')) as never)
+    );
+
+    await runAdd(['t_team-id/team-name'], {
+      agent: ['claude-code'],
+      global: true,
+      copy: true,
+    });
+
+    const collectCall = vi.mocked(addSkillToLock).mock.calls.find(([name]) => name === 'skill-a');
+    const noCollectCall = vi.mocked(addSkillToLock).mock.calls.find(([name]) => name === 'skill-b');
+
+    expect(collectCall?.[1]).toMatchObject({ collectConsent: true });
+    expect(noCollectCall?.[1]).toMatchObject({ teamId: 'team-id' });
+    expect(noCollectCall?.[1]).not.toHaveProperty('collectConsent');
+  });
+
+  it('does not inherit bare-name public consent for team installs', async () => {
+    const publicEntry = {
+      skillPath: 'id-skill-a',
+      source: 'market/skill-a',
+      sourceType: 'market' as const,
+      sourceUrl: 'market://skill-a',
+      skillFolderHash: 'public-hash',
+      collectConsent: true,
+      installedAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    vi.mocked(getAllLockedSkills).mockResolvedValue({ 'skill-a': publicEntry });
+    vi.mocked(getSkillFromLock).mockImplementation(async (name: string) =>
+      name === 'skill-a' ? publicEntry : null
+    );
+
+    await runAdd(['t_team-id/team-name'], {
+      agent: ['claude-code'],
+      global: true,
+      copy: true,
+      yes: true,
+    });
+
+    expect(addSkillToLock).toHaveBeenCalledWith(
+      'skill-a',
+      expect.objectContaining({ teamId: 'team-id', collectConsent: false })
+    );
+    expect(addSkillToLock).not.toHaveBeenCalledWith(
+      'skill-a',
+      expect.objectContaining({ teamId: 'team-id', collectConsent: true })
+    );
+  });
+
+  it('preserves existing team consent when reinstalling', async () => {
+    const baseEntry = {
+      source: 'market/skill-a',
+      sourceType: 'market',
+      sourceUrl: 'market://skill-a',
+      skillFolderHash: 'team-hash',
+      installedAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      teamId: 'team-id',
+    };
+    vi.mocked(getAllLockedSkills).mockResolvedValue({
+      'skill-a': { ...baseEntry, collectConsent: true },
+      'skill-b': {
+        ...baseEntry,
+        source: 'market/skill-b',
+        sourceUrl: 'market://skill-b',
+        collectConsent: false,
+      },
+    });
+
+    await runAdd(['t_team-id/team-name'], {
+      agent: ['claude-code'],
+      global: true,
+      copy: true,
+      yes: true,
+    });
+
+    expect(addSkillToLock).toHaveBeenCalledWith(
+      'skill-a',
+      expect.objectContaining({ teamId: 'team-id', collectConsent: true })
+    );
+    expect(addSkillToLock).toHaveBeenCalledWith(
+      'skill-b',
+      expect.objectContaining({ teamId: 'team-id', collectConsent: false })
+    );
+  });
+
+  it('keeps non-interactive team installs safe with one Pilot hint', async () => {
+    vi.mocked(p.confirm).mockReset();
+
+    await runAdd(['t_team-id/team-name'], {
+      agent: ['claude-code'],
+      global: true,
+      copy: true,
+      yes: true,
+    });
+
+    const messages = vi
+      .mocked(p.log.message)
+      .mock.calls.map(([message]) => String(message))
+      .filter((message) => message.includes('本机监测插件'));
+
+    expect(messages).toHaveLength(1);
+    expect(p.confirm).not.toHaveBeenCalled();
+    expect(createRecordAndInstallPilot).not.toHaveBeenCalled();
+  });
+
+  it('uses monitored builds when observability=true is explicit', async () => {
+    vi.mocked(p.confirm).mockReset();
+
+    await runAdd(['t_team-id/team-name'], {
+      agent: ['claude-code'],
+      global: true,
+      copy: true,
+      yes: true,
+      observability: true,
+    });
+
+    expect(p.confirm).not.toHaveBeenCalled();
+    expect(addSkillToLock).toHaveBeenCalledWith(
+      'skill-a',
+      expect.objectContaining({ collectConsent: true })
+    );
+    expect(addSkillToLock).toHaveBeenCalledWith(
+      'skill-b',
+      expect.objectContaining({ collectConsent: true })
+    );
+  });
+
+  it('warns and falls back when an explicit team skill has no observability build', async () => {
+    vi.mocked(p.confirm).mockReset();
+    vi.mocked(marketProvider.fetchById).mockImplementation(
+      async (id: string, _version?: string, _author?: string) =>
+        String(id) === 'id-skill-b'
+          ? (teamSkill(id, 'skill-b', false) as never)
+          : (teamSkill(id, String(id).replace(/^id-/, '')) as never)
+    );
+
+    await runAdd(['t_team-id/team-name'], {
+      agent: ['claude-code'],
+      global: true,
+      copy: true,
+      yes: true,
+      observability: true,
+    });
+
+    const messages = vi.mocked(p.log.message).mock.calls.map(([message]) => String(message));
+    const noCollectCall = vi.mocked(addSkillToLock).mock.calls.find(([name]) => name === 'skill-b');
+
+    expect(messages.some((message) => message.includes('未做可观测改造'))).toBe(true);
+    expect(noCollectCall?.[1]).not.toHaveProperty('collectConsent');
+  });
+
+  it('skips team skill when both install versions are missing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              data: {
+                teamName: 'Team',
+                skills: [
+                  {
+                    id: 'id-missing-version',
+                    name: 'missing-version',
+                    displayName: 'Missing',
+                    currentVersion: null,
+                    visibility: 'PUBLIC',
+                    authorId: 'author-a',
+                  },
+                ],
+              },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          )
+      )
+    );
+
+    await runAdd(['t_team-id/team-name'], {
+      agent: ['claude-code'],
+      global: true,
+      copy: true,
+      yes: true,
+    });
+
+    expect(marketProvider.fetchById).not.toHaveBeenCalled();
+    const messages = vi.mocked(p.log.warn).mock.calls.map(([message]) => String(message));
+    expect(
+      messages.some((message) => message.includes('missing installVersion/currentVersion'))
+    ).toBe(true);
+  });
+
+  it('prefers installVersion over currentVersion', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              data: {
+                teamName: 'Team',
+                skills: [
+                  {
+                    id: 'id-skill-a',
+                    name: 'skill-a',
+                    displayName: 'Skill A',
+                    currentVersion: '1.0.0',
+                    installVersion: '2.0.0',
+                    visibility: 'PUBLIC',
+                    authorId: 'author-a',
+                  },
+                ],
+              },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          )
+      )
+    );
+
+    await runAdd(['t_team-id/team-name'], {
+      agent: ['claude-code'],
+      global: true,
+      copy: true,
+      yes: true,
+    });
+
+    for (const call of vi.mocked(marketProvider.fetchById).mock.calls) {
+      expect(call[1]).toBe('2.0.0');
+      expect(call[3]).toBe('team-id');
+    }
+  });
+
+  it('falls back to currentVersion for old Market responses', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              data: {
+                teamName: 'Team',
+                skills: [
+                  {
+                    id: 'id-skill-a',
+                    name: 'skill-a',
+                    displayName: 'Skill A',
+                    currentVersion: '1.0.0',
+                    visibility: 'PUBLIC',
+                    authorId: 'author-a',
+                  },
+                ],
+              },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          )
+      )
+    );
+
+    await runAdd(['t_team-id/team-name'], {
+      agent: ['claude-code'],
+      global: true,
+      copy: true,
+      yes: true,
+    });
+
+    for (const call of vi.mocked(marketProvider.fetchById).mock.calls) {
+      expect(call[1]).toBe('1.0.0');
+      expect(call[3]).toBe('team-id');
+    }
+  });
+});
