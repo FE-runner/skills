@@ -1772,6 +1772,7 @@ export async function handleMarketSkill(
     authorId: string;
     teamId?: string;
   } | null = null;
+  spinner.start(`Resolving "${displayName}" from Skills Market...`);
   if (parsed.marketSkillId && teamId) {
     resolved = {
       id: parsed.marketSkillId,
@@ -1781,7 +1782,6 @@ export async function handleMarketSkill(
       teamId,
     };
   } else {
-    spinner.start(`Resolving "${displayName}" from Skills Market...`);
     resolved = await marketProvider.resolve(skillName, author);
   }
 

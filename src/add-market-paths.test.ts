@@ -160,6 +160,38 @@ describe('market install paths', () => {
     }
   });
 
+  it('keeps spinner start and stop paired for explicit team installs', async () => {
+    let spinnerStarted = false;
+    const spinner = {
+      start: vi.fn(() => {
+        spinnerStarted = true;
+      }),
+      stop: vi.fn(() => {
+        if (!spinnerStarted) {
+          throw new TypeError('s is not a function');
+        }
+        spinnerStarted = false;
+      }),
+    };
+
+    await handleMarketSkill(
+      't_team-id/team-skill',
+      {
+        type: 'market',
+        url: 't_team-id/team-skill',
+        marketName: 'team-skill',
+        marketSkillId: 'id-team-skill',
+        marketTeamId: 'team-id',
+        marketVersion: '1.2.3',
+      },
+      { agent: ['claude-code'], yes: true, copy: true, global: false },
+      spinner as never
+    );
+
+    expect(spinner.start).toHaveBeenCalled();
+    expect(spinner.stop).toHaveBeenCalled();
+  });
+
   it('returns GitHub fallback when market name is not found', async () => {
     vi.mocked(marketProvider.resolve).mockResolvedValue(null);
 
