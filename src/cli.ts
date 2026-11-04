@@ -21,7 +21,12 @@ import { readLocalLock } from './local-lock.ts';
 import { fetchSkillFolderHash, getGitHubToken } from './skill-lock.ts';
 import { getGlobalSkillLockPath } from './paths.ts';
 import { marketProvider } from './providers/market.ts';
-import { buildUpdateInstallSource, formatSourceInput } from './update-source.ts';
+import {
+  buildMarketUpdateInstallSource,
+  buildUpdateInstallSource,
+  checkMarketLockEntry,
+  formatSourceInput,
+} from './update-source.ts';
 import {
   NPX_CMD,
   BIN_NAME,
@@ -128,6 +133,7 @@ ${BOLD}Manage Skills:${RESET}
                        e.g. ${EXAMPLE_REPO}
                             <authorId>/<skill-name>
                             t_<teamId>/<team-name>   (install all team skills)
+                            ts_<skillTeamId>/<skillName> (install one team skill)
   remove [skills]      Remove installed skills
   list, ls             List installed skills
   find [query]         Search for skills interactively
@@ -217,6 +223,7 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ${BIN_NAME} add owner/repo --skill my-skill another-skill
   ${DIM}$${RESET} ${BIN_NAME} add t_<teamId>/<team-name>            ${DIM}# install all team skills${RESET}
   ${DIM}$${RESET} ${BIN_NAME} add t_<teamId>/<team-name> -a claude-code -g -y ${DIM}# team install, silent${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} add ts_<skillTeamId>/<skillName>      ${DIM}# install one team skill${RESET}
   ${DIM}$${RESET} ${BIN_NAME} remove                        ${DIM}# interactive remove${RESET}
   ${DIM}$${RESET} ${BIN_NAME} remove my-skill               ${DIM}# remove by name${RESET}
   ${DIM}$${RESET} ${BIN_NAME} rm --global my-skill
@@ -506,10 +513,10 @@ async function runCheck(args: string[] = []): Promise<void> {
 
     for (const { name, entry } of marketSkills) {
       try {
-        const checkResult = await marketProvider.check(entry.skillPath!, entry.authorId);
-        if (!checkResult) {
-          errors.push({ name, source: entry.source, error: 'Could not fetch from Skills Market' });
-        } else if (checkResult.currentVersion !== entry.version) {
+        const checkResult = await checkMarketLockEntry(name, entry);
+        if (checkResult.error) {
+          errors.push({ name, source: entry.source, error: checkResult.error });
+        } else if (checkResult.hasUpdate) {
           updates.push({ name, source: entry.source });
         }
       } catch (err) {
@@ -565,15 +572,15 @@ async function runCheck(args: string[] = []): Promise<void> {
       if (entry.sourceType === 'market' && entry.skillId) {
         totalSkills++;
         try {
-          const checkResult = await marketProvider.check(entry.skillId, entry.authorId);
-          if (!checkResult) {
+          const checkResult = await checkMarketLockEntry(name, entry);
+          if (checkResult.error) {
             errors.push({
               name,
-              source: `market/${name}`,
-              error: 'Could not fetch from Skills Market',
+              source: entry.source || `market/${name}`,
+              error: checkResult.error,
             });
-          } else if (checkResult.currentVersion !== entry.version) {
-            updates.push({ name, source: `market/${name}` });
+          } else if (checkResult.hasUpdate) {
+            updates.push({ name, source: entry.source || `market/${name}` });
           }
         } catch (err) {
           errors.push({
@@ -646,9 +653,9 @@ async function runUpdate(args: string[] = []): Promise<void> {
       if (entry.sourceType === 'market' && entry.skillPath) {
         checkedCount++;
         try {
-          const checkResult = await marketProvider.check(entry.skillPath, entry.authorId);
-          if (checkResult && checkResult.currentVersion !== entry.version) {
-            const installUrl = entry.source.replace('market/', '');
+          const checkResult = await checkMarketLockEntry(skillName, entry);
+          if (checkResult.hasUpdate) {
+            const installUrl = buildMarketUpdateInstallSource(skillName, entry);
             updates.push({ name: skillName, installUrl });
           }
         } catch {
@@ -757,9 +764,9 @@ async function runUpdate(args: string[] = []): Promise<void> {
       if (entry.sourceType === 'market' && entry.skillId) {
         checkedCount++;
         try {
-          const checkResult = await marketProvider.check(entry.skillId, entry.authorId);
-          if (checkResult && checkResult.currentVersion !== entry.version) {
-            const installUrl = entry.source.replace('market/', '');
+          const checkResult = await checkMarketLockEntry(skillName, entry);
+          if (checkResult.hasUpdate) {
+            const installUrl = buildMarketUpdateInstallSource(skillName, entry);
             updates.push({ name: skillName, installUrl });
           }
         } catch {
@@ -881,6 +888,10 @@ async function main(): Promise<void> {
     case 'install':
     case 'a':
     case 'add': {
+      if (restArgs.includes('--help') || restArgs.includes('-h')) {
+        showHelp();
+        break;
+      }
       showLogo();
       const { source: addSource, options: addOpts } = parseAddOptions(restArgs);
       await runAdd(addSource, addOpts);

@@ -1577,6 +1577,7 @@ async function handleTeamInstall(
         marketTeamId: teamId,
         marketName: skill.name,
         marketVersion: installVersion,
+        marketReleaseId: skill.releaseId,
       },
       skillOptions,
       p.spinner()
@@ -1651,7 +1652,14 @@ async function preflightTeamCollectConsent(
     const version = resolveTeamInstallVersion(s);
     if (!version) continue;
     try {
-      const skill = await marketProvider.fetchById(s.id, version, undefined, teamId, true);
+      const skill = await marketProvider.fetchById(
+        s.id,
+        version,
+        undefined,
+        teamId,
+        true,
+        s.releaseId
+      );
       if (!skill || !hasValidCollect(skill)) continue;
 
       collectSkillNames.add(getTeamCollectKey(teamId, s.id));
@@ -1755,16 +1763,22 @@ export async function handleMarketSkill(
   spinner: ReturnType<typeof p.spinner>
 ): Promise<{ fallbackToGitHub: boolean }> {
   // Name-based install: [author/]name[@version]
-  const skillName = parsed.marketName || source;
-  const author = parsed.marketAuthor;
-  const version = parsed.marketVersion;
-  const teamId = parsed.marketTeamId;
-
-  const displayName = teamId
-    ? `t_${teamId}/${skillName}`
-    : author
-      ? `${author}/${skillName}`
-      : skillName;
+  let skillName = parsed.marketName || source;
+  let author = parsed.marketAuthor;
+  let version = parsed.marketVersion;
+  let teamId = parsed.marketTeamId;
+  let releaseId = parsed.marketReleaseId;
+  const isTeamSkillCommand = source.trim().startsWith('ts_');
+  const teamSkillId = isTeamSkillCommand && author?.startsWith('ts_') ? author.slice(3) : undefined;
+  const displayName = isTeamSkillCommand
+    ? teamSkillId !== undefined
+      ? `ts_${teamSkillId}/${skillName}`
+      : source.trim()
+    : teamId
+      ? `t_${teamId}/${skillName}`
+      : author
+        ? `${author}/${skillName}`
+        : skillName;
   let resolved: {
     id: string;
     name: string;
@@ -1772,8 +1786,40 @@ export async function handleMarketSkill(
     authorId: string;
     teamId?: string;
   } | null = null;
-  spinner.start(`Resolving "${displayName}" from Skills Market...`);
-  if (parsed.marketSkillId && teamId) {
+
+  if (isTeamSkillCommand) {
+    if (!teamSkillId || !skillName || skillName.includes('/') || parsed.marketVersion) {
+      p.outro(
+        pc.red(
+          '团队单 Skill 命令格式错误：应为 ts_<skillTeamId>/<skillName>，且不允许显式 @version'
+        )
+      );
+      process.exit(1);
+    }
+
+    spinner.start(`Resolving "${displayName}" from Skills Market...`);
+    const targetResult = await marketProvider.resolveTeamSkillInstallTarget(teamSkillId, skillName);
+    if (!targetResult.ok) {
+      spinner.stop(pc.red('Failed to resolve team Skill'));
+      p.outro(pc.red(targetResult.message || '团队单 Skill 解析失败'));
+      process.exit(1);
+    }
+
+    const target = targetResult.data;
+    resolved = {
+      id: target.skillId,
+      name: target.skillName,
+      currentVersion: target.installVersion,
+      authorId: '',
+      teamId: target.teamId,
+    };
+    skillName = target.skillName;
+    author = undefined;
+    version = target.installVersion;
+    teamId = target.teamId;
+    releaseId = target.releaseId;
+  } else if (parsed.marketSkillId && teamId) {
+    spinner.start(`Resolving "${displayName}" from Skills Market...`);
     resolved = {
       id: parsed.marketSkillId,
       name: skillName,
@@ -1782,6 +1828,7 @@ export async function handleMarketSkill(
       teamId,
     };
   } else {
+    spinner.start(`Resolving "${displayName}" from Skills Market...`);
     resolved = await marketProvider.resolve(skillName, author);
   }
 
@@ -1805,7 +1852,9 @@ export async function handleMarketSkill(
     resolved.id,
     version,
     author,
-    teamId || resolved.teamId
+    teamId || resolved.teamId,
+    undefined,
+    releaseId
   );
 
   if (!skill) {
@@ -1975,7 +2024,8 @@ export async function handleMarketSkill(
         version,
         author,
         resolved.teamId,
-        true
+        true,
+        releaseId
       );
       const probedValid = probed !== null && hasValidCollect(probed);
       collectCapable = probedValid && options.observability;
@@ -2029,7 +2079,8 @@ export async function handleMarketSkill(
           version,
           author,
           resolved.teamId,
-          true
+          true,
+          releaseId
         );
         const probedValid = probed !== null && hasValidCollect(probed);
         collectCapable = probedValid;
@@ -2073,7 +2124,8 @@ export async function handleMarketSkill(
       version,
       author,
       resolved.teamId,
-      true
+      true,
+      releaseId
     );
     if (monitored && hasValidCollect(monitored)) {
       skill.files = monitored.files;
@@ -2154,11 +2206,13 @@ export async function handleMarketSkill(
   const failed = results.filter((r) => !r.success);
 
   // Track installation
-  const sourceIdentifier = teamId
-    ? `market/team/${teamId}/${skill.installName}`
-    : parsed.marketAuthor
-      ? `market/${parsed.marketAuthor}/${skill.installName}`
-      : `market/${skill.installName}`;
+  const sourceIdentifier = teamSkillId
+    ? `ts_${teamSkillId}/${skillName}`
+    : teamId
+      ? `market/team/${teamId}/${skill.installName}`
+      : parsed.marketAuthor
+        ? `market/${parsed.marketAuthor}/${skill.installName}`
+        : `market/${skill.installName}`;
 
   track({
     event: 'install',
@@ -2181,6 +2235,9 @@ export async function handleMarketSkill(
         version: skill.version,
         authorId: teamId ? undefined : resolved.authorId,
         ...(teamId ? { teamId } : {}),
+        ...(teamSkillId ? { skillTeamId: teamSkillId } : {}),
+        ...(releaseId ? { releaseId } : {}),
+        ...(teamSkillId ? { teamSkillName: skillName } : {}),
         ...(writeCollectConsent !== undefined ? { collectConsent: writeCollectConsent } : {}),
       });
     } catch {
@@ -2203,7 +2260,11 @@ export async function handleMarketSkill(
             computedHash,
             version: skill.version,
             skillId: skill.skillId,
-            authorId: resolved.authorId,
+            authorId: teamId ? undefined : resolved.authorId,
+            ...(teamId ? { teamId } : {}),
+            ...(teamSkillId ? { skillTeamId: teamSkillId } : {}),
+            ...(releaseId ? { releaseId } : {}),
+            ...(teamSkillId ? { teamSkillName: skillName } : {}),
           },
           cwd
         );

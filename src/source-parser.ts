@@ -500,6 +500,9 @@ function isMarketInstallCommand(input: string): boolean {
   if (input.startsWith('http://') || input.startsWith('https://')) return false;
   if (input.trim().length === 0) return false;
 
+  // 团队单 Skill 必须先进入 Market 分支，由命令层负责精确校验段数与版本后缀
+  if (input.startsWith('ts_')) return true;
+
   // Contains non-ASCII -> market skill name
   if (/[^\x00-\x7F]/.test(input)) return true;
 

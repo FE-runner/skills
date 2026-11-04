@@ -1,0 +1,7 @@
+schema: spec-driven
+created: 2026-11-04
+lyx:
+  isolation: worktree
+  sourceBranch: develop
+  developmentBranch: feature/team-skill-install-command
+  worktreePath: /Users/ly/.ly/worktrees/skills-cli/feature/team-skill-install-command

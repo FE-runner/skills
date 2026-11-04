@@ -6,6 +6,7 @@ import { runTrack } from './track.ts';
 import { runCli } from './test-utils.ts';
 import { marketProvider } from './providers/market.ts';
 import { installWellKnownSkillForAgent } from './installer.ts';
+import * as p from '@clack/prompts';
 
 vi.mock('./installer.ts', () => ({
   installWellKnownSkillForAgent: vi.fn().mockResolvedValue({
@@ -97,7 +98,14 @@ describe('track command', () => {
 
     await runTrack(['on', 'demo']);
 
-    expect(fetchMock).toHaveBeenCalledWith('skill-123', '1.0.0', undefined, undefined, true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'skill-123',
+      '1.0.0',
+      undefined,
+      undefined,
+      true,
+      undefined
+    );
     const lock = readLock();
     expect((lock.skills['demo'] as { collectConsent: unknown }).collectConsent).toBe(true);
   });
@@ -107,7 +115,14 @@ describe('track command', () => {
 
     await runTrack(['off', 'demo']);
 
-    expect(fetchMock).toHaveBeenCalledWith('skill-123', '1.0.0', undefined, undefined, false);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'skill-123',
+      '1.0.0',
+      undefined,
+      undefined,
+      false,
+      undefined
+    );
     const lock = readLock();
     expect((lock.skills['demo'] as { collectConsent: unknown }).collectConsent).toBe(false);
   });
@@ -173,5 +188,75 @@ describe('track command', () => {
     expect(entry.teamId).toBe('team-a');
     expect(entry.source).toBe('market/team/team-a/demo');
     expect(entry.collectConsent).toBe(true);
+  });
+
+  it('track list and toggles preserve team single Skill release context', async () => {
+    writeLock({
+      demo: marketSkillEntry({
+        teamId: 'team-a',
+        skillTeamId: 'skill-team-a',
+        releaseId: 'release-a',
+        teamSkillName: 'release-name',
+        source: 'ts_skill-team-a/release-name',
+      }),
+    });
+    fetchMock.mockResolvedValue(
+      marketSkillResult({
+        collect: { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } },
+      })
+    );
+
+    const output = runCli(['track', 'list'], process.cwd());
+    expect(output.stdout).toContain('ts_skill-team-a/release-name');
+
+    await runTrack(['on', 'ts_skill-team-a/release-name']);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'skill-123',
+      '1.0.0',
+      undefined,
+      'team-a',
+      true,
+      'release-a'
+    );
+    const entry = readLock().skills.demo as {
+      teamId?: string;
+      skillTeamId?: string;
+      releaseId?: string;
+      teamSkillName?: string;
+      source?: string;
+      collectConsent?: boolean;
+    };
+    expect(entry).toMatchObject({
+      teamId: 'team-a',
+      skillTeamId: 'skill-team-a',
+      releaseId: 'release-a',
+      teamSkillName: 'release-name',
+      source: 'ts_skill-team-a/release-name',
+      collectConsent: true,
+    });
+  });
+
+  it('keeps consent unchanged when a team single Skill release is stale', async () => {
+    writeLock({
+      demo: marketSkillEntry({
+        teamId: 'team-a',
+        skillTeamId: 'skill-team-a',
+        releaseId: 'stale-release',
+        source: 'ts_skill-team-a/demo',
+        collectConsent: false,
+      }),
+    });
+    fetchMock.mockResolvedValue(null);
+    const errorSpy = vi.spyOn(p.log, 'error');
+
+    await runTrack(['on', 'ts_skill-team-a/demo']);
+
+    const entry = readLock().skills.demo as { collectConsent?: boolean };
+    expect(entry.collectConsent).toBe(false);
+    expect(installWellKnownSkillForAgent).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('团队版本不可用：ts_skill-team-a/demo v1.0.0')
+    );
   });
 });

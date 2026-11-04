@@ -12,6 +12,7 @@ describe('skills CLI', () => {
       expect(output).toContain('Manage Skills:');
       expect(output).toContain('init [name]');
       expect(output).toContain('add <package>');
+      expect(output).toContain('ts_<skillTeamId>/<skillName>');
       expect(output).toContain('check');
       expect(output).toContain('update');
       expect(output).toContain('Add Options:');
@@ -31,6 +32,12 @@ describe('skills CLI', () => {
       const helpOutput = runCliOutput(['--help']);
       const hOutput = runCliOutput(['-h']);
       expect(hOutput).toBe(helpOutput);
+    });
+
+    it('should show add command help at the command position', () => {
+      const output = runCliOutput(['add', '--help']);
+      expect(output).toContain('ts_<skillTeamId>/<skillName>');
+      expect(output).toContain('t_<teamId>/<team-name>');
     });
   });
 
