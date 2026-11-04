@@ -2,6 +2,16 @@
 
 > 本 CHANGELOG 仅记录 BMC 内部 Fork（`-bmc` 标签）自身的改动，不包含上游 `blueai-skills` 原始项目的版本历史。
 
+## [1.4.7-bmc1.9.0] - 2026-11-04
+
+### 新功能
+
+- **团队单 Skill 安装**：新增 `ts_<skillTeamId>/<skillName>` 安装源，通过团队 resolver 定位当前 approved release，并只安装该入口指向的单个 Skill。下载、采集探测和正式安装统一携带 `skillId`、`teamId`、版本与 `releaseId`，避免名称变化或 release 切换造成错装；解析失败时 fail-closed，不回退公开、私有、GitHub 或全团队安装。全局与项目 lock 保存团队单 Skill 上下文，`track on/off` 复用同一 release，`check/update` 走团队 resolver；CLI help 与 README 同时展示 `t_` 批量安装和 `ts_` 单 Skill 安装。
+
+### 修复
+
+- **团队单 Skill 的 track 失败提示**：当 `releaseId` 已失效时，`track on/off` 明确输出“团队版本不可用”，与 fail-closed 契约一致；普通 Market entry 的失败提示保持不变。
+
 ## [1.4.7-bmc1.8.1] - 2026-11-04
 
 ### 修复
