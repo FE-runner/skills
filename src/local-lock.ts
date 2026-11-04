@@ -31,6 +31,14 @@ export interface LocalSkillLockEntry {
   skillId?: string;
   /** Market skill author ID for private skill verification */
   authorId?: string;
+  /** Market Team ID for team release installs */
+  teamId?: string;
+  /** Market SkillTeam ID for team single Skill installs */
+  skillTeamId?: string;
+  /** Immutable approved team release ID used by this lock entry */
+  releaseId?: string;
+  /** Team release name used by `ts_` resolver; may differ from install directory name */
+  teamSkillName?: string;
 }
 
 /**

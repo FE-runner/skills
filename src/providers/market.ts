@@ -169,6 +169,18 @@ export interface MarketSkill extends RemoteSkill {
   binaryFileErrors?: string[];
 }
 
+/** 团队单 Skill 安装目标，与 Market `TeamSkillInstallTargetResponse` 对齐 */
+export interface TeamSkillInstallTarget {
+  skillTeamId: string;
+  teamId: string;
+  teamName: string;
+  skillId: string;
+  skillName: string;
+  displayName: string;
+  installVersion: string;
+  releaseId: string;
+}
+
 /**
  * Install API response shape from the market.
  */
@@ -286,6 +298,21 @@ export class MarketProvider {
   }
 
   /**
+   * 按 SkillTeam ID 与期望名称解析团队单 Skill 的当前生效 release。
+   * 使用结构化结果保留 404/409 消息，供命令层 fail-closed。
+   */
+  async resolveTeamSkillInstallTarget(
+    skillTeamId: string,
+    skillName: string
+  ): Promise<ApiResult<TeamSkillInstallTarget>> {
+    const params = new URLSearchParams({ id: skillTeamId, name: skillName });
+    return requestApiResult<TeamSkillInstallTarget>(
+      `${this.apiBase}/api/team/skill/installTarget?${params}`,
+      { method: 'GET' }
+    );
+  }
+
+  /**
    * Install a skill by its market ID.
    * Pass `author` for private skills (userId format).
    * Pass `team` for team skills (teamId format),优先于 author。
@@ -295,13 +322,16 @@ export class MarketProvider {
     version?: string,
     author?: string,
     team?: string,
-    report?: boolean
+    report?: boolean,
+    releaseId?: string
   ): Promise<MarketSkill | null> {
     try {
       const body: Record<string, string | boolean> = { id: skillId };
       if (version) body.version = version;
-      if (team) body.team = team;
-      else if (author) body.author = author;
+      if (team) {
+        body.team = team;
+        if (releaseId) body.releaseId = releaseId;
+      } else if (author) body.author = author;
       // Market 契约（SkillInstallBody）report 为 boolean；发字符串 'true' 会被
       // 路由的 `body.report === true` 判 false，导致采集配置永不下发
       if (report) body.report = true;

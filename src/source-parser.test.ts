@@ -73,6 +73,28 @@ describe('source-parser', () => {
   });
 
   describe('Existing GitHub Support', () => {
+    it('parses team single Skill source as market', () => {
+      const result = parseSource('ts_team-skill-1/my-skill');
+      expect(result).toEqual({
+        type: 'market',
+        url: 'ts_team-skill-1/my-skill',
+        marketAuthor: 'ts_team-skill-1',
+        marketName: 'my-skill',
+        marketVersion: undefined,
+      });
+    });
+
+    it('keeps malformed team single Skill source in market for command validation', () => {
+      const extraSegment = parseSource('ts_team-skill-1/my-skill/extra');
+      expect(extraSegment.type).toBe('market');
+      expect(extraSegment.marketAuthor).toBe('ts_team-skill-1');
+      expect(extraSegment.marketName).toBe('my-skill/extra');
+
+      const explicitVersion = parseSource('ts_team-skill-1/my-skill@1.2.3');
+      expect(explicitVersion.type).toBe('market');
+      expect(explicitVersion.marketVersion).toBe('1.2.3');
+    });
+
     it('parses github shorthand as market (market priority)', () => {
       const result = parseSource('vercel-labs/agent-skills');
       expect(result).toEqual({

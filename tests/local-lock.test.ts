@@ -62,6 +62,35 @@ describe('local-lock', () => {
       }
     });
 
+    it('preserves optional team single Skill context without a schema bump', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'lock-test-'));
+      try {
+        const content = {
+          version: 1,
+          skills: {
+            'team-skill': {
+              source: 'ts_skill-team-a/team-skill',
+              sourceType: 'market',
+              computedHash: 'abc123',
+              version: '1.0.0',
+              skillId: 'skill-1',
+              teamId: 'team-a',
+              skillTeamId: 'skill-team-a',
+              releaseId: 'release-1',
+              teamSkillName: 'team-release-name',
+            },
+          },
+        };
+        await writeFile(join(dir, 'skills-lock.json'), JSON.stringify(content), 'utf-8');
+
+        const lock = await readLocalLock(dir);
+        expect(lock.version).toBe(1);
+        expect(lock.skills['team-skill']).toEqual(content.skills['team-skill']);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
     it('returns empty lock for corrupted JSON (merge conflict markers)', async () => {
       const dir = await mkdtemp(join(tmpdir(), 'lock-test-'));
       try {

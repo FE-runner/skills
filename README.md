@@ -5,7 +5,9 @@
 开放式 AI Agent 技能生态系统的 CLI 工具。
 
 <!-- agent-list:start -->
+
 Supports **Claude Code**, **Codex**, **OpenClaw**, **Hermes**, and [43 more](#available-agents).
+
 <!-- agent-list:end -->
 
 ## 安装技能
@@ -28,6 +30,9 @@ npx blueai-skills add <authorId>/create-adaptable-composable
 
 # Skills Market — 安装团队全部技能（t_ 前缀 + teamId）
 npx blueai-skills add t_<teamId>/<teamName>
+
+# Skills Market — 安装指定团队 Skill（ts_ 前缀 + SkillTeam ID）
+npx blueai-skills add ts_<skillTeamId>/<skillName>
 
 # COS 直链 — 浏览可用技能
 npx blueai-skills add https://<bucket>.cos.<region>.myqcloud.com/<prefix>/ --list
@@ -56,16 +61,16 @@ npx blueai-skills add ./my-local-skills
 
 ### 选项
 
-| 选项                      | 说明                                                                                                                          |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `-g, --global`            | 安装到用户目录而非项目目录                                                                                                    |
+| 选项                      | 说明                                                                                                                                               |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-g, --global`            | 安装到用户目录而非项目目录                                                                                                                         |
 | `-a, --agent <agents...>` | <!-- agent-names:start -->Target specific agents (e.g., `claude-code`, `codex`). See [Available Agents](#available-agents)<!-- agent-names:end --> |
-| `-s, --skill <skills...>` | 按名称安装指定技能（使用 `'*'` 安装所有技能）                                                                                 |
-| `-l, --list`              | 列出可用技能但不安装                                                                                                          |
-| `--copy`                  | 复制文件到 Agent 目录而非使用符号链接                                                                                         |
-| `-y, --yes`               | 跳过所有确认提示；未指定 `-g` 时默认安装到**项目**，安装方式默认为**符号链接**（多 Agent）或复制（单 Agent）                  |
-| `--all`                   | 将所有技能安装到所有 Agent，无需确认                                                                                          |
-| `--observability`         | 全局安装时本次显式使用可观测版本；未传时沿用已有采集状态与首次询问                                                            |
+| `-s, --skill <skills...>` | 按名称安装指定技能（使用 `'*'` 安装所有技能）                                                                                                      |
+| `-l, --list`              | 列出可用技能但不安装                                                                                                                               |
+| `--copy`                  | 复制文件到 Agent 目录而非使用符号链接                                                                                                              |
+| `-y, --yes`               | 跳过所有确认提示；未指定 `-g` 时默认安装到**项目**，安装方式默认为**符号链接**（多 Agent）或复制（单 Agent）                                       |
+| `--all`                   | 将所有技能安装到所有 Agent，无需确认                                                                                                               |
+| `--observability`         | 全局安装时本次显式使用可观测版本；未传时沿用已有采集状态与首次询问                                                                                 |
 
 ### 示例
 
@@ -97,6 +102,9 @@ npx blueai-skills add owner/repo --agent '*' --skill my-skill
 # 安装团队全部技能（在团队页面复制命令）
 npx blueai-skills add t_<teamId>/<teamName>
 
+# 安装指定团队 Skill（SkillTeam 详情页复制命令）
+npx blueai-skills add ts_<skillTeamId>/<skillName>
+
 # 安装团队全部技能，指定 Agent 和全局范围，静默执行
 npx blueai-skills add t_<teamId>/<teamName> -a claude-code -g -y
 
@@ -109,7 +117,9 @@ npx blueai-skills add t_<teamId>/<teamName> -g --observability
 
 ### 团队安装
 
-通过 `t_<teamId>/<teamName>` 格式一次安装某个 Skills Market 团队的全部已审核技能。`t_` 前缀用于区分团队来源与私有技能（`authorId/name`）。
+通过 `t_<teamId>/<teamName>` 格式一次安装某个 Skills Market 团队的全部已审核技能。
+
+通过 `ts_<skillTeamId>/<skillName>` 格式安装团队内的一个 Skill。`skillTeamId` 是团队详情里该 Skill 的稳定 ID；名称用于识别目标，实际版本与 release 由 Market 解析并以不可变 `releaseId` 锁定。`ts_` 命令不接受显式 `@version`，避免绕过团队审核版本。
 
 安装命令可在团队页面的"安装命令"按钮中复制。
 
@@ -119,6 +129,9 @@ npx blueai-skills add t_<teamId>/<teamName>
 
 # 静默安装：指定 Agent、全局范围、跳过所有确认
 npx blueai-skills add t_<teamId>/<teamName> -a claude-code -g -y
+
+# 安装团队中的一个 Skill
+npx blueai-skills add ts_<skillTeamId>/<skillName> -a claude-code -g -y
 ```
 
 支持全部 `add` 选项：`--agent`、`--global`、`--copy`、`--yes`、`--observability`。Agent、安装范围和安装方式在循环开始前统一询问一次，后续每个技能静默复用同一配置；传 `--observability` 时，团队中带有效采集配置的 Skill 直接安装可观测版本。
@@ -141,18 +154,18 @@ npx blueai-skills add t_<teamId>/<teamName> -a claude-code -g -y
 
 ## 其他命令
 
-| 命令                                | 说明                                              |
-| ----------------------------------- | ------------------------------------------------- |
-| `npx blueai-skills list`            | 列出已安装的技能（别名：`ls`）                    |
-| `npx blueai-skills find [query]`    | 交互式搜索或按关键词搜索技能                      |
-| `npx blueai-skills remove [skills]` | 从 Agent 中移除已安装的技能                       |
-| `npx blueai-skills check`           | 检查可用的技能更新（默认项目级，`-g` 全局）       |
-| `npx blueai-skills update`          | 更新已安装技能到最新版本（默认项目级，`-g` 全局） |
-| `npx blueai-skills init [name]`     | 创建新的 SKILL.md 模板                            |
-| `npx blueai-skills login <api-key>` | 保存 Skills Market API Key，供 publish/withdraw/whoami 鉴权 |
-| `npx blueai-skills whoami`          | 查看当前保存的 API Key 对应的登录用户             |
+| 命令                                | 说明                                                                        |
+| ----------------------------------- | --------------------------------------------------------------------------- |
+| `npx blueai-skills list`            | 列出已安装的技能（别名：`ls`）                                              |
+| `npx blueai-skills find [query]`    | 交互式搜索或按关键词搜索技能                                                |
+| `npx blueai-skills remove [skills]` | 从 Agent 中移除已安装的技能                                                 |
+| `npx blueai-skills check`           | 检查可用的技能更新（默认项目级，`-g` 全局）                                 |
+| `npx blueai-skills update`          | 更新已安装技能到最新版本（默认项目级，`-g` 全局）                           |
+| `npx blueai-skills init [name]`     | 创建新的 SKILL.md 模板                                                      |
+| `npx blueai-skills login <api-key>` | 保存 Skills Market API Key，供 publish/withdraw/whoami 鉴权                 |
+| `npx blueai-skills whoami`          | 查看当前保存的 API Key 对应的登录用户                                       |
 | `npx blueai-skills publish [path]`  | 将本地 Skill 推送/更新到市场（私有 upsert，或 `--public` 推送为公开 Skill） |
-| `npx blueai-skills withdraw <name>` | 撤回处于审核中（PENDING）的公开 Skill             |
+| `npx blueai-skills withdraw <name>` | 撤回处于审核中（PENDING）的公开 Skill                                       |
 
 ### `blueai-skills list`
 
@@ -288,12 +301,11 @@ curl -fsSL "http://localhost:3001/api/observability/install?token=<token>&os=uni
 Invoke-WebRequest -Uri "http://localhost:3001/api/observability/install?token=<token>&os=windows" -OutFile "$env:TEMP\skills-obs.ps1" -UseBasicParsing; powershell -ExecutionPolicy Bypass -File "$env:TEMP\skills-obs.ps1"
 ```
 
-
 ### 选项
 
-| 选项              | 说明                                                                 |
-| ----------------- | -------------------------------------------------------------------- |
-| `--uid <union_id>` | 传入飞书 union_id，搜索结果中额外包含你的私有技能和所在团队的技能   |
+| 选项               | 说明                                                              |
+| ------------------ | ----------------------------------------------------------------- |
+| `--uid <union_id>` | 传入飞书 union_id，搜索结果中额外包含你的私有技能和所在团队的技能 |
 
 ### `blueai-skills check` / `blueai-skills update`
 
@@ -383,51 +395,53 @@ Agent 技能是可复用的指令集，用于扩展编程 Agent 的能力。它�
 技能可安装到以下任意 Agent：
 
 <!-- supported-agents:start -->
-| Agent | `--agent` | Project Path | Global Path |
-|-------|-----------|--------------|-------------|
-| Claude Code | `claude-code` | `.claude/skills/` | `~/.claude/skills/` |
-| Codex | `codex` | `.agents/skills/` | `~/.codex/skills/` |
-| OpenClaw | `openclaw` | `skills/` | `~/.openclaw/skills/` |
-| Hermes | `hermes` | `skills/` | `~/.hermes/skills/` |
-| WorkBuddy | `workbuddy` | `.workbuddy/skills/` | `~/.workbuddy/skills/` |
-| AdaL | `adal` | `.adal/skills/` | `~/.adal/skills/` |
-| Amp, Kimi Code CLI, Replit, Universal | `amp`, `kimi-cli`, `replit`, `universal` | `.agents/skills/` | `~/.config/agents/skills/` |
-| Antigravity | `antigravity` | `.agents/skills/` | `~/.gemini/antigravity/skills/` |
-| Augment | `augment` | `.augment/skills/` | `~/.augment/skills/` |
-| IBM Bob | `bob` | `.bob/skills/` | `~/.bob/skills/` |
-| Cline, Warp | `cline`, `warp` | `.agents/skills/` | `~/.agents/skills/` |
-| CodeBuddy | `codebuddy` | `.codebuddy/skills/` | `~/.codebuddy/skills/` |
-| Command Code | `command-code` | `.commandcode/skills/` | `~/.commandcode/skills/` |
-| Continue | `continue` | `.continue/skills/` | `~/.continue/skills/` |
-| Cortex Code | `cortex` | `.cortex/skills/` | `~/.snowflake/cortex/skills/` |
-| Crush | `crush` | `.crush/skills/` | `~/.config/crush/skills/` |
-| Cursor | `cursor` | `.agents/skills/` | `~/.cursor/skills/` |
-| Deep Agents | `deepagents` | `.agents/skills/` | `~/.deepagents/agent/skills/` |
-| Droid | `droid` | `.factory/skills/` | `~/.factory/skills/` |
-| Firebender | `firebender` | `.agents/skills/` | `~/.firebender/skills/` |
-| Gemini CLI | `gemini-cli` | `.agents/skills/` | `~/.gemini/skills/` |
-| GitHub Copilot | `github-copilot` | `.agents/skills/` | `~/.copilot/skills/` |
-| Goose | `goose` | `.goose/skills/` | `~/.config/goose/skills/` |
-| iFlow CLI | `iflow-cli` | `.iflow/skills/` | `~/.iflow/skills/` |
-| Junie | `junie` | `.junie/skills/` | `~/.junie/skills/` |
-| Kilo Code | `kilo` | `.kilocode/skills/` | `~/.kilocode/skills/` |
-| Kiro CLI | `kiro-cli` | `.kiro/skills/` | `~/.kiro/skills/` |
-| Kode | `kode` | `.kode/skills/` | `~/.kode/skills/` |
-| MCPJam | `mcpjam` | `.mcpjam/skills/` | `~/.mcpjam/skills/` |
-| Mistral Vibe | `mistral-vibe` | `.vibe/skills/` | `~/.vibe/skills/` |
-| Mux | `mux` | `.mux/skills/` | `~/.mux/skills/` |
-| Neovate | `neovate` | `.neovate/skills/` | `~/.neovate/skills/` |
-| OpenCode | `opencode` | `.agents/skills/` | `~/.config/opencode/skills/` |
-| OpenHands | `openhands` | `.openhands/skills/` | `~/.openhands/skills/` |
-| Pi | `pi` | `.pi/skills/` | `~/.pi/agent/skills/` |
-| Pochi | `pochi` | `.pochi/skills/` | `~/.pochi/skills/` |
-| Qoder | `qoder` | `.qoder/skills/` | `~/.qoder/skills/` |
-| Qwen Code | `qwen-code` | `.qwen/skills/` | `~/.qwen/skills/` |
-| Roo Code | `roo` | `.roo/skills/` | `~/.roo/skills/` |
-| Trae | `trae` | `.trae/skills/` | `~/.trae/skills/` |
-| Trae CN | `trae-cn` | `.trae/skills/` | `~/.trae-cn/skills/` |
-| Windsurf | `windsurf` | `.windsurf/skills/` | `~/.codeium/windsurf/skills/` |
-| Zencoder | `zencoder` | `.zencoder/skills/` | `~/.zencoder/skills/` |
+
+| Agent                                 | `--agent`                                | Project Path           | Global Path                     |
+| ------------------------------------- | ---------------------------------------- | ---------------------- | ------------------------------- |
+| Claude Code                           | `claude-code`                            | `.claude/skills/`      | `~/.claude/skills/`             |
+| Codex                                 | `codex`                                  | `.agents/skills/`      | `~/.codex/skills/`              |
+| OpenClaw                              | `openclaw`                               | `skills/`              | `~/.openclaw/skills/`           |
+| Hermes                                | `hermes`                                 | `skills/`              | `~/.hermes/skills/`             |
+| WorkBuddy                             | `workbuddy`                              | `.workbuddy/skills/`   | `~/.workbuddy/skills/`          |
+| AdaL                                  | `adal`                                   | `.adal/skills/`        | `~/.adal/skills/`               |
+| Amp, Kimi Code CLI, Replit, Universal | `amp`, `kimi-cli`, `replit`, `universal` | `.agents/skills/`      | `~/.config/agents/skills/`      |
+| Antigravity                           | `antigravity`                            | `.agents/skills/`      | `~/.gemini/antigravity/skills/` |
+| Augment                               | `augment`                                | `.augment/skills/`     | `~/.augment/skills/`            |
+| IBM Bob                               | `bob`                                    | `.bob/skills/`         | `~/.bob/skills/`                |
+| Cline, Warp                           | `cline`, `warp`                          | `.agents/skills/`      | `~/.agents/skills/`             |
+| CodeBuddy                             | `codebuddy`                              | `.codebuddy/skills/`   | `~/.codebuddy/skills/`          |
+| Command Code                          | `command-code`                           | `.commandcode/skills/` | `~/.commandcode/skills/`        |
+| Continue                              | `continue`                               | `.continue/skills/`    | `~/.continue/skills/`           |
+| Cortex Code                           | `cortex`                                 | `.cortex/skills/`      | `~/.snowflake/cortex/skills/`   |
+| Crush                                 | `crush`                                  | `.crush/skills/`       | `~/.config/crush/skills/`       |
+| Cursor                                | `cursor`                                 | `.agents/skills/`      | `~/.cursor/skills/`             |
+| Deep Agents                           | `deepagents`                             | `.agents/skills/`      | `~/.deepagents/agent/skills/`   |
+| Droid                                 | `droid`                                  | `.factory/skills/`     | `~/.factory/skills/`            |
+| Firebender                            | `firebender`                             | `.agents/skills/`      | `~/.firebender/skills/`         |
+| Gemini CLI                            | `gemini-cli`                             | `.agents/skills/`      | `~/.gemini/skills/`             |
+| GitHub Copilot                        | `github-copilot`                         | `.agents/skills/`      | `~/.copilot/skills/`            |
+| Goose                                 | `goose`                                  | `.goose/skills/`       | `~/.config/goose/skills/`       |
+| iFlow CLI                             | `iflow-cli`                              | `.iflow/skills/`       | `~/.iflow/skills/`              |
+| Junie                                 | `junie`                                  | `.junie/skills/`       | `~/.junie/skills/`              |
+| Kilo Code                             | `kilo`                                   | `.kilocode/skills/`    | `~/.kilocode/skills/`           |
+| Kiro CLI                              | `kiro-cli`                               | `.kiro/skills/`        | `~/.kiro/skills/`               |
+| Kode                                  | `kode`                                   | `.kode/skills/`        | `~/.kode/skills/`               |
+| MCPJam                                | `mcpjam`                                 | `.mcpjam/skills/`      | `~/.mcpjam/skills/`             |
+| Mistral Vibe                          | `mistral-vibe`                           | `.vibe/skills/`        | `~/.vibe/skills/`               |
+| Mux                                   | `mux`                                    | `.mux/skills/`         | `~/.mux/skills/`                |
+| Neovate                               | `neovate`                                | `.neovate/skills/`     | `~/.neovate/skills/`            |
+| OpenCode                              | `opencode`                               | `.agents/skills/`      | `~/.config/opencode/skills/`    |
+| OpenHands                             | `openhands`                              | `.openhands/skills/`   | `~/.openhands/skills/`          |
+| Pi                                    | `pi`                                     | `.pi/skills/`          | `~/.pi/agent/skills/`           |
+| Pochi                                 | `pochi`                                  | `.pochi/skills/`       | `~/.pochi/skills/`              |
+| Qoder                                 | `qoder`                                  | `.qoder/skills/`       | `~/.qoder/skills/`              |
+| Qwen Code                             | `qwen-code`                              | `.qwen/skills/`        | `~/.qwen/skills/`               |
+| Roo Code                              | `roo`                                    | `.roo/skills/`         | `~/.roo/skills/`                |
+| Trae                                  | `trae`                                   | `.trae/skills/`        | `~/.trae/skills/`               |
+| Trae CN                               | `trae-cn`                                | `.trae/skills/`        | `~/.trae-cn/skills/`            |
+| Windsurf                              | `windsurf`                               | `.windsurf/skills/`    | `~/.codeium/windsurf/skills/`   |
+| Zencoder                              | `zencoder`                               | `.zencoder/skills/`    | `~/.zencoder/skills/`           |
+
 <!-- supported-agents:end -->
 
 > [!NOTE]
@@ -489,6 +503,7 @@ metadata:
 CLI 在仓库中的以下位置搜索技能：
 
 <!-- skill-discovery:start -->
+
 - Root directory (if it contains `SKILL.md`)
 - `skills/`
 - `skills/.curated/`

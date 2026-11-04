@@ -31,3 +31,4 @@
 - 团队单 Skill 的采集探测必须传同一 `releaseId`，不能只复用 id/team/version。
 - `track` 的历史 `t_` entry 没有 `releaseId`；新增字段必须可选，否则会让旧 lock 失效。
 - 项目级 lock 的恢复来源应保留可重新解析的 `ts_<skillTeamId>/<skillName>`，不能写成普通 `market/<name>`。
+- Market 返回的 `installName` 可能是 displayName，而 resolver 需要比较 approved release 的 `name`；lock 额外保存可选 `teamSkillName`，track/check/update 都优先用它。

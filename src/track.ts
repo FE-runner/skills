@@ -25,7 +25,11 @@ async function runTrackList(): Promise<void> {
     const consent = entry.collectConsent;
     const status = consent === true ? 'on' : consent === false ? 'off' : '未定夺（首次未询问）';
     rows.push({
-      name: entry.teamId ? `t_${entry.teamId}/${name}` : name,
+      name: entry.skillTeamId
+        ? `ts_${entry.skillTeamId}/${entry.teamSkillName || name}`
+        : entry.teamId
+          ? `t_${entry.teamId}/${name}`
+          : name,
       status,
     });
   }
@@ -58,6 +62,9 @@ interface ResolvedTarget {
   version?: string;
   authorId?: string;
   teamId?: string;
+  skillTeamId?: string;
+  releaseId?: string;
+  teamSkillName?: string;
 }
 
 async function resolveTarget(skillName: string): Promise<ResolvedTarget | null> {
@@ -66,7 +73,11 @@ async function resolveTarget(skillName: string): Promise<ResolvedTarget | null> 
   if (!entry) {
     const entries = await getAllLockedSkills();
     const matched = Object.entries(entries).find(
-      ([key, candidate]) => candidate.teamId && `t_${candidate.teamId}/${key}` === skillName
+      ([key, candidate]) =>
+        (candidate.skillTeamId && `ts_${candidate.skillTeamId}/${key}` === skillName) ||
+        (candidate.skillTeamId &&
+          `ts_${candidate.skillTeamId}/${candidate.teamSkillName}` === skillName) ||
+        (candidate.teamId && `t_${candidate.teamId}/${key}` === skillName)
     );
     if (matched) {
       lockKey = matched[0];
@@ -90,6 +101,9 @@ async function resolveTarget(skillName: string): Promise<ResolvedTarget | null> 
     version: entry.version,
     authorId: entry.authorId,
     teamId: entry.teamId,
+    skillTeamId: entry.skillTeamId,
+    releaseId: entry.releaseId,
+    teamSkillName: entry.teamSkillName,
   };
 }
 
@@ -109,7 +123,8 @@ async function runTrackToggle(skillName: string, report: boolean): Promise<void>
     target.version,
     target.authorId,
     target.teamId,
-    report
+    report,
+    target.releaseId
   );
 
   if (!skill) {
@@ -151,6 +166,9 @@ async function runTrackToggle(skillName: string, report: boolean): Promise<void>
     version: skill.version,
     authorId: target.authorId,
     teamId: target.teamId,
+    skillTeamId: target.skillTeamId,
+    releaseId: target.releaseId,
+    teamSkillName: target.teamSkillName,
     collectConsent: report,
   });
 

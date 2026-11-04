@@ -81,6 +81,8 @@ export interface ParsedSource {
   marketSkillId?: string;
   /** Team ID for explicit team release installs */
   marketTeamId?: string;
+  /** Immutable team release ID resolved for `ts_<skillTeamId>/<skillName>` */
+  marketReleaseId?: string;
   /** Market skill name (without author prefix or version suffix) */
   marketName?: string;
   /** Author prefix for private market skills (userId) */
