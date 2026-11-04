@@ -101,7 +101,7 @@ describe('team install observability confirmation', () => {
     vi.mocked(p.confirm).mockResolvedValueOnce(true).mockResolvedValueOnce(true);
     vi.mocked(getApiKey).mockReturnValue('sk-test');
     vi.mocked(getAllLockedSkills).mockResolvedValue({});
-    vi.mocked(getSkillFromLock).mockResolvedValue(undefined);
+    vi.mocked(getSkillFromLock).mockResolvedValue(null);
     vi.mocked(readLocalPilotStatus).mockReturnValue({
       serviceName: null,
       hasBinary: false,
@@ -226,7 +226,7 @@ describe('team install observability confirmation', () => {
     };
     vi.mocked(getAllLockedSkills).mockResolvedValue({ 'skill-a': publicEntry });
     vi.mocked(getSkillFromLock).mockImplementation(async (name: string) =>
-      name === 'skill-a' ? publicEntry : undefined
+      name === 'skill-a' ? publicEntry : null
     );
 
     await runAdd(['t_team-id/team-name'], {

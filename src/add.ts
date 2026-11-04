@@ -58,6 +58,7 @@ import { getApiKey } from './auth.ts';
 import {
   addSkillToLock,
   fetchSkillFolderHash,
+  getAllLockedSkills,
   getSkillFromLock,
   getGitHubToken,
   isPromptDismissed,
