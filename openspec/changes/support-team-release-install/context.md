@@ -33,3 +33,6 @@
 - 团队安装通过 ParsedSource 的 marketSkillId/marketTeamId 跳过 resolve，并复用 handleMarketSkill 的 agent、scope、采集与 lock 流程。
 - 团队 preflight 以 teamId+skillId+installVersion 探测，正式安装与探测共享同一 release 上下文。
 - lock 新增可选 teamId，不提升 schema version；track 重取和写回都保留 teamId 与团队 source。
+- 正式安装的全局 consent 查询也按 teamId 隔离；团队重复安装会回写既有 true/false，避免整条 lock 覆盖时丢失采集定夺。
+- track 的团队 lock 通过 `t_<teamId>/<installName>` 定位实际 lock key，并继续使用该 key 完成写回。
+- 团队 release 获取失败时直接输出 teamId/version 并退出，不进入 GitHub、公开裸名或私有 author fallback。

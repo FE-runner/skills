@@ -156,9 +156,9 @@ describe('track command', () => {
       })
     );
 
-    await runTrack(['on', 'demo']);
-    await runTrack(['off', 'demo']);
-    await runTrack(['on', 'demo']);
+    await runTrack(['on', 't_team-a/demo']);
+    await runTrack(['off', 't_team-a/demo']);
+    await runTrack(['on', 't_team-a/demo']);
 
     for (const call of fetchMock.mock.calls) {
       expect(call[0]).toBe('skill-123');

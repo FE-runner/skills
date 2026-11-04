@@ -1,11 +1,11 @@
 # Run State
 
 - Change: support-team-release-install
-- Stage: apply
+- Stage: review-code-fix
 - Source branch: master
 - Development branch: feature/team-release-install
 - Last good commit: 352edd5
-- Next safe action: 待本次 apply 阶段统一提交后执行 review-code
+- Next safe action: 统一提交 review-code 修复后进入 lyx-archive
 
 ## Task Evidence
 
@@ -34,11 +34,17 @@
 - Round 3: 0 Critical, 2 Warning, 0 Info; 影响落地 Warning 与新增测试缺口均已修复
 - Round 4: 0 Critical, 0 Warning, 0 Info; 正常清零
 - Termination type: normal
+- review-code Round 1: 1 Critical, 2 Warning, 0 Info；全部认可并修复
+- review-code Round 2: 1 Critical, 0 Warning, 0 Info；Critical 已修复，发现相邻 consent 回写问题
+- review-code Round 3: 0 Critical, 0 Warning, 0 Info；正常清零
+- Termination type: normal
+- Review-code fix commit: 待统一提交归属
 
 ## Verification
 
 - OpenSpec validation: passed — `openspec validate --changes support-team-release-install`
 - OpenSpec strict: passed — `openspec validate support-team-release-install --strict`
+- review-code diff check: passed — `git diff --check ced881494f72732307e234e1212fd3a3bbf263e6`
 
 ## Rulings
 

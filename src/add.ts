@@ -1606,6 +1606,23 @@ async function getSkillConsent(skillName: string): Promise<boolean | 'missing'> 
   }
 }
 
+export async function getTeamSkillConsent(
+  teamId: string,
+  installName: string
+): Promise<boolean | 'missing'> {
+  try {
+    const entries = await getAllLockedSkills();
+    const matched = Object.entries(entries).find(
+      ([name, entry]) => name === installName && entry.teamId === teamId
+    );
+    if (matched?.[1].collectConsent === true) return true;
+    if (matched?.[1].collectConsent === false) return false;
+    return 'missing';
+  } catch {
+    return 'missing';
+  }
+}
+
 /**
  * 团队批量安装的采集与监测插件预检（D5）：
  * - 预探测哪些 skill 带有效采集配置；
@@ -1638,7 +1655,7 @@ async function preflightTeamCollectConsent(
 
       collectSkillNames.add(getTeamCollectKey(teamId, s.id));
       if (!forceObservability) {
-        const locked = await getSkillConsent(skill.installName);
+        const locked = await getTeamSkillConsent(teamId, skill.installName);
         if (locked === true) {
           lockedOnCount++;
         } else if (locked === 'missing') {
@@ -1730,7 +1747,7 @@ async function promptForPilotInstallation(allowPrompt: boolean): Promise<void> {
   }
 }
 
-async function handleMarketSkill(
+export async function handleMarketSkill(
   source: string,
   parsed: ParsedSource,
   options: AddOptions,
@@ -1792,7 +1809,13 @@ async function handleMarketSkill(
 
   if (!skill) {
     spinner.stop(pc.red('Failed to fetch skill'));
-    p.outro(pc.red('Could not download skill from Skills Market'));
+    p.outro(
+      pc.red(
+        teamId
+          ? `团队版本不可用：${displayName} v${version ?? 'unknown'}（teamId: ${teamId}）`
+          : 'Could not download skill from Skills Market'
+      )
+    );
     process.exit(1);
   }
 
@@ -1981,12 +2004,17 @@ async function handleMarketSkill(
         }
       }
     } else {
-      const locked = await getSkillConsent(skill.installName);
+      const consentTeamId = teamId || resolved.teamId;
+      const locked = consentTeamId
+        ? await getTeamSkillConsent(consentTeamId, skill.installName)
+        : await getSkillConsent(skill.installName);
       if (locked === true) {
         useCollect = true; // 已同意：装监测版
         collectCapable = true;
+        if (consentTeamId) writeCollectConsent = true;
       } else if (locked === false) {
         useCollect = false; // 已拒绝：装原版
+        if (consentTeamId) writeCollectConsent = false;
       } else if (options.collectConsent !== undefined) {
         // 团队一次询问结果（D5，探测已在团队流程完成）
         useCollect = options.collectConsent;

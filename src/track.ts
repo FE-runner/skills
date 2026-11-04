@@ -52,6 +52,7 @@ async function runTrackList(): Promise<void> {
 
 interface ResolvedTarget {
   skillId: string;
+  lockKey: string;
   name: string;
   source: string;
   version?: string;
@@ -60,7 +61,18 @@ interface ResolvedTarget {
 }
 
 async function resolveTarget(skillName: string): Promise<ResolvedTarget | null> {
-  const entry = await getSkillFromLock(skillName);
+  let lockKey = skillName;
+  let entry = await getSkillFromLock(skillName);
+  if (!entry) {
+    const entries = await getAllLockedSkills();
+    const matched = Object.entries(entries).find(
+      ([key, candidate]) => candidate.teamId && `t_${candidate.teamId}/${key}` === skillName
+    );
+    if (matched) {
+      lockKey = matched[0];
+      entry = matched[1];
+    }
+  }
   if (!entry || entry.sourceType !== 'market') {
     p.log.error(`未在全局 lock 中找到 market skill「${skillName}」`);
     return null;
@@ -71,8 +83,9 @@ async function resolveTarget(skillName: string): Promise<ResolvedTarget | null> 
     return null;
   }
   return {
+    lockKey,
     skillId: entry.skillPath,
-    name: skillName,
+    name: lockKey,
     source: entry.source,
     version: entry.version,
     authorId: entry.authorId,
@@ -129,8 +142,8 @@ async function runTrackToggle(skillName: string, report: boolean): Promise<void>
   }
 
   // 写回 lock（collectConsent + 覆盖后的 skillFolderHash）
-  await addSkillToLock(skillName, {
-    source: target.source || `market/${skillName}`,
+  await addSkillToLock(target.lockKey, {
+    source: target.source || `market/${target.lockKey}`,
     sourceType: 'market',
     sourceUrl: skill.sourceUrl,
     skillFolderHash: skill.skillFolderHash,
