@@ -17,6 +17,12 @@ CLI SHALL 识别 `ts_<skillTeamId>/<skillName>` 团队单 Skill 安装源。`ski
 - **THEN** CLI 输出命令格式错误并退出
 - **AND** 不发起 Market resolve、安装或 GitHub 回退
 
+#### Scenario: Reject explicit version for team single Skill source
+
+- **WHEN** 用户输入 `ts_<skillTeamId>/<skillName>@<version>`
+- **THEN** CLI 拒绝该显式版本并以格式错误退出
+- **AND** 安装版本只允许采用 resolver 返回的当前 approved release
+
 #### Scenario: Reject stale Skill name
 
 - **WHEN** resolver 返回名称已变化冲突
@@ -65,6 +71,29 @@ CLI SHALL 识别 `ts_<skillTeamId>/<skillName>` 团队单 Skill 安装源。`ski
 - **WHEN** 全局 lock 只有旧 `teamId` 而没有 `skillTeamId` 或 `releaseId`
 - **THEN** CLI 保持旧团队安装的重取行为
 - **AND** 不提升 lock schema version
+
+### Requirement: Team single Skill check and update use the team resolver
+
+全局和项目级 `check` SHALL 对带 `skillTeamId` 的 entry 使用 `skillTeamId` 与 Skill 名调用团队 resolver，并以当前 `releaseId` 和安装版本判断是否有更新；该路径 MUST NOT 调用普通 Market `check`。`update` SHALL 从 `ts_<skillTeamId>/<skillName>` source 重新执行 `add`，由 resolver 选择当前 approved release；resolver 失败时 SHALL 报错或跳过，不得回退公开、私有、GitHub 或 `market/team` 安装源。
+
+#### Scenario: Check detects a new approved release
+
+- **WHEN** 全局或项目 lock 的 `ts_` entry 记录 `releaseId=release-1`
+- **AND** resolver 当前返回 `releaseId=release-2`
+- **THEN** `check` 将该 Skill 标记为有更新
+- **AND** 不调用普通 `/api/skill/check`
+
+#### Scenario: Update re-resolves the team target
+
+- **WHEN** `update` 处理需要更新的 `ts_` entry
+- **THEN** CLI 以 `ts_<skillTeamId>/<skillName>` 重新执行 `add`
+- **AND** 由 resolver 返回的新 approved release 进入安装
+
+#### Scenario: Team resolver fails during check
+
+- **WHEN** 团队 resolver 返回 404、409 或网络错误
+- **THEN** `check` 记录该团队 Skill 检查失败
+- **AND** 不调用公开/私有 check，也不尝试其他安装源
 
 ### Requirement: Team single Skill command is discoverable in help
 

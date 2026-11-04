@@ -7,6 +7,8 @@
 - `ts_` 解析失败一律 fail-closed，不回退公开、私有、GitHub 或 `t_` 全团队安装。
 - 旧 `t_<teamId>/<teamName>` 批量命令保持原行为；新命令只安装 resolver 返回的一个目标。
 - 不增加环境变量，CLI 与 Market/Web 在同一协调窗口上线。
+- `ts_` 全局/项目 lock 的 check/update 必须重走团队 resolver，不能落入普通 market check/update。
+- `ts_...@version` 明确拒绝；版本选择权只属于 resolver 返回的当前 approved release。
 
 ## 已否决方案
 
@@ -17,8 +19,8 @@
 
 ## 范围边界
 
-- 做：CLI 解析、Market resolver 调用、release-bound 下载与采集、lock/track 上下文、help/README、测试。
-- 不做：Market 侧 resolver 实现（已在另一 change 完成）、数据库迁移、自动刷新团队 release、全团队命令替换。
+- 做：CLI 解析、Market resolver 调用、release-bound 下载与采集、lock/track/check/update 上下文、help/README、测试。
+- 不做：Market 侧 resolver 实现（已在另一 change 完成）、数据库迁移、自动刷新已安装团队的 release、全团队命令替换、实际部署上线。
 - `blueai-skills-cli` 用户技能位于独立 `liyang-skills` 仓库，不在本 worktree 写入范围；上线前需在该仓库单独同步 `ts_` 安装说明。
 
 ## 已知坑
