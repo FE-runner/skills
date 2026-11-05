@@ -38,7 +38,7 @@ export interface SkillLockEntry {
   releaseId?: string;
   /** Team release name used by `ts_` resolver; may differ from install display name */
   teamSkillName?: string;
-  /** 采集知情同意（三态）：缺失 = 首次未定夺；true = 开（监测版）；false = 关（原版）。仅全局安装写入 */
+  /** 采集知情同意（三态）：缺失 = 首次未定夺；true = 开（监测版）；false = 关（原版） */
   collectConsent?: boolean;
   /** ISO timestamp when the skill was first installed */
   installedAt: string;

@@ -6,6 +6,7 @@ import { createRecordAndInstallPilot, readLocalPilotStatus } from './obs.ts';
 import { getApiKey } from './auth.ts';
 import { installWellKnownSkillForAgent } from './installer.ts';
 import { addSkillToLock, getAllLockedSkills, getSkillFromLock } from './skill-lock.ts';
+import { addSkillToLocalLock, readLocalLock } from './local-lock.ts';
 
 vi.mock('@clack/prompts', () => ({
   intro: vi.fn(),
@@ -62,6 +63,12 @@ vi.mock('./skill-lock.ts', async () => {
   };
 });
 
+vi.mock('./local-lock.ts', () => ({
+  addSkillToLocalLock: vi.fn(),
+  computeSkillFolderHash: vi.fn(async () => 'local-hash'),
+  readLocalLock: vi.fn(async () => ({ version: 1, skills: {} })),
+}));
+
 vi.mock('./telemetry.ts', () => ({
   setVersion: vi.fn(),
   track: vi.fn(),
@@ -102,6 +109,7 @@ describe('team install observability confirmation', () => {
     vi.mocked(getApiKey).mockReturnValue('sk-test');
     vi.mocked(getAllLockedSkills).mockResolvedValue({});
     vi.mocked(getSkillFromLock).mockResolvedValue(null);
+    vi.mocked(readLocalLock).mockResolvedValue({ version: 1, skills: {} });
     vi.mocked(readLocalPilotStatus).mockReturnValue({
       serviceName: null,
       hasBinary: false,
@@ -323,6 +331,31 @@ describe('team install observability confirmation', () => {
       'skill-b',
       expect.objectContaining({ collectConsent: true })
     );
+  });
+
+  it('uses monitored builds for project-level team installs', async () => {
+    vi.mocked(p.confirm).mockReset();
+
+    await runAdd(['t_team-id/team-name'], {
+      agent: ['claude-code'],
+      global: false,
+      copy: true,
+      yes: true,
+      observability: true,
+    });
+
+    expect(p.confirm).not.toHaveBeenCalled();
+    expect(addSkillToLocalLock).toHaveBeenCalledWith(
+      'skill-a',
+      expect.objectContaining({ teamId: 'team-id', collectConsent: true }),
+      expect.any(String)
+    );
+    expect(addSkillToLocalLock).toHaveBeenCalledWith(
+      'skill-b',
+      expect.objectContaining({ teamId: 'team-id', collectConsent: true }),
+      expect.any(String)
+    );
+    expect(addSkillToLock).not.toHaveBeenCalled();
   });
 
   it('warns and falls back when an explicit team skill has no observability build', async () => {
