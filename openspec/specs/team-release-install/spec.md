@@ -66,20 +66,25 @@ CLI SHALL 读取 `/api/team/installAll` 返回的每个 Skill 标识、名称、
 
 ### Requirement: Team lock context supports collection toggles
 
-团队全局安装 SHALL 在现有 `SkillLockEntry` 中写入可选 `teamId`，不提升 lock schema version。`track on/off` SHALL 读取该字段，并以相同 Skill ID、teamId 和版本调用 Market 安装接口。旧 lock entry 缺少 `teamId` 时 SHALL 保持原有公开/私有重取行为。
+团队安装 SHALL 在当前 scope 对应 lock 中写入可选 `teamId`，不提升 lock schema version：全局写入 `SkillLockEntry`，项目级写入 `LocalSkillLockEntry`。全局 `track on/off` SHALL 读取该字段，并以相同 Skill ID、teamId 和版本调用 Market 安装接口。旧 lock entry 缺少 `teamId` 时 SHALL 保持原有公开/私有重取行为。
 
 #### Scenario: Team install writes team context
 
-- **WHEN** 团队全局安装成功
+- **WHEN** 团队安装成功
 - **THEN** lock entry 保存 Skill ID、teamId 和 version
-- **AND** 仅当该 Skill 带有效采集配置且团队级采集决定已应用时保存 collectConsent
+- **AND** 仅当该 Skill 带有效采集配置且当前 scope 的采集决定已应用时保存 collectConsent
 - **AND** source 标识包含 teamId
 
 #### Scenario: Team skill without collect does not write consent
 
-- **WHEN** 团队全局安装成功但该 Skill 无有效采集配置
+- **WHEN** 团队安装成功但该 Skill 无有效采集配置
 - **THEN** lock entry 保存 teamId
 - **AND** 不写 collectConsent 字段
+
+#### Scenario: Project team install writes collection consent
+
+- **WHEN** 项目级团队安装中的 Skill 带有效采集配置且用户同意
+- **THEN** 项目 `skills-lock.json` 保存 teamId、Skill ID、version 和 collectConsent=true
 
 #### Scenario: Track toggles a team skill
 
@@ -147,12 +152,13 @@ CLI SHALL 识别 `ts_<skillTeamId>/<skillName>` 团队单 Skill 安装源。`ski
 
 ### Requirement: Team single Skill context is persisted
 
-全局 lock SHALL 为 `ts_` 安装保存 `teamId`、`skillTeamId`、`releaseId`、版本与 Skill ID；项目级 lock 的清点与来源 SHALL 保留同一团队单 Skill 上下文。`track list` SHALL 能识别团队单 Skill 来源，`track on/off` SHALL 使用 lock 中的同一 `skillId`、`teamId`、版本与 `releaseId` 重取，SHALL NOT 重新走名称解析。旧 `t_` 安装和缺少新增字段的历史 lock SHALL 保持兼容。
+全局 lock SHALL 为 `ts_` 安装保存 `teamId`、`skillTeamId`、`releaseId`、版本与 Skill ID；项目级 lock 的清点与来源 SHALL 保留同一团队单 Skill 上下文及 `collectConsent`。全局 `track list` SHALL 能识别团队单 Skill 来源，`track on/off` SHALL 使用 lock 中的同一 `skillId`、`teamId`、版本与 `releaseId` 重取，SHALL NOT 重新走名称解析。旧 `t_` 安装和缺少新增字段的历史 lock SHALL 保持兼容。
 
 #### Scenario: Global install writes team single Skill context
 
-- **WHEN** `ts_` 团队单 Skill 全局安装成功
+- **WHEN** `ts_` 团队单 Skill 全局或项目级安装成功
 - **THEN** lock entry 保存 `teamId`、`skillTeamId`、`releaseId`、`skillPath` 和安装版本
+- **AND** 采集已定夺时在对应 lock 保存 `collectConsent`
 
 #### Scenario: Track toggles release-bound team Skill
 

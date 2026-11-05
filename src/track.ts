@@ -51,7 +51,9 @@ async function runTrackList(): Promise<void> {
     console.log(`  ${color(r.status)}  ${pc.cyan(r.name)}`);
   }
   console.log();
-  p.log.message(pc.dim('只有全局安装（--global）的技能在此展示；项目级安装不参与采集记录。'));
+  p.log.message(
+    pc.dim('track 只展示全局安装；项目级采集状态记录在当前目录 skills-lock.json，不在本列表展示。')
+  );
 }
 
 interface ResolvedTarget {
