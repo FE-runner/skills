@@ -4,7 +4,7 @@ import { handleMarketSkill } from './add.ts';
 import { marketProvider } from './providers/market.ts';
 import { installWellKnownSkillForAgent } from './installer.ts';
 import { addSkillToLock } from './skill-lock.ts';
-import { addSkillToLocalLock } from './local-lock.ts';
+import { addSkillToLocalLock, readLocalLock } from './local-lock.ts';
 
 vi.mock('@clack/prompts', () => ({
   intro: vi.fn(),
@@ -41,6 +41,7 @@ vi.mock('./installer.ts', async () => {
 vi.mock('./local-lock.ts', () => ({
   addSkillToLocalLock: vi.fn(),
   computeSkillFolderHash: vi.fn().mockResolvedValue('local-hash'),
+  readLocalLock: vi.fn(),
 }));
 
 vi.mock('./skill-lock.ts', async () => {
@@ -92,6 +93,7 @@ describe('market install paths', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(marketProvider.fetchById).mockResolvedValue(marketSkill() as never);
+    vi.mocked(readLocalLock).mockResolvedValue({ version: 1, skills: {} });
   });
 
   it('keeps public bare-name resolve and install behavior', async () => {
@@ -119,6 +121,250 @@ describe('market install paths', () => {
       undefined
     );
     expect(installWellKnownSkillForAgent).toHaveBeenCalled();
+  });
+
+  it('installs a project-level monitored build when observability is explicit', async () => {
+    vi.mocked(marketProvider.fetchById)
+      .mockResolvedValueOnce(marketSkill() as never)
+      .mockResolvedValueOnce(
+        marketSkill('demo', {
+          collect: { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } },
+          skillFolderHash: 'hash-monitored',
+          files: new Map([
+            ['SKILL.md', '# monitored demo'],
+            ['.blueai-skills-market/bsm-obs-run.cjs', 'module.exports = {};'],
+          ]),
+        }) as never
+      );
+
+    await handleMarketSkill(
+      'demo',
+      { type: 'market', url: 'demo', marketName: 'demo' },
+      {
+        agent: ['claude-code'],
+        yes: true,
+        copy: true,
+        global: false,
+        observability: true,
+        skipPilotStatus: true,
+      },
+      p.spinner()
+    );
+
+    expect(marketProvider.fetchById).toHaveBeenNthCalledWith(
+      2,
+      'id-demo',
+      undefined,
+      undefined,
+      undefined,
+      true,
+      undefined
+    );
+    expect(addSkillToLocalLock).toHaveBeenCalledWith(
+      'demo',
+      expect.objectContaining({ collectConsent: true }),
+      expect.any(String)
+    );
+    const installCall = vi.mocked(installWellKnownSkillForAgent).mock.calls[0]!;
+    expect(installCall[0].files.get('.blueai-skills-market/bsm-obs-run.cjs')).toBe(
+      'module.exports = {};'
+    );
+    expect(installCall[1]).toBe('claude-code');
+    expect(installCall[2]).toMatchObject({ global: false });
+  });
+
+  it('asks for project-level collection consent and installs the monitored build', async () => {
+    vi.mocked(p.confirm).mockResolvedValue(true);
+    vi.mocked(marketProvider.fetchById)
+      .mockResolvedValueOnce(marketSkill() as never)
+      .mockResolvedValueOnce(
+        marketSkill('demo', {
+          collect: { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } },
+          skillFolderHash: 'hash-monitored',
+        }) as never
+      );
+
+    await handleMarketSkill(
+      'demo',
+      { type: 'market', url: 'demo', marketName: 'demo' },
+      { agent: ['claude-code'], copy: true, global: false, skipPilotStatus: true },
+      p.spinner()
+    );
+
+    expect(p.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining('是否同意采集并安装监测版') })
+    );
+    expect(marketProvider.fetchById).toHaveBeenNthCalledWith(
+      2,
+      'id-demo',
+      undefined,
+      undefined,
+      undefined,
+      true,
+      undefined
+    );
+    expect(addSkillToLocalLock).toHaveBeenCalledWith(
+      'demo',
+      expect.objectContaining({ collectConsent: true }),
+      expect.any(String)
+    );
+  });
+
+  it('defaults project-level collection to off in non-interactive installs', async () => {
+    vi.mocked(marketProvider.fetchById)
+      .mockResolvedValueOnce(marketSkill() as never)
+      .mockResolvedValueOnce(
+        marketSkill('demo', {
+          collect: { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } },
+        }) as never
+      );
+
+    await handleMarketSkill(
+      'demo',
+      { type: 'market', url: 'demo', marketName: 'demo' },
+      {
+        agent: ['claude-code'],
+        yes: true,
+        copy: true,
+        global: false,
+        skipPilotStatus: true,
+      },
+      p.spinner()
+    );
+
+    expect(p.confirm).not.toHaveBeenCalled();
+    expect(addSkillToLocalLock).toHaveBeenCalledWith(
+      'demo',
+      expect.objectContaining({ collectConsent: false }),
+      expect.any(String)
+    );
+  });
+
+  it('reuses existing project-level collection consent', async () => {
+    vi.mocked(readLocalLock).mockResolvedValue({
+      version: 1,
+      skills: {
+        demo: {
+          source: 'market/demo',
+          sourceType: 'market',
+          computedHash: 'old-hash',
+          collectConsent: true,
+        },
+      },
+    });
+    vi.mocked(marketProvider.fetchById)
+      .mockResolvedValueOnce(marketSkill() as never)
+      .mockResolvedValueOnce(
+        marketSkill('demo', {
+          collect: { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } },
+        }) as never
+      );
+
+    await handleMarketSkill(
+      'demo',
+      { type: 'market', url: 'demo', marketName: 'demo' },
+      {
+        agent: ['claude-code'],
+        yes: true,
+        copy: true,
+        global: false,
+        skipPilotStatus: true,
+      },
+      p.spinner()
+    );
+
+    expect(p.confirm).not.toHaveBeenCalled();
+    expect(marketProvider.fetchById).toHaveBeenNthCalledWith(
+      2,
+      'id-demo',
+      undefined,
+      undefined,
+      undefined,
+      true,
+      undefined
+    );
+    expect(addSkillToLocalLock).toHaveBeenCalledWith(
+      'demo',
+      expect.objectContaining({ collectConsent: true }),
+      expect.any(String)
+    );
+  });
+
+  it('keeps an existing project-level collection opt-out without probing', async () => {
+    vi.mocked(readLocalLock).mockResolvedValue({
+      version: 1,
+      skills: {
+        demo: {
+          source: 'market/demo',
+          sourceType: 'market',
+          computedHash: 'old-hash',
+          collectConsent: false,
+        },
+      },
+    });
+
+    await handleMarketSkill(
+      'demo',
+      { type: 'market', url: 'demo', marketName: 'demo' },
+      {
+        agent: ['claude-code'],
+        yes: true,
+        copy: true,
+        global: false,
+        skipPilotStatus: true,
+      },
+      p.spinner()
+    );
+
+    expect(p.confirm).not.toHaveBeenCalled();
+    expect(marketProvider.fetchById).toHaveBeenCalledTimes(1);
+    expect(addSkillToLocalLock).toHaveBeenCalledWith(
+      'demo',
+      expect.objectContaining({ collectConsent: false }),
+      expect.any(String)
+    );
+  });
+
+  it('keeps existing project-level consent when an explicit monitored build is unavailable', async () => {
+    vi.mocked(readLocalLock).mockResolvedValue({
+      version: 1,
+      skills: {
+        demo: {
+          source: 'market/demo',
+          sourceType: 'market',
+          computedHash: 'old-hash',
+          collectConsent: true,
+        },
+      },
+    });
+    vi.mocked(marketProvider.fetchById)
+      .mockResolvedValueOnce(marketSkill() as never)
+      .mockResolvedValueOnce(
+        marketSkill('demo', { collect: { reason: 'frontmatter 解析失败' } }) as never
+      );
+
+    await handleMarketSkill(
+      'demo',
+      { type: 'market', url: 'demo', marketName: 'demo' },
+      {
+        agent: ['claude-code'],
+        yes: true,
+        copy: true,
+        global: false,
+        observability: true,
+        skipPilotStatus: true,
+      },
+      p.spinner()
+    );
+
+    expect(addSkillToLocalLock).toHaveBeenCalledWith(
+      'demo',
+      expect.objectContaining({ collectConsent: true }),
+      expect.any(String)
+    );
+    expect(p.log.message).toHaveBeenCalledWith(
+      expect.stringContaining('可观测改造失败：frontmatter 解析失败')
+    );
   });
 
   it('keeps private author/name resolve and install behavior', async () => {
