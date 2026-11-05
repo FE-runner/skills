@@ -181,6 +181,13 @@ export interface TeamSkillInstallTarget {
   releaseId: string;
 }
 
+export interface TeamPublicationWarning {
+  success: false;
+  teamIds: string[];
+  status: number;
+  message: string;
+}
+
 /**
  * Install API response shape from the market.
  */
@@ -386,6 +393,7 @@ export class MarketProvider {
       currentVersion: string;
       visibility: string;
       status: string;
+      teamPublication?: TeamPublicationWarning;
     }>
   > {
     const body: Record<string, unknown> = { skillMd };
@@ -408,6 +416,7 @@ export class MarketProvider {
       currentVersion: string;
       visibility: string;
       status: string;
+      teamPublication?: TeamPublicationWarning;
     }>(`${this.apiBase}/api/skill/push`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -424,6 +433,7 @@ export class MarketProvider {
         currentVersion: data.currentVersion,
         visibility: data.visibility,
         status: data.status,
+        ...(data.teamPublication ? { teamPublication: data.teamPublication } : {}),
       },
     };
   }

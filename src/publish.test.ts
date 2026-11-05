@@ -301,6 +301,41 @@ describe('publish', () => {
       expect(process.exitCode).toBeUndefined();
     });
 
+    it('reports partial success when the Skill push succeeds but team publication fails', async () => {
+      vi.mocked(marketProvider.push).mockResolvedValue({
+        ok: true,
+        data: {
+          skillId: 's1',
+          name: 'my-skill',
+          currentVersion: '1.0.1',
+          visibility: 'PRIVATE',
+          status: 'APPROVED',
+          teamPublication: {
+            success: false,
+            teamIds: ['team-a'],
+            status: 400,
+            message: '部分团队不存在或你不是成员',
+          },
+        },
+      });
+
+      await runPublish([dir, '--team', 'team-a']);
+
+      expect(process.exitCode).toBe(1);
+      expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('推送成功'))).toBe(
+        true
+      );
+      expect(
+        errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('团队发布失败 (HTTP 400)'))
+      ).toBe(true);
+      expect(
+        errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('不要通过再次 publish'))
+      ).toBe(true);
+      expect(
+        logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('已提交团队审核'))
+      ).toBe(false);
+    });
+
     it('passes upload metadata through to marketProvider.push', async () => {
       vi.mocked(marketProvider.push).mockResolvedValue({
         ok: true,
