@@ -1,11 +1,11 @@
 # 运行状态
 
 - 变更名: observable-version-gate
-- 阶段: apply-complete
+- 阶段: review-code-normal-cleared
 - 源分支: develop
 - 开发分支: feature/observable-version-gate-cli
 - 最后成功 commit: df1d462
-- 下一步安全动作: 创建 apply 阶段 commit 后执行 `@lyx-review-code observable-version-gate`
+- 下一步安全动作: 可用 `@lyx-archive observable-version-gate` 进入归档前完整验证
 
 ## 任务证据
 
@@ -40,12 +40,16 @@
 - 第 3 轮：0 个 Critical，0 个 Warning，0 个 Info；上一轮 2 个影响落地 Warning 已解决
 - 终止类型：normal
 - review-plan-fix 统一提交：df1d462
-- apply 阶段实施：完成，待本次阶段提交归属
+- apply 阶段提交：4f04b1c
+- 代码审查第 1 轮：0 个 Critical，0 个 Warning，0 个 Info；未发现问题
+- 代码审查终止类型：normal
+- review-code-fix 统一提交：待本次阶段提交归属
 
 ## 验证
 
 - `git diff --check -- openspec/changes/observable-version-gate`: passed
 - `openspec validate --changes observable-version-gate --strict`: passed — exit 0，1 passed，0 failed
+- review-code 固定基线：`4f04b1c`；`git show` 与 `git diff <baseline>` 已核对，工作区与未跟踪文件为空
 
 ## 裁决
 
