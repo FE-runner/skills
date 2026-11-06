@@ -33,6 +33,7 @@ vi.mock('./providers/market.ts', () => ({
   marketProvider: {
     resolve: vi.fn(),
     fetchById: vi.fn(),
+    installById: vi.fn(),
   },
 }));
 
@@ -100,9 +101,11 @@ function teamSkill(id: string, name: string, includeCollect = true) {
 
 describe('team install observability confirmation', () => {
   const originalIsTTY = process.stdin.isTTY;
+  const originalExitCode = process.exitCode;
 
   beforeEach(() => {
     Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: true });
+    process.exitCode = undefined;
     vi.clearAllMocks();
 
     vi.mocked(p.confirm).mockResolvedValueOnce(true).mockResolvedValueOnce(true);
@@ -131,9 +134,12 @@ describe('team install observability confirmation', () => {
           authorId: 'author-id',
         }) as never
     );
-    vi.mocked(marketProvider.fetchById).mockImplementation(
+    vi.mocked(marketProvider.installById).mockImplementation(
       async (id: string, _version?: string, _author?: string) =>
-        teamSkill(id, String(id).replace(/^id-/, '')) as never
+        ({
+          ok: true,
+          data: teamSkill(id, String(id).replace(/^id-/, '')),
+        }) as never
     );
 
     vi.stubGlobal(
@@ -151,6 +157,7 @@ describe('team install observability confirmation', () => {
                   displayName: 'Skill A',
                   currentVersion: '1.0.0',
                   installVersion: '1.0.0',
+                  releaseId: 'release-a',
                   visibility: 'PUBLIC',
                   authorId: 'author-a',
                 },
@@ -161,6 +168,7 @@ describe('team install observability confirmation', () => {
                   displayName: 'Skill B',
                   currentVersion: '1.0.0',
                   installVersion: '1.0.0',
+                  releaseId: 'release-b',
                   visibility: 'PUBLIC',
                   authorId: 'author-b',
                 },
@@ -179,6 +187,7 @@ describe('team install observability confirmation', () => {
       configurable: true,
       value: originalIsTTY,
     });
+    process.exitCode = originalExitCode;
   });
 
   it('asks once after team collection consent and installs Pilot once', async () => {
@@ -193,18 +202,23 @@ describe('team install observability confirmation', () => {
     expect(messages.some((message) => message.includes('LoongSuite Pilot'))).toBe(true);
     expect(createRecordAndInstallPilot).toHaveBeenCalledTimes(1);
     expect(marketProvider.resolve).not.toHaveBeenCalled();
-    for (const call of vi.mocked(marketProvider.fetchById).mock.calls) {
+    for (const call of vi.mocked(marketProvider.installById).mock.calls) {
       expect(call[1]).toBe('1.0.0');
       expect(call[3]).toBe('team-id');
+      expect(call[4]).toMatch(/^release-/);
     }
   });
 
   it('writes collect consent only to collect-capable team skills', async () => {
-    vi.mocked(marketProvider.fetchById).mockImplementation(
+    vi.mocked(marketProvider.installById).mockImplementation(
       async (id: string, _version?: string, _author?: string) =>
-        String(id) === 'id-skill-b'
-          ? (teamSkill(id, 'skill-b', false) as never)
-          : (teamSkill(id, String(id).replace(/^id-/, '')) as never)
+        ({
+          ok: true,
+          data:
+            String(id) === 'id-skill-b'
+              ? teamSkill(id, 'skill-b', false)
+              : teamSkill(id, String(id).replace(/^id-/, '')),
+        }) as never
     );
 
     await runAdd(['t_team-id/team-name'], {
@@ -291,7 +305,7 @@ describe('team install observability confirmation', () => {
     );
   });
 
-  it('keeps non-interactive team installs safe with one Pilot hint', async () => {
+  it('does not guide Pilot when non-interactive team consent defaults to false', async () => {
     vi.mocked(p.confirm).mockReset();
 
     await runAdd(['t_team-id/team-name'], {
@@ -306,12 +320,33 @@ describe('team install observability confirmation', () => {
       .mock.calls.map(([message]) => String(message))
       .filter((message) => message.includes('本机监测插件'));
 
+    expect(messages).toHaveLength(0);
+    expect(p.confirm).not.toHaveBeenCalled();
+    expect(createRecordAndInstallPilot).not.toHaveBeenCalled();
+  });
+
+  it('only guides Pilot when non-interactive team consent is explicit true', async () => {
+    vi.mocked(p.confirm).mockReset();
+
+    await runAdd(['t_team-id/team-name'], {
+      agent: ['claude-code'],
+      global: true,
+      copy: true,
+      yes: true,
+      observability: true,
+    });
+
+    const messages = vi
+      .mocked(p.log.message)
+      .mock.calls.map(([message]) => String(message))
+      .filter((message) => message.includes('本机监测插件'));
+
     expect(messages).toHaveLength(1);
     expect(p.confirm).not.toHaveBeenCalled();
     expect(createRecordAndInstallPilot).not.toHaveBeenCalled();
   });
 
-  it('uses monitored builds when observability=true is explicit', async () => {
+  it('records consent=true for all team skills when observability=true is explicit', async () => {
     vi.mocked(p.confirm).mockReset();
 
     await runAdd(['t_team-id/team-name'], {
@@ -333,7 +368,7 @@ describe('team install observability confirmation', () => {
     );
   });
 
-  it('uses monitored builds for project-level team installs', async () => {
+  it('records project-level consent=true for team installs when observability=true is explicit', async () => {
     vi.mocked(p.confirm).mockReset();
 
     await runAdd(['t_team-id/team-name'], {
@@ -358,13 +393,17 @@ describe('team install observability confirmation', () => {
     expect(addSkillToLock).not.toHaveBeenCalled();
   });
 
-  it('warns and falls back when an explicit team skill has no observability build', async () => {
+  it('records consent=true without probing when an explicit team skill is non-observable', async () => {
     vi.mocked(p.confirm).mockReset();
-    vi.mocked(marketProvider.fetchById).mockImplementation(
+    vi.mocked(marketProvider.installById).mockImplementation(
       async (id: string, _version?: string, _author?: string) =>
-        String(id) === 'id-skill-b'
-          ? (teamSkill(id, 'skill-b', false) as never)
-          : (teamSkill(id, String(id).replace(/^id-/, '')) as never)
+        ({
+          ok: true,
+          data:
+            String(id) === 'id-skill-b'
+              ? teamSkill(id, 'skill-b', false)
+              : teamSkill(id, String(id).replace(/^id-/, '')),
+        }) as never
     );
 
     await runAdd(['t_team-id/team-name'], {
@@ -375,11 +414,10 @@ describe('team install observability confirmation', () => {
       observability: true,
     });
 
-    const messages = vi.mocked(p.log.message).mock.calls.map(([message]) => String(message));
     const noCollectCall = vi.mocked(addSkillToLock).mock.calls.find(([name]) => name === 'skill-b');
 
-    expect(messages.some((message) => message.includes('未做可观测改造'))).toBe(true);
-    expect(noCollectCall?.[1]).not.toHaveProperty('collectConsent');
+    expect(noCollectCall?.[1]).toMatchObject({ collectConsent: true });
+    expect(marketProvider.installById).toHaveBeenCalledTimes(2);
   });
 
   it('skips team skill when both install versions are missing', async () => {
@@ -415,7 +453,7 @@ describe('team install observability confirmation', () => {
       yes: true,
     });
 
-    expect(marketProvider.fetchById).not.toHaveBeenCalled();
+    expect(marketProvider.installById).not.toHaveBeenCalled();
     const messages = vi.mocked(p.log.warn).mock.calls.map(([message]) => String(message));
     expect(
       messages.some((message) => message.includes('missing installVersion/currentVersion'))
@@ -438,6 +476,7 @@ describe('team install observability confirmation', () => {
                     displayName: 'Skill A',
                     currentVersion: '1.0.0',
                     installVersion: '2.0.0',
+                    releaseId: 'release-a',
                     visibility: 'PUBLIC',
                     authorId: 'author-a',
                   },
@@ -456,13 +495,14 @@ describe('team install observability confirmation', () => {
       yes: true,
     });
 
-    for (const call of vi.mocked(marketProvider.fetchById).mock.calls) {
+    for (const call of vi.mocked(marketProvider.installById).mock.calls) {
       expect(call[1]).toBe('2.0.0');
       expect(call[3]).toBe('team-id');
+      expect(call[4]).toBe('release-a');
     }
   });
 
-  it('falls back to currentVersion for old Market responses', async () => {
+  it('falls back to currentVersion when installVersion is missing', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(
@@ -477,6 +517,7 @@ describe('team install observability confirmation', () => {
                     name: 'skill-a',
                     displayName: 'Skill A',
                     currentVersion: '1.0.0',
+                    releaseId: 'release-a',
                     visibility: 'PUBLIC',
                     authorId: 'author-a',
                   },
@@ -495,9 +536,98 @@ describe('team install observability confirmation', () => {
       yes: true,
     });
 
-    for (const call of vi.mocked(marketProvider.fetchById).mock.calls) {
+    for (const call of vi.mocked(marketProvider.installById).mock.calls) {
       expect(call[1]).toBe('1.0.0');
       expect(call[3]).toBe('team-id');
+      expect(call[4]).toBe('release-a');
     }
+  });
+
+  it('fails closed for a team Skill without releaseId and continues installable Skills', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              data: {
+                teamName: 'Team',
+                skills: [
+                  {
+                    id: 'id-skill-a',
+                    teamId: 'team-id',
+                    name: 'skill-a',
+                    displayName: 'Skill A',
+                    installVersion: '1.0.0',
+                    visibility: 'PUBLIC',
+                    authorId: 'author-a',
+                  },
+                  {
+                    id: 'id-skill-b',
+                    teamId: 'team-id',
+                    name: 'skill-b',
+                    displayName: 'Skill B',
+                    installVersion: '1.0.0',
+                    releaseId: 'release-b',
+                    visibility: 'PUBLIC',
+                    authorId: 'author-b',
+                  },
+                ],
+              },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          )
+      )
+    );
+
+    await runAdd(['t_team-id/team-name'], {
+      agent: ['claude-code'],
+      global: true,
+      copy: true,
+      yes: true,
+    });
+
+    expect(marketProvider.installById).toHaveBeenCalledTimes(1);
+    expect(marketProvider.installById).toHaveBeenCalledWith(
+      'id-skill-b',
+      '1.0.0',
+      undefined,
+      'team-id',
+      'release-b'
+    );
+    expect(addSkillToLock).toHaveBeenCalledWith('skill-b', expect.any(Object));
+    expect(addSkillToLock).not.toHaveBeenCalledWith('skill-a', expect.any(Object));
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('continues after one team install fails and does not write consent for it', async () => {
+    vi.mocked(marketProvider.installById).mockImplementation(
+      async (id: string, version?: string, _author?: string, _team?: string, releaseId?: string) =>
+        String(id) === 'id-skill-b'
+          ? ({
+              ok: false,
+              status: 409,
+              code: 'OBS_VERSION_UNAVAILABLE',
+              message: '当前版本尚无可安装的可观测产物',
+            } as never)
+          : ({
+              ok: true,
+              data: teamSkill(id, 'skill-a'),
+            } as never)
+    );
+
+    await runAdd(['t_team-id/team-name'], {
+      agent: ['claude-code'],
+      global: true,
+      copy: true,
+      yes: true,
+    });
+
+    expect(addSkillToLock).toHaveBeenCalledWith(
+      'skill-a',
+      expect.objectContaining({ collectConsent: false })
+    );
+    expect(addSkillToLock).not.toHaveBeenCalledWith('skill-b', expect.any(Object));
+    expect(process.exitCode).toBe(1);
   });
 });

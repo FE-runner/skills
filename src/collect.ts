@@ -1,8 +1,8 @@
 /**
  * 安装响应中的采集配置判定。
  *
- * Market 契约：成功时返回 `collect = { config, meta: { blueai_signature } }`；
- * 改造失败降级时返回 `collect = { reason }`。只有前者代表可安装的监测版。
+ * Market 契约：可观测 Skill 返回 `collect = { config, meta: { blueai_signature } }`；
+ * `reason` 不再参与安装降级判定，用户是否统计只看 lock 的 collectConsent。
  */
 export interface CollectCarrier {
   collect?: unknown;
@@ -24,13 +24,4 @@ export function hasValidCollect(skill: CollectCarrier | null | undefined): boole
 
   const signature = meta.blueai_signature;
   return typeof signature === 'string' && signature.length > 0;
-}
-
-/** 提取改造失败降级原因；非降级响应返回 undefined。 */
-export function getCollectFailureReason(
-  skill: CollectCarrier | null | undefined
-): string | undefined {
-  const collect = asRecord(skill?.collect);
-  const reason = collect?.reason;
-  return typeof reason === 'string' && reason.length > 0 ? reason : undefined;
 }

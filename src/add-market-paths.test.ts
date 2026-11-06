@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as p from '@clack/prompts';
 import { handleMarketSkill } from './add.ts';
 import { marketProvider } from './providers/market.ts';
@@ -23,6 +23,7 @@ vi.mock('./providers/market.ts', () => ({
     resolve: vi.fn(),
     resolveTeamSkillInstallTarget: vi.fn(),
     fetchById: vi.fn(),
+    installById: vi.fn(),
   },
 }));
 
@@ -90,10 +91,23 @@ function teamTarget() {
 }
 
 describe('market install paths', () => {
+  const originalIsTTY = process.stdin.isTTY;
+
   beforeEach(() => {
+    Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: true });
     vi.clearAllMocks();
-    vi.mocked(marketProvider.fetchById).mockResolvedValue(marketSkill() as never);
+    vi.mocked(marketProvider.installById).mockResolvedValue({
+      ok: true,
+      data: marketSkill(),
+    } as never);
     vi.mocked(readLocalLock).mockResolvedValue({ version: 1, skills: {} });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(process.stdin, 'isTTY', {
+      configurable: true,
+      value: originalIsTTY,
+    });
   });
 
   it('keeps public bare-name resolve and install behavior', async () => {
@@ -112,9 +126,8 @@ describe('market install paths', () => {
     );
 
     expect(marketProvider.resolve).toHaveBeenCalledWith('demo', undefined);
-    expect(marketProvider.fetchById).toHaveBeenCalledWith(
+    expect(marketProvider.installById).toHaveBeenCalledWith(
       'id-demo',
-      undefined,
       undefined,
       undefined,
       undefined,
@@ -123,19 +136,18 @@ describe('market install paths', () => {
     expect(installWellKnownSkillForAgent).toHaveBeenCalled();
   });
 
-  it('installs a project-level monitored build when observability is explicit', async () => {
-    vi.mocked(marketProvider.fetchById)
-      .mockResolvedValueOnce(marketSkill() as never)
-      .mockResolvedValueOnce(
-        marketSkill('demo', {
-          collect: { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } },
-          skillFolderHash: 'hash-monitored',
-          files: new Map([
-            ['SKILL.md', '# monitored demo'],
-            ['.blueai-skills-market/bsm-obs-run.cjs', 'module.exports = {};'],
-          ]),
-        }) as never
-      );
+  it('installs one active artifact when observability is explicit', async () => {
+    vi.mocked(marketProvider.installById).mockResolvedValue({
+      ok: true,
+      data: marketSkill('demo', {
+        collect: { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } },
+        skillFolderHash: 'hash-monitored',
+        files: new Map([
+          ['SKILL.md', '# monitored demo'],
+          ['.blueai-skills-market/bsm-obs-run.cjs', 'module.exports = {};'],
+        ]),
+      }),
+    } as never);
 
     await handleMarketSkill(
       'demo',
@@ -151,13 +163,12 @@ describe('market install paths', () => {
       p.spinner()
     );
 
-    expect(marketProvider.fetchById).toHaveBeenNthCalledWith(
-      2,
+    expect(marketProvider.installById).toHaveBeenCalledTimes(1);
+    expect(marketProvider.installById).toHaveBeenCalledWith(
       'id-demo',
       undefined,
       undefined,
       undefined,
-      true,
       undefined
     );
     expect(addSkillToLocalLock).toHaveBeenCalledWith(
@@ -173,16 +184,15 @@ describe('market install paths', () => {
     expect(installCall[2]).toMatchObject({ global: false });
   });
 
-  it('asks for project-level collection consent and installs the monitored build', async () => {
+  it('asks once for project-level collection consent and keeps the same file', async () => {
     vi.mocked(p.confirm).mockResolvedValue(true);
-    vi.mocked(marketProvider.fetchById)
-      .mockResolvedValueOnce(marketSkill() as never)
-      .mockResolvedValueOnce(
-        marketSkill('demo', {
-          collect: { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } },
-          skillFolderHash: 'hash-monitored',
-        }) as never
-      );
+    vi.mocked(marketProvider.installById).mockResolvedValue({
+      ok: true,
+      data: marketSkill('demo', {
+        collect: { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } },
+        skillFolderHash: 'hash-monitored',
+      }),
+    } as never);
 
     await handleMarketSkill(
       'demo',
@@ -192,17 +202,9 @@ describe('market install paths', () => {
     );
 
     expect(p.confirm).toHaveBeenCalledWith(
-      expect.objectContaining({ message: expect.stringContaining('是否同意采集并安装监测版') })
+      expect.objectContaining({ message: expect.stringContaining('是否同意数据采集') })
     );
-    expect(marketProvider.fetchById).toHaveBeenNthCalledWith(
-      2,
-      'id-demo',
-      undefined,
-      undefined,
-      undefined,
-      true,
-      undefined
-    );
+    expect(marketProvider.installById).toHaveBeenCalledTimes(1);
     expect(addSkillToLocalLock).toHaveBeenCalledWith(
       'demo',
       expect.objectContaining({ collectConsent: true }),
@@ -211,13 +213,12 @@ describe('market install paths', () => {
   });
 
   it('defaults project-level collection to off in non-interactive installs', async () => {
-    vi.mocked(marketProvider.fetchById)
-      .mockResolvedValueOnce(marketSkill() as never)
-      .mockResolvedValueOnce(
-        marketSkill('demo', {
-          collect: { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } },
-        }) as never
-      );
+    vi.mocked(marketProvider.installById).mockResolvedValue({
+      ok: true,
+      data: marketSkill('demo', {
+        collect: { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } },
+      }),
+    } as never);
 
     await handleMarketSkill(
       'demo',
@@ -252,13 +253,12 @@ describe('market install paths', () => {
         },
       },
     });
-    vi.mocked(marketProvider.fetchById)
-      .mockResolvedValueOnce(marketSkill() as never)
-      .mockResolvedValueOnce(
-        marketSkill('demo', {
-          collect: { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } },
-        }) as never
-      );
+    vi.mocked(marketProvider.installById).mockResolvedValue({
+      ok: true,
+      data: marketSkill('demo', {
+        collect: { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } },
+      }),
+    } as never);
 
     await handleMarketSkill(
       'demo',
@@ -274,15 +274,7 @@ describe('market install paths', () => {
     );
 
     expect(p.confirm).not.toHaveBeenCalled();
-    expect(marketProvider.fetchById).toHaveBeenNthCalledWith(
-      2,
-      'id-demo',
-      undefined,
-      undefined,
-      undefined,
-      true,
-      undefined
-    );
+    expect(marketProvider.installById).toHaveBeenCalledTimes(1);
     expect(addSkillToLocalLock).toHaveBeenCalledWith(
       'demo',
       expect.objectContaining({ collectConsent: true }),
@@ -290,7 +282,7 @@ describe('market install paths', () => {
     );
   });
 
-  it('keeps an existing project-level collection opt-out without probing', async () => {
+  it('keeps an existing project-level collection opt-out', async () => {
     vi.mocked(readLocalLock).mockResolvedValue({
       version: 1,
       skills: {
@@ -317,7 +309,7 @@ describe('market install paths', () => {
     );
 
     expect(p.confirm).not.toHaveBeenCalled();
-    expect(marketProvider.fetchById).toHaveBeenCalledTimes(1);
+    expect(marketProvider.installById).toHaveBeenCalledTimes(1);
     expect(addSkillToLocalLock).toHaveBeenCalledWith(
       'demo',
       expect.objectContaining({ collectConsent: false }),
@@ -325,23 +317,11 @@ describe('market install paths', () => {
     );
   });
 
-  it('keeps existing project-level consent when an explicit monitored build is unavailable', async () => {
-    vi.mocked(readLocalLock).mockResolvedValue({
-      version: 1,
-      skills: {
-        demo: {
-          source: 'market/demo',
-          sourceType: 'market',
-          computedHash: 'old-hash',
-          collectConsent: true,
-        },
-      },
-    });
-    vi.mocked(marketProvider.fetchById)
-      .mockResolvedValueOnce(marketSkill() as never)
-      .mockResolvedValueOnce(
-        marketSkill('demo', { collect: { reason: 'frontmatter 解析失败' } }) as never
-      );
+  it('writes consent=true for explicit observability on a non-observable response', async () => {
+    vi.mocked(marketProvider.installById).mockResolvedValue({
+      ok: true,
+      data: marketSkill('demo'),
+    } as never);
 
     await handleMarketSkill(
       'demo',
@@ -362,9 +342,7 @@ describe('market install paths', () => {
       expect.objectContaining({ collectConsent: true }),
       expect.any(String)
     );
-    expect(p.log.message).toHaveBeenCalledWith(
-      expect.stringContaining('可观测改造失败：frontmatter 解析失败')
-    );
+    expect(p.log.warn).toHaveBeenCalledWith(expect.stringContaining('安装响应不含合法可观测信息'));
   });
 
   it('keeps private author/name resolve and install behavior', async () => {
@@ -388,11 +366,10 @@ describe('market install paths', () => {
     );
 
     expect(marketProvider.resolve).toHaveBeenCalledWith('demo', 'author-id');
-    expect(marketProvider.fetchById).toHaveBeenCalledWith(
+    expect(marketProvider.installById).toHaveBeenCalledWith(
       'id-demo',
       undefined,
       'author-id',
-      undefined,
       undefined,
       undefined
     );
@@ -421,12 +398,11 @@ describe('market install paths', () => {
       'team-skill'
     );
     expect(marketProvider.resolve).not.toHaveBeenCalled();
-    expect(marketProvider.fetchById).toHaveBeenCalledWith(
+    expect(marketProvider.installById).toHaveBeenCalledWith(
       'id-team-skill',
       '1.2.3',
       undefined,
       'team-1',
-      undefined,
       'release-1'
     );
     expect(addSkillToLocalLock).toHaveBeenCalledWith(
@@ -514,19 +490,18 @@ describe('market install paths', () => {
     expect(spinner.stop).toHaveBeenCalled();
   });
 
-  it('uses the same releaseId for collection preflight and monitored replacement', async () => {
+  it('uses one release-bound install response for consent and installation', async () => {
     vi.mocked(marketProvider.resolveTeamSkillInstallTarget).mockResolvedValue({
       ok: true,
       data: teamTarget(),
     });
-    vi.mocked(marketProvider.fetchById)
-      .mockResolvedValueOnce(marketSkill() as never)
-      .mockResolvedValueOnce(
-        marketSkill('demo', {
-          collect: { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } },
-          skillFolderHash: 'hash-monitored',
-        }) as never
-      );
+    vi.mocked(marketProvider.installById).mockResolvedValue({
+      ok: true,
+      data: marketSkill('demo', {
+        collect: { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } },
+        skillFolderHash: 'hash-monitored',
+      }),
+    } as never);
 
     await handleMarketSkill(
       'ts_skill-team-1/team-skill',
@@ -547,22 +522,12 @@ describe('market install paths', () => {
       p.spinner()
     );
 
-    expect(marketProvider.fetchById).toHaveBeenNthCalledWith(
-      1,
+    expect(marketProvider.installById).toHaveBeenCalledTimes(1);
+    expect(marketProvider.installById).toHaveBeenCalledWith(
       'id-team-skill',
       '1.2.3',
       undefined,
       'team-1',
-      undefined,
-      'release-1'
-    );
-    expect(marketProvider.fetchById).toHaveBeenNthCalledWith(
-      2,
-      'id-team-skill',
-      '1.2.3',
-      undefined,
-      'team-1',
-      true,
       'release-1'
     );
   });
@@ -598,7 +563,7 @@ describe('market install paths', () => {
       ).rejects.toThrow('process.exit');
 
       expect(marketProvider.resolveTeamSkillInstallTarget).not.toHaveBeenCalled();
-      expect(marketProvider.fetchById).not.toHaveBeenCalled();
+      expect(marketProvider.installById).not.toHaveBeenCalled();
       expect(p.outro).toHaveBeenCalledWith(expect.stringContaining('团队单 Skill 命令格式错误'));
     } finally {
       exitSpy.mockRestore();
@@ -632,7 +597,7 @@ describe('market install paths', () => {
       ).rejects.toThrow('process.exit');
 
       expect(marketProvider.resolve).not.toHaveBeenCalled();
-      expect(marketProvider.fetchById).not.toHaveBeenCalled();
+      expect(marketProvider.installById).not.toHaveBeenCalled();
       expect(p.outro).toHaveBeenCalledWith(
         expect.stringContaining('Team Skill 名称已变化，请重新复制安装命令')
       );
@@ -641,8 +606,7 @@ describe('market install paths', () => {
     }
   });
 
-  it('stops explicit team installs when the approved release is unavailable', async () => {
-    vi.mocked(marketProvider.fetchById).mockResolvedValue(null);
+  it('fails closed before install when an explicit team source lacks releaseId', async () => {
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
       throw new Error('process.exit');
     }) as never);
@@ -664,17 +628,52 @@ describe('market install paths', () => {
         )
       ).rejects.toThrow('process.exit');
 
+      expect(marketProvider.installById).not.toHaveBeenCalled();
+      expect(p.outro).toHaveBeenCalledWith(expect.stringContaining('缺少 releaseId'));
+    } finally {
+      exitSpy.mockRestore();
+    }
+  });
+
+  it('stops explicit team installs when the approved release is unavailable', async () => {
+    vi.mocked(marketProvider.installById).mockResolvedValue({
+      ok: false,
+      status: 409,
+      code: 'OBS_VERSION_UNAVAILABLE',
+      message: '当前版本尚无可安装的可观测产物',
+    });
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('process.exit');
+    }) as never);
+
+    try {
+      await expect(
+        handleMarketSkill(
+          't_team-id/team-skill',
+          {
+            type: 'market',
+            url: 't_team-id/team-skill',
+            marketName: 'team-skill',
+            marketSkillId: 'id-team-skill',
+            marketTeamId: 'team-id',
+            marketVersion: '1.2.3',
+            marketReleaseId: 'release-1',
+          },
+          { agent: ['claude-code'], yes: true, copy: true, global: false },
+          p.spinner()
+        )
+      ).rejects.toThrow('process.exit');
+
       expect(marketProvider.resolve).not.toHaveBeenCalled();
-      expect(marketProvider.fetchById).toHaveBeenCalledWith(
+      expect(marketProvider.installById).toHaveBeenCalledWith(
         'id-team-skill',
         '1.2.3',
         undefined,
         'team-id',
-        undefined,
-        undefined
+        'release-1'
       );
       expect(p.outro).toHaveBeenCalledWith(
-        expect.stringContaining('团队版本不可用：t_team-id/team-skill v1.2.3')
+        expect.stringContaining('当前版本尚无可安装的可观测产物：t_team-id/team-skill')
       );
     } finally {
       exitSpy.mockRestore();
@@ -704,6 +703,7 @@ describe('market install paths', () => {
         marketSkillId: 'id-team-skill',
         marketTeamId: 'team-id',
         marketVersion: '1.2.3',
+        marketReleaseId: 'release-1',
       },
       { agent: ['claude-code'], yes: true, copy: true, global: false },
       spinner as never
@@ -728,6 +728,6 @@ describe('market install paths', () => {
       p.spinner()
     );
 
-    expect(result).toEqual({ fallbackToGitHub: true });
+    expect(result).toEqual({ fallbackToGitHub: true, installed: false });
   });
 });

@@ -39,7 +39,7 @@ export interface LocalSkillLockEntry {
   releaseId?: string;
   /** Team release name used by `ts_` resolver; may differ from install directory name */
   teamSkillName?: string;
-  /** 采集知情同意（三态）：缺失 = 首次未定夺；true = 开（监测版）；false = 关（原版）。 */
+  /** 采集知情同意（三态）：缺失 = 首次未定夺；true = 同意统计；false = 拒绝统计。 */
   collectConsent?: boolean;
 }
 
