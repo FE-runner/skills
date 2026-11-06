@@ -1,9 +1,4 @@
-import { marketProvider } from './providers/market.ts';
-import { getAllLockedSkills, getSkillFromLock, addSkillToLock } from './skill-lock.ts';
-import { installWellKnownSkillForAgent } from './installer.ts';
-import { agents } from './agents.ts';
-import type { AgentType } from './types.ts';
-import { getCollectFailureReason, hasValidCollect } from './collect.ts';
+import { getAllLockedSkills, getSkillFromLock, setSkillCollectConsent } from './skill-lock.ts';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 
@@ -11,10 +6,8 @@ function printHelp(): void {
   console.log();
   console.log('Usage:');
   console.log('  track list            List global skills and their collection status');
-  console.log(
-    '  track on  <skill>     Install the collection-enabled build (global) + consent=true'
-  );
-  console.log('  track off <skill>     Revert to the original build (global) + consent=false');
+  console.log('  track on  <skill>     Record collection consent=true (no reinstall)');
+  console.log('  track off <skill>     Record collection consent=false (no reinstall)');
 }
 
 async function runTrackList(): Promise<void> {
@@ -23,7 +16,8 @@ async function runTrackList(): Promise<void> {
 
   for (const [name, entry] of Object.entries(entries)) {
     const consent = entry.collectConsent;
-    const status = consent === true ? 'on' : consent === false ? 'off' : '未定夺（首次未询问）';
+    const status =
+      consent === true ? '同意统计' : consent === false ? '拒绝统计' : '未定夺（首次未询问）';
     rows.push({
       name: entry.skillTeamId
         ? `ts_${entry.skillTeamId}/${entry.teamSkillName || name}`
@@ -42,8 +36,8 @@ async function runTrackList(): Promise<void> {
 
   console.log();
   const colored: Record<string, (s: string) => string> = {
-    on: pc.green,
-    off: pc.dim,
+    同意统计: pc.green,
+    拒绝统计: pc.dim,
     '未定夺（首次未询问）': pc.yellow,
   };
   for (const r of rows) {
@@ -57,16 +51,8 @@ async function runTrackList(): Promise<void> {
 }
 
 interface ResolvedTarget {
-  skillId: string;
   lockKey: string;
   name: string;
-  source: string;
-  version?: string;
-  authorId?: string;
-  teamId?: string;
-  skillTeamId?: string;
-  releaseId?: string;
-  teamSkillName?: string;
 }
 
 async function resolveTarget(skillName: string): Promise<ResolvedTarget | null> {
@@ -90,26 +76,13 @@ async function resolveTarget(skillName: string): Promise<ResolvedTarget | null> 
     p.log.error(`未在全局 lock 中找到 market skill「${skillName}」`);
     return null;
   }
-  // add 落全局 lock 时把 market skillId 存入 skillPath、authorId 存入 authorId
-  if (!entry.skillPath) {
-    p.log.error(`skill「${skillName}」缺少 skillId（skillPath），无法重取`);
-    return null;
-  }
   return {
     lockKey,
-    skillId: entry.skillPath,
     name: lockKey,
-    source: entry.source,
-    version: entry.version,
-    authorId: entry.authorId,
-    teamId: entry.teamId,
-    skillTeamId: entry.skillTeamId,
-    releaseId: entry.releaseId,
-    teamSkillName: entry.teamSkillName,
   };
 }
 
-async function runTrackToggle(skillName: string, report: boolean): Promise<void> {
+async function runTrackToggle(skillName: string, collectConsent: boolean): Promise<void> {
   if (!skillName) {
     p.log.error('缺少 skill 名称，用法：track on <skill> / track off <skill>');
     printHelp();
@@ -119,69 +92,16 @@ async function runTrackToggle(skillName: string, report: boolean): Promise<void>
   const target = await resolveTarget(skillName);
   if (!target) return;
 
-  p.log.info(`Fetching ${report ? 'monitored' : 'original'} build of「${target.name}」...`);
-  const skill = await marketProvider.fetchById(
-    target.skillId,
-    target.version,
-    target.authorId,
-    target.teamId,
-    report,
-    target.releaseId
-  );
-
-  if (!skill) {
-    p.log.error(
-      target.skillTeamId
-        ? `团队版本不可用：ts_${target.skillTeamId}/${target.teamSkillName || target.name} v${target.version ?? 'unknown'}`
-        : `无法从 Market 获取「${target.name}」（HTTP 失败或未找到）`
-    );
+  const updated = await setSkillCollectConsent(target.lockKey, collectConsent);
+  if (!updated) {
+    p.log.error(`未在全局 lock 中找到「${target.name}」`);
     return;
   }
-
-  if (report && !hasValidCollect(skill)) {
-    const reason = getCollectFailureReason(skill);
-    p.log.error(
-      reason
-        ? `「${target.name}」改造失败，无监测版可装：${reason}（未写入 lock）`
-        : `「${target.name}」作者未开启采集，无监测版可装（未写入 lock）`
-    );
-    return;
-  }
-
-  // 覆盖所有支持 global 的 agent 的 canonical 目录（symlink 源），失败静默
-  const written: string[] = [];
-  for (const key of Object.keys(agents)) {
-    try {
-      const res = await installWellKnownSkillForAgent(skill, key as AgentType, {
-        global: true,
-        mode: 'symlink',
-      });
-      if (res.success) written.push(key);
-    } catch {
-      // 单 agent 失败不影响其余
-    }
-  }
-
-  // 写回 lock（collectConsent + 覆盖后的 skillFolderHash）
-  await addSkillToLock(target.lockKey, {
-    source: target.source || `market/${target.lockKey}`,
-    sourceType: 'market',
-    sourceUrl: skill.sourceUrl,
-    skillFolderHash: skill.skillFolderHash,
-    skillPath: skill.skillId,
-    version: skill.version,
-    authorId: target.authorId,
-    teamId: target.teamId,
-    skillTeamId: target.skillTeamId,
-    releaseId: target.releaseId,
-    teamSkillName: target.teamSkillName,
-    collectConsent: report,
-  });
 
   p.log.success(
-    report
-      ? `「${skillName}」已切换为监测版并记录同意（写入 ${written.length} 个 agent 目录）`
-      : `「${skillName}」已退回原版并记录拒绝（写入 ${written.length} 个 agent 目录）`
+    collectConsent
+      ? `「${skillName}」已记录同意统计；安装文件与版本未改变`
+      : `「${skillName}」已记录拒绝统计；安装文件与版本未改变`
   );
 }
 

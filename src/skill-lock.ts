@@ -38,7 +38,7 @@ export interface SkillLockEntry {
   releaseId?: string;
   /** Team release name used by `ts_` resolver; may differ from install display name */
   teamSkillName?: string;
-  /** 采集知情同意（三态）：缺失 = 首次未定夺；true = 开（监测版）；false = 关（原版） */
+  /** 采集知情同意（三态）：缺失 = 首次未定夺；true = 同意统计；false = 拒绝统计 */
   collectConsent?: boolean;
   /** ISO timestamp when the skill was first installed */
   installedAt: string;
@@ -259,6 +259,22 @@ export async function addSkillToLock(
   };
 
   await writeSkillLock(lock);
+}
+
+/**
+ * 只更新采集同意状态，保留版本、hash、team/release 等其它 lock 字段。
+ */
+export async function setSkillCollectConsent(
+  skillName: string,
+  collectConsent: boolean
+): Promise<boolean> {
+  const lock = await readSkillLock();
+  const entry = lock.skills[skillName];
+  if (!entry) return false;
+
+  entry.collectConsent = collectConsent;
+  await writeSkillLock(lock);
+  return true;
 }
 
 /**

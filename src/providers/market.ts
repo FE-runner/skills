@@ -160,7 +160,7 @@ export interface MarketSkill extends RemoteSkill {
   version: string;
   /** SHA-256 based folder hash for update detection */
   skillFolderHash: string;
-  /** 采集改造信息（fetchById 传 report=true 且作者开启时带返） */
+  /** 采集改造信息；存在合法 config + meta.blueai_signature 表示可观测 Skill */
   collect?: unknown;
   /**
    * `binaryFiles` 中未通过严格 Base64 校验的条目（`<path>: <原因>`）。
@@ -202,7 +202,7 @@ interface InstallResponse {
   /** 二进制文件（标准 Base64，无 data URI 前缀）；没有二进制文件时该字段不出现 */
   binaryFiles?: Record<string, string>;
   skillFolderHash: string;
-  /** 采集改造信息：report=true 且作者开启采集时返回（含 config.meta 签名与改造版 files） */
+  /** 采集改造信息：目标版本可观测时返回（含 config.meta 签名与改造版 files） */
   collect?: unknown;
 }
 
@@ -320,42 +320,56 @@ export class MarketProvider {
   }
 
   /**
-   * Install a skill by its market ID.
-   * Pass `author` for private skills (userId format).
-   * Pass `team` for team skills (teamId format),优先于 author。
+   * 按 Market ID 安装 Skill，并保留失败状态码与服务端错误码。
+   *
+   * 安装接口始终返回目标版本当前可用产物；`report` 已从契约移除。
+   * `author` 用于私有 Skill，`team` 优先于 author；团队安装必须携带 releaseId。
+   */
+  async installById(
+    skillId: string,
+    version?: string,
+    author?: string,
+    team?: string,
+    releaseId?: string
+  ): Promise<ApiResult<MarketSkill>> {
+    const body: Record<string, string> = { id: skillId };
+    if (version) body.version = version;
+    if (team) {
+      body.team = team;
+      if (releaseId) body.releaseId = releaseId;
+    } else if (author) body.author = author;
+
+    const result = await requestApiResult<InstallResponse>(`${this.apiBase}/api/skill/install`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!result.ok) return result;
+
+    try {
+      return { ok: true, data: this.toMarketSkill(result.data, skillId) };
+    } catch (err) {
+      return {
+        ok: false,
+        status: 0,
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  /**
+   * 兼容只读调用：不关心失败分类时返回 MarketSkill 或 null。
+   * 安装主流程应使用 installById()，以保留 409 OBS_VERSION_UNAVAILABLE 等错误码。
    */
   async fetchById(
     skillId: string,
     version?: string,
     author?: string,
     team?: string,
-    report?: boolean,
     releaseId?: string
   ): Promise<MarketSkill | null> {
-    try {
-      const body: Record<string, string | boolean> = { id: skillId };
-      if (version) body.version = version;
-      if (team) {
-        body.team = team;
-        if (releaseId) body.releaseId = releaseId;
-      } else if (author) body.author = author;
-      // Market 契约（SkillInstallBody）report 为 boolean；发字符串 'true' 会被
-      // 路由的 `body.report === true` 判 false，导致采集配置永不下发
-      if (report) body.report = true;
-      const url = `${this.apiBase}/api/skill/install`;
-
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) return null;
-
-      const data = unwrapEnvelope<InstallResponse>(await res.json());
-      return this.toMarketSkill(data, skillId);
-    } catch {
-      return null;
-    }
+    const result = await this.installById(skillId, version, author, team, releaseId);
+    return result.ok ? result.data : null;
   }
 
   /**

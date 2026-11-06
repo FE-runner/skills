@@ -143,7 +143,7 @@ describe('MarketProvider observability methods', () => {
     expect((result as { status: number }).status).toBe(0);
   });
 
-  describe('fetchById report / collect', () => {
+  describe('installById / collect', () => {
     const INSTALL_URL = `${SKILLS_SITE}/api/skill/install`;
     const bg = {
       code: 'SUCCESS',
@@ -164,24 +164,15 @@ describe('MarketProvider observability methods', () => {
       ) as Record<string, string>;
     }
 
-    it('sends report=true when report option is passed', async () => {
+    it('installs once without sending report', async () => {
       const fetchMock = mockFetchOnce(bg);
       const provider = new MarketProvider();
 
-      await provider.fetchById('id-1', undefined, undefined, undefined, true);
+      const result = await provider.installById('id-1');
 
       expect(fetchMock.mock.calls[0]?.[0]).toBe(INSTALL_URL);
-      // Market 契约 report 为 boolean（install route 用 `body.report === true` 判定）
-      expect(mockBody(fetchMock)).toEqual({ id: 'id-1', report: true });
-    });
-
-    it('omits report when report option is not passed (backward compatible)', async () => {
-      const fetchMock = mockFetchOnce(bg);
-      const provider = new MarketProvider();
-
-      await provider.fetchById('id-1');
-
       expect(mockBody(fetchMock)).toEqual({ id: 'id-1' });
+      expect(result.ok).toBe(true);
     });
 
     it('surfaces collect on the returned MarketSkill when present', async () => {
@@ -189,19 +180,47 @@ describe('MarketProvider observability methods', () => {
       const fetchMock = mockFetchOnce({ ...bg, data: { ...bg.data, collect } });
       const provider = new MarketProvider();
 
-      const skill = await provider.fetchById('id-1', undefined, undefined, undefined, true);
+      const result = await provider.installById('id-1');
 
-      expect(skill?.collect).toEqual(collect);
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.data.collect).toEqual(collect);
     });
 
     it('omits collect when the install response has none (author not collecting)', async () => {
       mockFetchOnce(bg);
       const provider = new MarketProvider();
 
-      const skill = await provider.fetchById('id-1');
+      const result = await provider.installById('id-1');
 
-      expect(skill).not.toHaveProperty('collect');
-      expect(skill?.collect).toBeUndefined();
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.data).not.toHaveProperty('collect');
+    });
+
+    it('preserves OBS_VERSION_UNAVAILABLE from the install endpoint', async () => {
+      mockFetchOnce(
+        { code: 'OBS_VERSION_UNAVAILABLE', message: '当前版本尚无可安装的可观测产物' },
+        false,
+        409
+      );
+      const provider = new MarketProvider();
+
+      const result = await provider.installById('id-1');
+
+      expect(result).toEqual({
+        ok: false,
+        status: 409,
+        code: 'OBS_VERSION_UNAVAILABLE',
+        message: '当前版本尚无可安装的可观测产物',
+        issues: undefined,
+        retryAfterSeconds: undefined,
+      });
+    });
+
+    it('keeps fetchById as a null-on-failure compatibility wrapper', async () => {
+      mockFetchOnce({ code: 'OBS_VERSION_UNAVAILABLE', message: '不可用' }, false, 409);
+      const provider = new MarketProvider();
+
+      await expect(provider.fetchById('id-1')).resolves.toBeNull();
     });
   });
 });

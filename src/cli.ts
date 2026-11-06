@@ -160,9 +160,9 @@ ${BOLD}Observability:${RESET}
   obs uninstall [--purge]  Uninstall LoongSuite Pilot on this machine
                            (--purge also deletes local data in ~/.loongsuite-pilot)
 ${BOLD}Collection Consent:${RESET}
-  track list               List global skills and their collection-consent status (on/off/未定夺)
-  track on <skill>         Install the monitored build for a global skill (consent=true)
-  track off <skill>        Revert to the original build for a global skill (consent=false)
+  track list               List global skills and their collection-consent status
+  track on <skill>         Record consent=true for a global skill (no reinstall)
+  track off <skill>        Record consent=false for a global skill (no reinstall)
 ${BOLD}Publishing:${RESET}
   login <api-key>          Save your Skills Market API Key for publish/withdraw
   whoami                   Show the user your API Key is currently logged in as
@@ -189,7 +189,7 @@ ${BOLD}Add Options:${RESET}
   --copy                 Copy files instead of symlinking to agent directories
   --all                  Shorthand for --skill '*' --agent '*' -y
   --full-depth           Search all subdirectories even when a root SKILL.md exists
-  --observability        Use the monitored build for project or global installs
+  --observability        Record collection consent=true and skip the consent prompt
 
 ${BOLD}Remove Options:${RESET}
   -g, --global           Remove from global scope
@@ -213,8 +213,8 @@ ${BOLD}Options:${RESET}
 
 ${BOLD}Track Options:${RESET}
   track list               List global skills and their collection consent status
-  track on <skill>         Install the monitored build (consent=true)
-  track off <skill>        Revert to the original build (consent=false)
+  track on <skill>         Record consent=true without reinstalling
+  track off <skill>        Record consent=false without reinstalling
 
 ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ${BIN_NAME} add ${EXAMPLE_REPO}
@@ -259,8 +259,8 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ${BIN_NAME} obs uninstall               ${DIM}# uninstall LoongSuite Pilot (--purge removes local data)${RESET}
 
   ${DIM}$${RESET} ${BIN_NAME} track list                       ${DIM}# list collection consent for global skills${RESET}
-  ${DIM}$${RESET} ${BIN_NAME} track on my-skill                ${DIM}# switch to monitored build + consent=true${RESET}
-  ${DIM}$${RESET} ${BIN_NAME} track off my-skill               ${DIM}# revert to original build + consent=false${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} track on my-skill                ${DIM}# record collection consent=true${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} track off my-skill               ${DIM}# record collection consent=false${RESET}
 
 Discover more skills at ${TEXT}${SKILLS_SITE}/${RESET}
 `);
