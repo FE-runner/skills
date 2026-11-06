@@ -437,6 +437,8 @@ export interface AddOptions {
   skipPilotStatus?: boolean;
   /** 团队预取的单次安装响应；设置后不再请求 Market */
   prefetchedMarketSkill?: MarketSkill;
+  /** update 内部重装时即使带 -y，也允许对可观测 Skill 重新确认采集同意 */
+  recheckCollectConsent?: boolean;
 }
 
 /**
@@ -1706,7 +1708,7 @@ async function preflightTeamInstall(
   const installResults = new Map<string, MarketSkill>();
   const consentByKey = new Map<string, boolean>();
   const failures = new Map<string, string>();
-  const missingConsentKeys: string[] = [];
+  const recheckConsentKeys: string[] = [];
   const forceObservability = options.observability === true;
 
   for (const s of skills) {
@@ -1735,32 +1737,33 @@ async function preflightTeamInstall(
 
     if (hasValidCollect(skill)) {
       const locked = await getTeamSkillConsent(teamId, skill.installName, installGlobally, cwd);
-      if (locked === 'missing') {
-        missingConsentKeys.push(key);
-      } else {
+      if (locked === true) {
         consentByKey.set(key, locked);
+      } else {
+        recheckConsentKeys.push(key);
       }
     }
   }
 
-  let missingConsent = options.collectConsent;
-  if (missingConsent === undefined && missingConsentKeys.length > 0) {
-    if (options.yes || !process.stdin.isTTY) {
-      missingConsent = false;
+  let recheckedConsent = options.collectConsent;
+  const canPrompt = process.stdin.isTTY && (!options.yes || options.recheckCollectConsent === true);
+  if (recheckedConsent === undefined && recheckConsentKeys.length > 0) {
+    if (!canPrompt) {
+      recheckedConsent = false;
     } else {
       const confirmed = await p.confirm({
-        message: `本团队有 ${missingConsentKeys.length} 个可观测 skill 尚未确定是否同意数据采集（安装文件不变），是否同意统计？`,
+        message: `本团队有 ${recheckConsentKeys.length} 个可观测 skill 需要重新确认数据采集（上次选择不采集或尚未定夺，安装文件不变），是否同意统计？`,
       });
       if (p.isCancel(confirmed)) {
         p.cancel('Installation cancelled');
         process.exit(0);
       }
-      missingConsent = !!confirmed;
+      recheckedConsent = !!confirmed;
     }
   }
 
-  for (const key of missingConsentKeys) {
-    consentByKey.set(key, missingConsent ?? false);
+  for (const key of recheckConsentKeys) {
+    consentByKey.set(key, recheckedConsent ?? false);
   }
 
   const observableKeys = [...installResults.entries()]
@@ -2111,12 +2114,12 @@ export async function handleMarketSkill(
   } else if (collectCapable) {
     if (locked === true) {
       writeCollectConsent = true;
-    } else if (locked === false) {
-      writeCollectConsent = false;
     } else if (options.collectConsent !== undefined) {
       writeCollectConsent = options.collectConsent;
     } else {
-      if (options.yes || !process.stdin.isTTY) {
+      const canPrompt =
+        process.stdin.isTTY && (!options.yes || options.recheckCollectConsent === true);
+      if (!canPrompt) {
         writeCollectConsent = false;
         p.log.message(
           pc.dim(
@@ -2125,7 +2128,10 @@ export async function handleMarketSkill(
         );
       } else {
         const confirmed = await p.confirm({
-          message: `「${skill.installName}」包含可观测文件，是否同意数据采集？(安装文件不变，${toggleHint})`,
+          message:
+            locked === false
+              ? `「${skill.installName}」上次选择不采集，本次是否改为同意数据采集？(安装文件不变，${toggleHint})`
+              : `「${skill.installName}」包含可观测文件，是否同意数据采集？(安装文件不变，${toggleHint})`,
         });
         writeCollectConsent = !p.isCancel(confirmed) && !!confirmed;
       }
@@ -3288,6 +3294,8 @@ export function parseAddOptions(args: string[]): { source: string[]; options: Ad
       options.copy = true;
     } else if (arg === '--observability') {
       options.observability = true;
+    } else if (arg === '--recheck-collect-consent') {
+      options.recheckCollectConsent = true;
     } else if (arg && !arg.startsWith('-')) {
       source.push(arg);
     }

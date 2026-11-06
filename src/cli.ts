@@ -722,11 +722,15 @@ async function runUpdate(args: string[] = []): Promise<void> {
         );
         continue;
       }
-      const result = spawnSync(process.execPath, [cliEntry, 'add', update.installUrl, '-g', '-y'], {
-        stdio: ['inherit', 'pipe', 'pipe'],
-        encoding: 'utf-8',
-        shell: process.platform === 'win32',
-      });
+      const result = spawnSync(
+        process.execPath,
+        [cliEntry, 'add', update.installUrl, '-g', '-y', '--recheck-collect-consent'],
+        {
+          stdio: 'inherit',
+          encoding: 'utf-8',
+          shell: process.platform === 'win32',
+        }
+      );
 
       if (result.status === 0) {
         successCount++;
@@ -797,10 +801,10 @@ async function runUpdate(args: string[] = []): Promise<void> {
     for (const update of updates) {
       console.log(`${TEXT}Updating ${update.name}...${RESET}`);
 
-      const flags = ['-y'];
+      const flags = ['-y', '--recheck-collect-consent'];
       const selfArgs = [process.argv[1]!, 'add', update.installUrl, ...flags];
       const result = spawnSync(process.execPath, selfArgs, {
-        stdio: ['inherit', 'pipe', 'pipe'],
+        stdio: 'inherit',
       });
 
       if (result.status === 0) {
@@ -892,7 +896,9 @@ async function main(): Promise<void> {
         showHelp();
         break;
       }
-      showLogo();
+      if (!restArgs.includes('--recheck-collect-consent')) {
+        showLogo();
+      }
       const { source: addSource, options: addOpts } = parseAddOptions(restArgs);
       await runAdd(addSource, addOpts);
       break;

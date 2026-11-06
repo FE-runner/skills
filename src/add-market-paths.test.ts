@@ -282,7 +282,7 @@ describe('market install paths', () => {
     );
   });
 
-  it('keeps an existing project-level collection opt-out', async () => {
+  it('reconfirms an existing project-level collection opt-out when interactive', async () => {
     vi.mocked(readLocalLock).mockResolvedValue({
       version: 1,
       skills: {
@@ -294,6 +294,99 @@ describe('market install paths', () => {
         },
       },
     });
+    vi.mocked(marketProvider.installById).mockResolvedValue({
+      ok: true,
+      data: marketSkill('demo', {
+        collect: { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } },
+      }),
+    } as never);
+    vi.mocked(p.confirm).mockResolvedValue(true);
+
+    await handleMarketSkill(
+      'demo',
+      { type: 'market', url: 'demo', marketName: 'demo' },
+      {
+        agent: ['claude-code'],
+        copy: true,
+        global: false,
+        skipPilotStatus: true,
+      },
+      p.spinner()
+    );
+
+    expect(p.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining('上次选择不采集') })
+    );
+    expect(marketProvider.installById).toHaveBeenCalledTimes(1);
+    expect(addSkillToLocalLock).toHaveBeenCalledWith(
+      'demo',
+      expect.objectContaining({ collectConsent: true }),
+      expect.any(String)
+    );
+  });
+
+  it('reconfirms an existing opt-out during update when the internal recheck flag is set', async () => {
+    vi.mocked(readLocalLock).mockResolvedValue({
+      version: 1,
+      skills: {
+        demo: {
+          source: 'market/demo',
+          sourceType: 'market',
+          computedHash: 'old-hash',
+          collectConsent: false,
+        },
+      },
+    });
+    vi.mocked(marketProvider.installById).mockResolvedValue({
+      ok: true,
+      data: marketSkill('demo', {
+        collect: { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } },
+      }),
+    } as never);
+    vi.mocked(p.confirm).mockResolvedValue(true);
+
+    await handleMarketSkill(
+      'demo',
+      { type: 'market', url: 'demo', marketName: 'demo' },
+      {
+        agent: ['claude-code'],
+        yes: true,
+        recheckCollectConsent: true,
+        copy: true,
+        global: false,
+        skipPilotStatus: true,
+      },
+      p.spinner()
+    );
+
+    expect(p.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining('上次选择不采集') })
+    );
+    expect(addSkillToLocalLock).toHaveBeenCalledWith(
+      'demo',
+      expect.objectContaining({ collectConsent: true }),
+      expect.any(String)
+    );
+  });
+
+  it('keeps an existing opt-out during ordinary non-interactive reinstall', async () => {
+    vi.mocked(readLocalLock).mockResolvedValue({
+      version: 1,
+      skills: {
+        demo: {
+          source: 'market/demo',
+          sourceType: 'market',
+          computedHash: 'old-hash',
+          collectConsent: false,
+        },
+      },
+    });
+    vi.mocked(marketProvider.installById).mockResolvedValue({
+      ok: true,
+      data: marketSkill('demo', {
+        collect: { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } },
+      }),
+    } as never);
 
     await handleMarketSkill(
       'demo',
@@ -309,7 +402,6 @@ describe('market install paths', () => {
     );
 
     expect(p.confirm).not.toHaveBeenCalled();
-    expect(marketProvider.installById).toHaveBeenCalledTimes(1);
     expect(addSkillToLocalLock).toHaveBeenCalledWith(
       'demo',
       expect.objectContaining({ collectConsent: false }),

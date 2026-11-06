@@ -305,6 +305,47 @@ describe('team install observability confirmation', () => {
     );
   });
 
+  it('reconfirms an existing team opt-out once when interactive', async () => {
+    const baseEntry = {
+      source: 'market/skill-a',
+      sourceType: 'market',
+      sourceUrl: 'market://skill-a',
+      skillFolderHash: 'team-hash',
+      installedAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      teamId: 'team-id',
+    };
+    vi.mocked(getAllLockedSkills).mockResolvedValue({
+      'skill-a': { ...baseEntry, collectConsent: false },
+      'skill-b': {
+        ...baseEntry,
+        source: 'market/skill-b',
+        sourceUrl: 'market://skill-b',
+        collectConsent: true,
+      },
+    });
+
+    await runAdd(['t_team-id/team-name'], {
+      agent: ['claude-code'],
+      global: true,
+      copy: true,
+    });
+
+    const consentPrompt = vi
+      .mocked(p.confirm)
+      .mock.calls.map(([options]) => options.message)
+      .find((message) => message.includes('上次选择不采集'));
+    expect(consentPrompt).toBeDefined();
+    expect(addSkillToLock).toHaveBeenCalledWith(
+      'skill-a',
+      expect.objectContaining({ teamId: 'team-id', collectConsent: true })
+    );
+    expect(addSkillToLock).toHaveBeenCalledWith(
+      'skill-b',
+      expect.objectContaining({ teamId: 'team-id', collectConsent: true })
+    );
+  });
+
   it('does not guide Pilot when non-interactive team consent defaults to false', async () => {
     vi.mocked(p.confirm).mockReset();
 
