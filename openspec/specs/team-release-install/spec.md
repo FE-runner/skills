@@ -2,7 +2,7 @@
 
 ## Purpose
 
-让 CLI 通过 Team、Skill ID 和团队生效 release 版本完成批量安装与采集预检，避免把团队 Skill 当作公开或私有 Skill 重新解析。
+让 CLI 通过 Team、Skill ID 和团队生效 release 版本完成批量或单 Skill 安装，以每次 release-bound 安装响应同时识别可观测 Skill 并落盘 active artifact，避免把团队 Skill 当作公开或私有 Skill 重新解析。
 
 ## Requirements
 

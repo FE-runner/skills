@@ -27,7 +27,7 @@ CLI SHALL NOT 在 Market 安装请求中发送 `report`。市场返回的 `files
 
 #### Scenario: 非可观测 Skill 安装
 
-- **WHEN** 目标版本 `collectEnabled=false`
+- **WHEN** 未显式传 `--observability`，且目标版本 `collectEnabled=false`
 - **THEN** 安装响应返回原版文件且不返回 `collect`；CLI 不写 consent 变更
 
 #### Scenario: 可观测版本不可用

@@ -26,7 +26,7 @@
 ## Impact
 
 - `src/providers/market.ts`：安装请求与响应类型、稳定错误码传递。
-- `src/add.ts`、`src/add-prompt.ts`、`src/track.ts`、`src/collect.ts`：原版先行、探测替换和重装切换逻辑移除。
+- `src/add.ts`、`src/track.ts`、`src/collect.ts`：原版先行、探测替换和重装切换逻辑移除。
 - `src/skill-lock.ts`、`src/local-lock.ts`：继续使用现有 `collectConsent` 字段，不提升 lock schema。
 - 测试：Market provider、单 Skill/团队安装、交互与非交互 consent、track 不重装、409 fail-closed。
 - 发布：必须与 `skills-market` 新契约配套发布；旧 CLI 的 `report` 请求不再受支持。

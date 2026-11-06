@@ -55,7 +55,7 @@ CLI SHALL 仅在安装响应含对象型 `collect.config` 与非空字符串 `co
 
 #### Scenario: 非可观测 Skill
 
-- **WHEN** 响应不含 `collect`，或 `collect` 缺少 config/签名
+- **WHEN** 未显式传 `--observability`，且响应不含 `collect` 或 `collect` 缺少 config/签名
 - **THEN** CLI 不询问采集，不写 `collectConsent`
 
 ### Requirement: 首次安装只询问 consent
@@ -107,7 +107,7 @@ CLI SHALL 仅在安装响应含对象型 `collect.config` 与非空字符串 `co
 
 ### Requirement: 团队安装一次询问 consent
 
-团队批量安装 SHALL 在安装前收集团队内可观测 Skill，并仅对 consent 未定夺项发起一次团队级询问。同意时写 `true`，拒绝或非交互时写 `false`。每个 Skill 的文件均来自各自一次安装响应；CLI SHALL NOT 用 `report` 探测或替换包。
+团队批量安装 SHALL 在安装前收集团队内可观测 Skill，并仅对 consent 未定夺项发起一次团队级询问。同意时写 `true`，拒绝或非交互时写 `false`。显式传 `--observability` 时跳过询问，并为本次团队安装参与的每个 Skill 写 `true`，包括响应不可观测的 Skill。每个 Skill 的文件均来自各自一次安装响应；CLI SHALL NOT 用 `report` 探测或替换包。安装失败的 Skill SHALL NOT 写 `collectConsent`。
 
 #### Scenario: 团队同意
 
@@ -119,11 +119,16 @@ CLI SHALL 仅在安装响应含对象型 `collect.config` 与非空字符串 `co
 - **WHEN** 用户拒绝团队级询问
 - **THEN** 这些 Skill 写 consent=false，文件不解包为原版
 
-#### Scenario: 团队无非可观测 Skill
+#### Scenario: 团队无可观测 Skill
 
 - **WHEN** 团队内无可观测 Skill
-- **THEN** CLI 不询问也不写 collectConsent
+- **THEN** CLI 不询问；未显式传 `--observability` 时不写 collectConsent
 
+#### Scenario: 团队显式开启采集
+
+- **WHEN** 团队安装传入 `--observability`，无论响应是否含合法 `collect`
+- **THEN** CLI 跳过团队询问，并为参与本次安装的每个 Skill 写 `collectConsent=true`
+- **AND** 各 Skill 仍安装服务端返回的响应文件
 ### Requirement: track 只修改 lock
 
 `track on <skillName>` SHALL 只把全局 lock 对应条目 `collectConsent` 写为 `true`；`track off` SHALL 只写 `false`。命令 SHALL NOT 请求 Market、下载文件、重装 Skill 或改写其它 lock 字段。缺失目标 lock entry 时 SHALL 报错且不创建条目。
@@ -156,3 +161,24 @@ CLI SHALL 仅在安装响应含对象型 `collect.config` 与非空字符串 `co
 
 - **WHEN** Market 返回 `OBS_VERSION_UNAVAILABLE` 或 release 不匹配
 - **THEN** CLI 报团队版本不可用并 fail-closed
+
+## MODIFIED Requirements
+
+### Requirement: lock 三态判定采集状态
+
+采集状态 SHALL 由当前 scope 对应 lock 的 `skills[<skillName>].collectConsent` 唯一决定：缺失 = 首次（未定夺）；`true` = 同意下游统计；`false` = 拒绝下游统计。该字段 SHALL NOT 表示安装包类型，CLI 不得通过扫描已装包文件判定采集状态。
+
+#### Scenario: lock 无字段
+
+- **WHEN** 用户运行 `track list` 且某已装 skill 无 `collectConsent` 字段
+- **THEN** 展示“未定夺”
+
+#### Scenario: lock true / false
+
+- **WHEN** `collectConsent=true` 或 `false`
+- **THEN** `track list` 分别展示“同意统计”或“拒绝统计”
+
+#### Scenario: 已装文件与 consent 不一致
+
+- **WHEN** 已装文件含可观测产物但 lock 为 `false`
+- **THEN** 文件保持可观测版本，但下游不得统计

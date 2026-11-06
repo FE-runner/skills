@@ -18,3 +18,9 @@
 
 - **WHEN** 非交互安装且 consent=false
 - **THEN** CLI 不输出采集插件自动安装指引，仅完成文件安装
+
+#### Scenario: 非交互 consent=true
+
+- **WHEN** 非交互安装且 consent=true，本机插件缺失或配置残留
+- **THEN** CLI 不展示自动安装询问、不自动创建接入记录、不执行安装脚本
+- **AND** 仅输出可稍后手动安装采集插件的指引

@@ -1,11 +1,11 @@
 # 运行状态
 
 - 变更名: observable-version-gate
-- 阶段: propose-complete
+- 阶段: review-plan-normal-cleared
 - 源分支: develop
 - 开发分支: feature/observable-version-gate-cli
-- 最后成功 commit: c07af41
-- 下一步安全动作: 运行 `@lyx-review-plan observable-version-gate`
+- 最后成功 commit: 0e7163c
+- 下一步安全动作: 创建 review-plan-fix 统一提交后执行 `@lyx-apply observable-version-gate`
 
 ## 任务证据
 
@@ -22,6 +22,7 @@
 ## 修改后评测（中间）
 
 - `openspec validate --changes observable-version-gate --strict`: passed — 1 passed, 0 failed
+- `git diff --check`: passed — exit 0
 
 ## 修改后评测（最终）
 
@@ -29,12 +30,17 @@
 
 ## 审查状态
 
-- propose commit 待创建
-- 方案自审已完成，待 review-plan
+- 基线 commit: 0e7163c
+- 第 1 轮：2 个 Critical，7 个 Warning；已开始修复，待统一提交归属
+- 第 2 轮：0 个 Critical，2 个 Warning；上一轮 2 个 Critical 和 1 个影响落地 Warning 已解决，待修复本轮影响落地项
+- 第 3 轮：0 个 Critical，0 个 Warning，0 个 Info；上一轮 2 个影响落地 Warning 已解决
+- 终止类型：normal
+- review-plan-fix 统一提交：待本次阶段提交归属
 
 ## 验证
 
 - `git diff --check -- openspec/changes/observable-version-gate`: passed
+- `openspec validate --changes observable-version-gate --strict`: passed — exit 0，1 passed，0 failed
 
 ## 裁决
 
