@@ -6,30 +6,28 @@
 
 ## Requirements
 
-### Requirement: 安装接口携带 report 参数
+### Requirement: 安装接口统一返回目标版本可用产物
 
-CLI SHALL 在安装 / 重装请求携带 `report`（boolean）控制采集改造产物：需要采集时 `report=true`，不采集时 `report=false`。接口响应含 `collect: { config: { collectEnabled }, meta: { blueai_signature } }` 表示改造成功，`files` 为服务端已生成好的产物；该产物可能仅含身份签名，也可能额外含 `.blueai-skills-market/bsm-obs-manifest.yaml` 与 `.blueai-skills-market/bsm-obs-run.cjs`，并由服务端决定 `SKILL.md` 内容。CLI SHALL 只按 `files` 目录结构落盘，不解析签名、不拼装结构化改造产物。`collect: { reason }` 表示服务端改造失败降级，`files` 为原样产物，CLI SHALL 按无有效采集配置处理。响应不含 `collect` 表示原样产物。
+CLI SHALL NOT 在 Market 安装请求中发送 `report`。市场返回的 `files`/`binaryFiles` 是目标版本当前唯一可安装产物：可观测 Skill 返回 active artifact，非可观测 Skill 返回原版。CLI SHALL 原样落盘，不按用户 consent 切换包类型。
 
-#### Scenario: report=true 返回改造版
+响应含合法 `collect`（`config` 与非空 `meta.blueai_signature`）表示该 Skill 可观测；不含 `collect` 表示非可观测 Skill。`collect.reason` 不再是失败降级契约。
 
-- **WHEN** CLI 以 report=true 请求安装某「作者开启采集」的 skill 且服务端改造成功
-- **THEN** 响应含 collect.config 与 collect.meta.blueai_signature，files 为服务端生成的改造版副本；CLI 原样落盘
+#### Scenario: 可观测 Skill 安装
 
-#### Scenario: report=true 返回结构化改造产物
+- **WHEN** 目标版本 `collectEnabled=true` 且存在 active artifact
+- **THEN** 安装响应返回改造后文件；CLI 原样落盘并识别该 Skill 可观测
 
-- **WHEN** CLI 以 report=true 请求安装的 skill 在目标版本存在成功的结构化改造快照
-- **THEN** 响应 files 中可额外包含 `.blueai-skills-market/bsm-obs-manifest.yaml` 与 `.blueai-skills-market/bsm-obs-run.cjs`，CLI 仍只按目录结构落盘
+#### Scenario: 非可观测 Skill 安装
 
-#### Scenario: 改造失败降级原样
+- **WHEN** 未显式传 `--observability`，且目标版本 `collectEnabled=false`
+- **THEN** 安装响应返回原版文件且不返回 `collect`；CLI 不写 consent 变更
 
-- **WHEN** report=true 但服务端改造失败（如 SKILL.md frontmatter 解析失败）
-- **THEN** 响应 collect 仅含 reason，files 为原样产物，CLI 按无有效采集配置处理
+#### Scenario: 可观测版本不可用
 
-### Requirement: 作者撤回采集声明不影响已装副本（跨仓边界一致）
+- **WHEN** 目标版本 `collectEnabled=true` 但没有可用 active artifact
+- **THEN** Market 返回 `409 OBS_VERSION_UNAVAILABLE`；CLI 明确报错并 fail-closed，不回退原版或其他来源
 
-作者将已发布 skill 的 collectEnabled 改为 false 后，本仓口径与 market 侧一致：仅新安装（无有效 collect 响应）按不可采集处理；已装用户的本地采集状态由 `cli-skill-collection-consent` 的 lock 三态规则管理，CLI SHALL NOT 因作者撤回声明自动改写该状态；用户可通过 `track off` 停止采集。
+#### Scenario: 用户拒绝统计仍安装可观测版本
 
-#### Scenario: 撤回声明后已装副本仍采集
-
-- **WHEN** 作者关闭采集声明后，已安装该 Skill 的用户执行更新
-- **THEN** CLI SHALL 按更新语义处理：作者撤回 SHALL NOT 自动改写用户 lock 中的采集状态，用户可通过 `track off` 停采
+- **WHEN** lock 中该 Skill 的 `collectConsent=false`，且安装响应返回合法 `collect`
+- **THEN** CLI 仍安装响应文件，但不上报同意、不引导安装采集插件

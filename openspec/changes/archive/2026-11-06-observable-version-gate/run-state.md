@@ -1,11 +1,11 @@
 # 运行状态
 
 - 变更名: observable-version-gate
-- 阶段: review-code-normal-cleared
+- 阶段: archived
 - 源分支: develop
 - 开发分支: feature/observable-version-gate-cli
 - 最后成功 commit: df1d462
-- 下一步安全动作: 可用 `@lyx-archive observable-version-gate` 进入归档前完整验证
+- 下一步安全动作: 创建 archive commit 后执行分支收尾确认
 
 ## 任务证据
 
@@ -27,10 +27,10 @@
 
 ## 修改后评测（最终）
 
+- `pnpm exec vitest run`: passed — exit 0，43 files / 651 tests，0 failed
 - `pnpm type-check`: passed — exit 0
-- `pnpm format:check`: passed — exit 0
-- `pnpm build`: passed — obuild 完成
-- `pnpm exec vitest run`: passed — 43 files / 651 tests
+- `pnpm build`: passed — exit 0，obuild 完成
+- `openspec validate --specs`: passed — 11 specs，0 failed
 
 ## 审查状态
 
@@ -50,6 +50,7 @@
 - `git diff --check -- openspec/changes/observable-version-gate`: passed
 - `openspec validate --changes observable-version-gate --strict`: passed — exit 0，1 passed，0 failed
 - review-code 固定基线：`4f04b1c`；`git show` 与 `git diff <baseline>` 已核对，工作区与未跟踪文件为空
+- `openspec validate --changes observable-version-gate --strict`: passed — 归档移动前 1 passed，0 failed
 
 ## 裁决
 

@@ -6,149 +6,110 @@
 
 ## Requirements
 
-### Requirement: 有效采集配置判定
+### Requirement: 可观测 Skill 识别
 
-CLI SHALL 仅在安装响应中的 `collect` 同时包含 `config` 与非空字符串 `meta.blueai_signature` 时，将其视为有效的监测版采集配置。响应不含 `collect`、`collect` 非对象、`collect` 仅含 `reason`、或缺少/为空 `config`/`meta.blueai_signature` 时，CLI SHALL 视为无效采集配置并按无监测版处理。
+CLI SHALL 仅在安装响应含对象型 `collect.config` 与非空字符串 `collect.meta.blueai_signature` 时识别该 Skill 为可观测 Skill。CLI SHALL NOT 使用 `collect.reason` 判断失败降级，也不得扫描文件内容判断 consent。
 
-#### Scenario: 成功响应判定为有效
+#### Scenario: 合法 collect
 
-- **WHEN** 安装响应返回 `collect = { config: { collectEnabled: true }, meta: { blueai_signature: "..." } }`
-- **THEN** CLI 将该响应判定为有效采集配置，可用于安装监测版
+- **WHEN** 响应 `collect = { config: {...}, meta: { blueai_signature: "..." } }`
+- **THEN** CLI 标记该 Skill 可观测，并可在 consent 未定夺时询问
 
-#### Scenario: 改造失败降级判定为无效
+#### Scenario: 非可观测 Skill
 
-- **WHEN** 安装响应返回 `collect = { reason: "frontmatter 解析失败" }`
-- **THEN** CLI 将该响应判定为无效采集配置，不安装监测版、不写采集同意
+- **WHEN** 未显式传 `--observability`，且响应不含 `collect` 或 `collect` 缺少 config/签名
+- **THEN** CLI 不询问采集，不写 `collectConsent`
 
-### Requirement: 首次安装知情同意
+### Requirement: 首次安装只询问 consent
 
-`skills add` 安装 Skill 时 SHALL 采用**原版先行**策略：先以 `report=false` 拉取原版产物。仅当当前 scope 对应 lock 中**首次未定夺**（无 `collectConsent`）时，SHALL 再以 `report=true` 请求安装接口探测是否带采集配置——**`report` 参数 SHALL 为布尔值**（Market 契约 `SkillInstallBody.report: z.boolean()`，路由以 `body.report === true` 判定；字符串 `'true'` 恒判 false，会导致采集配置永不下发）。响应**无有效 `collect`**（作者未开启采集，或服务端改造失败降级）时 SHALL 安装原版且**不写入** `collectConsent` 字段。响应**有有效 `collect`** 时 SHALL 询问用户「是否同意采集并安装监测版」：同意 → **直接复用探测到的监测版产物**落盘（不重复拉取）并写入当前 lock 的 `collectConsent = true`；拒绝 → 安装原版并写入 `false`。在**非交互环境**（`-y`/`--all`/update 重装/非 TTY 输入）下 SHALL **默认拒绝**：不询问，安装原版并写入 `false`；全局安装提示可稍后运行 `track on <skillName>`，项目级安装提示可稍后重新执行 `add <skill> --observability`。该记录 SHALL **永久生效**（per-skill、per-scope，后续同 scope 安装该 skill 不再询问），但**不跨 skill 或跨 scope 生效**。**团队批量安装**（`add t_<teamId>/<name>`）以**一次询问覆盖该团队全部 `skill`**（见「团队安装的采集同意」Requirement）。
+`add` 安装 Skill 时 SHALL 只请求一次目标版本安装产物。若当前 scope lock 的 `collectConsent` 缺失且 Skill 可观测：交互环境 SHALL 询问是否同意统计；同意写 `true`，拒绝写 `false`。无论选择为何，落盘文件均为同一份服务端响应。非交互环境 SHALL 默认写 `false` 且不询问。
 
-#### Scenario: 首次安装无采集配置的 skill
+#### Scenario: 首次同意
 
-- **WHEN** 用户 `add` 安装一个作者未开启采集的 Skill（探测响应无 collect）
-- **THEN** CLI 安装原版，不询问，不写入 collectConsent 字段
+- **WHEN** 可观测 Skill 首次安装，用户同意统计
+- **THEN** CLI 安装响应文件并写 `collectConsent=true`
 
-#### Scenario: 改造失败降级不触发询问
+#### Scenario: 首次拒绝
 
-- **WHEN** 用户首次 `add` 一个作者开启采集但服务端返回 `collect = { reason }` 的 Skill
-- **THEN** CLI 安装原版，不询问是否采集，不写入 collectConsent 字段
+- **WHEN** 可观测 Skill 首次安装，用户拒绝统计
+- **THEN** CLI 仍安装同一份响应文件并写 `collectConsent=false`
 
-#### Scenario: 非交互环境遇到带采集的 skill
+#### Scenario: 非交互首次安装
 
-- **WHEN** 用户以 `-y`/`--all`/update 重装/非 TTY 方式安装带有效采集配置的 Skill 且此前未定夺
-- **THEN** CLI 不询问、默认拒绝：安装原版并写入 collectConsent=false，并按安装范围提示 `track on` 或 `add --observability`
+- **WHEN** `-y`、非 TTY 或更新重装遇到 consent 缺失的可观测 Skill
+- **THEN** CLI 不询问，写 `collectConsent=false`，文件仍为服务端 active artifact
 
-#### Scenario: 首次安装带采集的 skill 并同意
+### Requirement: add --observability 只强制 consent
 
-- **WHEN** 用户 `add` 安装带有效采集配置的 Skill 且用户同意
-- **THEN** CLI 直接复用探测到的监测版产物（含身份签名与可选结构化改造产物）落盘并写入 collectConsent=true，该 skill 后不再询问
+`add --observability` SHALL 在本次安装写 `collectConsent=true` 并跳过询问。该开关 SHALL NOT 触发额外安装请求，也 SHALL NOT 在可观测产物不可用时回退原版。非可观测 Skill 仍安装原版，但显式 flag 仍写 `true`，不额外探测。
 
-#### Scenario: 首次安装带采集的 skill 并拒绝
+#### Scenario: 显式打开 consent
 
-- **WHEN** 用户 `add` 安装带有效采集配置的 Skill 且用户拒绝
-- **THEN** CLI 安装原版并写入 collectConsent=false，该 skill 后不再询问
+- **WHEN** 用户执行 `add <skill> --observability` 且响应为可观测 Skill
+- **THEN** CLI 安装该响应文件一次并写 consent=true
 
-#### Scenario: 项目级安装带采集的 skill
+#### Scenario: 可观测版本不可用
 
-- **WHEN** 用户以项目级方式（非 `--global`）`add` 安装带采集的 Skill
-- **THEN** CLI 按首次安装流程询问；同意则安装监测版并在项目 `skills-lock.json` 写入 collectConsent=true，拒绝则安装原版并写入 false
+- **WHEN** Market 返回 `OBS_VERSION_UNAVAILABLE`
+- **THEN** CLI 报错且不写 consent、不安装原版替代
 
-### Requirement: add 命令的可观测版本开关
+### Requirement: consent 决定 Pilot 引导但不决定文件
 
-`skills add` SHALL 支持无值开关 `--observability`。未传该开关时 SHALL NOT 强制指定本次版本，继续按当前 scope 对应 lock 的三态与首次安装询问流程处理；传入该开关时，CLI SHALL 以 `report=true` 探测安装响应，并在 `collect` 有效时直接安装监测版、跳过本次采集询问、写入当前 lock 的 `collectConsent=true`，该显式选择 SHALL 覆盖此前的 `collectConsent=false`。若响应无有效 `collect`，CLI SHALL 安装原版、SHALL NOT 写入 `collectConsent`，并明确提示用户该 Skill 未做可观测改造或改造失败。团队批量安装传该开关时 SHALL 以这一次选择覆盖团队内全部带有效 `collect` 的 Skill，SHALL NOT 再逐个询问；团队内未改造的 Skill SHALL 回退原版并提示用户。`--observability` 只决定本次安装产物；LoongSuite Pilot 的自动安装仍遵循交互登录与本机状态规则，`-y`/非 TTY SHALL NOT 自动执行安装脚本。
+只有 lock 中 `collectConsent=true` 的可观测 Skill SHALL 触发现有 LoongSuite Pilot 状态提示或自动安装询问。`false`/缺失且非交互时 SHALL 不提示 Pilot，但安装文件不变。
 
-#### Scenario: 显式使用可观测版本
+#### Scenario: consent=true
 
-- **WHEN** 用户在全局或项目级执行 `add --observability`，该 Skill 返回有效 `collect`，且当前 lock 中此前为 `collectConsent=false` 或缺失
-- **THEN** CLI 直接安装监测版、不询问采集，并写入 `collectConsent=true`
+- **WHEN** 可观测 Skill 安装且 consent=true
+- **THEN** CLI 按既有交互规则展示 Pilot 状态或询问安装
 
-#### Scenario: 显式使用但服务端无监测版
+#### Scenario: consent=false
 
-- **WHEN** 用户在全局或项目级执行 `add --observability`，但安装响应无有效 `collect`
-- **THEN** CLI 安装原版、不写入 `collectConsent`，并提示该 Skill 未做可观测改造或改造失败
+- **WHEN** 可观测 Skill 安装且 consent=false
+- **THEN** CLI 不提示 Pilot、不自动安装插件，但仍落盘服务端文件
 
-#### Scenario: 团队显式使用可观测版本
+### Requirement: 团队安装一次询问 consent
 
-- **WHEN** 用户执行团队安装并传入 `--observability`
-- **THEN** 团队内每个带有效 `collect` 的 Skill 安装监测版并写入 `collectConsent=true`，本次安装不再出现采集同意询问；未改造的 Skill 回退原版并提示用户
+团队批量安装 SHALL 在安装前收集团队内可观测 Skill，并仅对 consent 未定夺项发起一次团队级询问。同意时写 `true`，拒绝或非交互时写 `false`。显式传 `--observability` 时跳过询问，并为本次团队安装参与的每个 Skill 写 `true`，包括响应不可观测的 Skill。每个 Skill 的文件均来自各自一次安装响应；CLI SHALL NOT 用 `report` 探测或替换包。安装失败的 Skill SHALL NOT 写 `collectConsent`。
 
-#### Scenario: 项目级传入可观测开关
+#### Scenario: 团队同意
 
-- **WHEN** 用户在非全局安装中传入 `--observability`
-- **THEN** CLI 直接安装监测版、不询问采集，并在项目 `skills-lock.json` 写入 collectConsent=true
+- **WHEN** 团队含 consent 未定夺的可观测 Skill 且用户同意
+- **THEN** 这些 Skill 写 consent=true，文件仍按各自响应安装
 
-### Requirement: 监测插件状态与自动安装
+#### Scenario: 团队拒绝
 
-安装带采集 Skill 时（采集询问已触发，或当前 scope lock 已定夺为同意），CLI SHALL 在采集询问之后展示本机 LoongSuite Pilot 监测插件状态（分层检测契约见 `cli-observability-agent`），并按状态分流：
+- **WHEN** 用户拒绝团队级询问
+- **THEN** 这些 Skill 写 consent=false，文件不解包为原版
 
-- **完整安装**（配置 + 程序文件）→ SHALL 仅提示 serviceNamePrefix与服务运行状态，不阻断安装
-- **缺失或配置残留** 且 **已登录** 且 **交互环境** → SHALL 询问「是否现在创建接入记录并自动安装监测插件」（默认同意）：同意 → 以本机主机名创建接入记录并在本机执行平台安装命令（见 `cli-observability-agent` 的「接入记录自动创建与插件安装」Requirement）；拒绝 → 提示可稍后 `obs <接入名>` 手动安装
-- **缺失或残留** 且 **未登录** → SHALL 提示先运行 `login`，不做自动安装
-- **非交互环境**（`-y`/非 TTY）→ SHALL NOT 自动执行安装脚本，仅保留提示
+#### Scenario: 团队无可观测 Skill
 
-#### Scenario: 已登录且本机无插件，同意自动安装
+- **WHEN** 团队内无可观测 Skill
+- **THEN** CLI 不询问；未显式传 `--observability` 时不写 collectConsent
 
-- **WHEN** 安装带采集 Skill，本机未检测到监测插件，用户已登录且同意自动安装询问
-- **THEN** CLI 以主机名创建接入记录并自动在本机安装 LoongSuite Pilot，打印 serviceName
+#### Scenario: 团队显式开启采集
 
-#### Scenario: 已登录但拒绝自动安装
-
-- **WHEN** 安装带采集 Skill，本机无插件，用户已登录但拒绝自动安装
-- **THEN** CLI 不创建记录、不执行脚本，提示可稍后 `obs <接入名>` 手动安装
-
-#### Scenario: 未登录时不自动安装
-
-- **WHEN** 安装带采集 Skill，本机无插件，用户未配置 API Key
-- **THEN** CLI 提示先 `login` 后可自动安装，不弹出安装询问
-
-#### Scenario: 非交互环境不自动安装
-
-- **WHEN** 以 `-y`/非 TTY 方式安装带采集 Skill 且本机无插件
-- **THEN** CLI 不执行安装脚本，仅保留 `obs <接入名>` 安装指引
-
-#### Scenario: 完整安装仅提示
-
-- **WHEN** 安装带采集 Skill，本机监测插件完整安装
-- **THEN** CLI 仅 dim 提示 serviceNamePrefix（含服务未运行标注），不弹任何询问
-
-### Requirement: 团队安装的采集同意
-
-`skills add` 以**团队批量方式**（`add t_<teamId>/<teamName>`）或 `--all`（`--skill '*'` 全量）安装 Skill 时，SHALL 在本次安装开始前以**一次询问**覆盖该团队全部带有效采集配置的 Skill：同意 → 该团队每个带有效采集配置的 Skill 安装监测版并在当前 scope lock 写入 `collectConsent=true`；拒绝 → 每个带有效采集配置的 Skill 安装原版并写入 `collectConsent=false`。若团队全部 Skill 无有效采集配置 → SHALL NOT 询问，均装原版不写字段。全局与项目级安装均执行该流程，项目级状态写入 `skills-lock.json`。该一次询问只影响**当次团队安装**，`collectConsent` 仍按每个 Skill、每个 scope 独立保存，后续单 Skill `add` 遵循对应 lock 状态。
-
-#### Scenario: 团队安装带采集 skill 并同意
-
-- **WHEN** 用户以团队批量方式安装，团队存在带有效采集配置的 Skill 且用户对团队级询问点击同意
-- **THEN** 该团队每个带有效采集配置的 Skill 安装监测版并写入 collectConsent=true，本次安装不再逐个询问
-
-#### Scenario: 团队安装带采集 skill 并拒绝
-
-- **WHEN** 用户以团队批量方式安装，团队存在带有效采集配置的 Skill 且用户对团队级询问点击拒绝
-- **THEN** 该团队每个带有效采集配置的 Skill 安装原版并写入 collectConsent=false
-
-#### Scenario: 团队无带采集 skill
-
-- **WHEN** 用户以团队批量方式安装，团队全部 Skill 均无有效采集配置
-- **THEN** 不出现采集询问，全部 Skill 装原版、不写入 collectConsent
-
-#### Scenario: 团队探测遇到改造失败降级
-
-- **WHEN** 用户以团队批量方式安装，某 Skill 的 `report=true` 探测响应为 `collect = { reason }`
-- **THEN** CLI 不把该 Skill 计入团队带采集数量，也不因该 Skill 触发团队级采集询问
+- **WHEN** 团队安装传入 `--observability`，无论响应是否含合法 `collect`
+- **THEN** CLI 跳过团队询问，并为参与本次安装的每个 Skill 写 `collectConsent=true`
+- **AND** 各 Skill 仍安装服务端返回的响应文件
 
 ### Requirement: lock 三态判定采集状态
 
-采集状态 SHALL 由当前 scope 对应 lock 的 `skills[<skillName>].collectConsent` 唯一决定：缺失 = 首次（未定夺）；`true` = 开（监测版）；`false` = 关（原版）。CLI 不得通过扫描已装包文件（是否有签名、`bsm-obs-run.cjs`、`bsm-obs-manifest.yaml` 或其他产物文件）判定采集状态。
+采集状态 SHALL 由当前 scope 对应 lock 的 `skills[<skillName>].collectConsent` 唯一决定：缺失 = 首次（未定夺）；`true` = 同意下游统计；`false` = 拒绝下游统计。该字段 SHALL NOT 表示安装包类型，CLI 不得通过扫描已装包文件判定采集状态。
 
 #### Scenario: lock 无字段
 
-- **WHEN** 用户 `track list` 且某已装 skill 无 collectConsent 字段
-- **THEN** 该 skill 标记为未定夺/首次状态（不按开或关对待）
+- **WHEN** 用户运行 `track list` 且某已装 skill 无 `collectConsent` 字段
+- **THEN** 展示“未定夺”
 
 #### Scenario: lock true / false
 
-- **WHEN** 用户 `track list` 且某 skill collectConsent=true（或 false）
-- **THEN** 该 skill 展示为 on（监测版）或 off（原版）
+- **WHEN** `collectConsent=true` 或 `false`
+- **THEN** `track list` 分别展示“同意统计”或“拒绝统计”
+
+#### Scenario: 已装文件与 consent 不一致
+
+- **WHEN** 已装文件含可观测产物但 lock 为 `false`
+- **THEN** 文件保持可观测版本，但下游不得统计
 
 ### Requirement: 不新建文件
 
@@ -159,78 +120,35 @@ CLI SHALL 仅在安装响应中的 `collect` 同时包含 `config` 与非空字�
 - **WHEN** 用户同意/拒绝采集或执行 track on/off
 - **THEN** collectConsent 写入当前 scope 锁文件对应 skill 节点，文件整体结构不变
 
-### Requirement: track 命令组（开发版与正式版一致）
+### Requirement: track 只修改 lock
 
-CLI SHALL 提供 `track` 子命令统一管理**全局**采集状态：
+`track on <skillName>` SHALL 只把全局 lock 对应条目 `collectConsent` 写为 `true`；`track off` SHALL 只写 `false`。命令 SHALL NOT 请求 Market、下载文件、重装 Skill 或改写其它 lock 字段。缺失目标 lock entry 时 SHALL 报错且不创建条目。
 
-- `track list`：按全局锁文件展示已装 Skill 的采集状态和团队上下文。
-- `track on <skillName>`：以 lock 中的 `skillPath`、可选 `teamId` 和版本调用 `fetchById`（`report=true`），写入 `collectConsent=true`；无有效 `collect` 时不覆盖文件、不改变 consent，并输出失败原因。
-- `track off <skillName>`：以相同 id/team/version 上下文调用 `fetchById`（`report=false`），写入 `collectConsent=false`。
+#### Scenario: track on
 
-团队 lock entry 的 `teamId` SHALL 优先于 author/公开解析。写回 lock 时 SHALL 保留 teamId 和包含 teamId 的 source。旧 entry 缺少 teamId 时保持原有行为。任何采集状态写入 MUST 继续使用现有 lock 文件，不提升 schema version。
+- **WHEN** 全局 lock 存在该 Skill
+- **THEN** 只更新 `collectConsent=true`
 
-#### Scenario: track list 展示状态
+#### Scenario: track off
 
-- **WHEN** 用户运行 `track list` 且全局锁文件存在多个已装 Skill
-- **THEN** 每个 Skill 展示 on（监测版）/ off（原版）/ 未定夺 三态之一
+- **WHEN** 全局 lock 存在该 Skill
+- **THEN** 只更新 `collectConsent=false`
 
-#### Scenario: track off 退回原样
+#### Scenario: track 不访问 Market
 
-- **WHEN** 用户对 collectConsent=true 的 Skill 运行 `track off`
-- **THEN** CLI 以 report=false 重装原版覆盖落盘，collectConsent 改为 false
+- **WHEN** 用户执行 track on/off
+- **THEN** CLI 不发起安装请求、不调用 installer、不改变文件 hash 或版本
 
-#### Scenario: track on 恢复监测
+### Requirement: Team single Skill consent is release-bound only for identity
 
-- **WHEN** 用户对 collectConsent=false 或缺失的 Skill 运行 `track on`，且服务端返回有效 `collect`
-- **THEN** CLI 以 report=true 重装监测版覆盖落盘，collectConsent 改为 true
+`ts_<skillTeamId>/<skillName>` 安装 SHALL 仍以 resolver 返回的 `skillId`、`teamId`、`installVersion`、`releaseId` 请求安装。`collectConsent` 只影响是否统计和 Pilot 引导；缺失时按首次询问，已定夺时复用。CLI SHALL NOT 为该 Skill 发起 `report` 预检。
 
-#### Scenario: track on 遇到改造失败降级
+#### Scenario: Team single consent missing
 
-- **WHEN** 用户对 collectConsent=false 或缺失的 Skill 运行 `track on`，且服务端返回 `collect = { reason }`
-- **THEN** CLI 不安装监测版、不写入 collectConsent=true、保持原 lock 状态不变
-- **AND** 输出改造失败原因
+- **WHEN** release-bound 安装响应可观测且 lock 缺失 consent
+- **THEN** CLI 询问一次并将结果写入 lock，安装 response 文件
 
-#### Scenario: 开发版与正式版读取同一份锁文件
+#### Scenario: Team release unavailable
 
-- **WHEN** 用户分别用开发版与正式版构建运行 `track list`
-- **THEN** 两者读取同一个全局锁文件，展示结果一致
-
-#### Scenario: 团队 lock 使用 teamId 重取
-
-- **WHEN** lock entry 包含 `teamId`
-- **THEN** `track on/off` 请求携带该 teamId、skillPath 和 version
-- **AND** 不重新名称解析
-- **AND** 写回后仍保留 teamId 和团队 source
-
-#### Scenario: 团队 lock 连续切换
-
-- **WHEN** 用户对同一团队 Skill 连续执行 `track on`、`track off`、`track on`
-- **THEN** 每一步都携带相同 teamId、skillPath 和 version
-- **AND** lock 中不会丢失 teamId
-
-#### Scenario: track list 展示团队上下文
-
-- **WHEN** lock entry 包含 teamId
-- **THEN** `track list` 展示对应采集状态和团队来源标识
-
-### Requirement: Team single Skill collection context is release-bound
-
-`ts_<skillTeamId>/<skillName>` 团队单 Skill 的 `report=true` 采集探测 SHALL 与实际安装使用相同 `skillId`、`teamId`、版本和 `releaseId`。全局或项目级安装写入对应 lock 时 SHALL 保存 `skillTeamId`、`releaseId` 与 `collectConsent`；全局 `track on/off` MUST 使用同一上下文重取，SHALL NOT 重新执行团队 resolver、公开解析或 GitHub 回退。`releaseId` 已失效时 CLI SHALL 报告失败并保持原 `collectConsent` 状态不变。
-
-#### Scenario: Collection preflight uses the same release
-
-- **WHEN** 团队单 Skill 安装需要探测采集配置
-- **THEN** `report=true` 请求携带 resolver 返回的 `id`、`team`、`version` 和 `releaseId`
-- **AND** 正式安装复用完全相同的版本上下文
-
-#### Scenario: Track toggles the same team release
-
-- **WHEN** 用户对带 `skillTeamId` 和 `releaseId` 的全局团队单 Skill 执行 `track on` 或 `track off`
-- **THEN** 请求携带 lock 中的同一组团队与 release 标识
-- **AND** 写回后保留这些字段
-
-#### Scenario: Team release is no longer current
-
-- **WHEN** `track on` 或 `track off` 使用已失效的 `releaseId` 请求 Market
-- **THEN** CLI 输出团队版本不可用
-- **AND** 不改变原 collectConsent，也不回退其他安装源
+- **WHEN** Market 返回 `OBS_VERSION_UNAVAILABLE` 或 release 不匹配
+- **THEN** CLI 报团队版本不可用并 fail-closed
