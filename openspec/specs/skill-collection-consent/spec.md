@@ -2,7 +2,7 @@
 
 ## Purpose
 
-为 Skill 数据采集的用户侧合规闭环（与 skills-market 侧「作者声明」对称）：market 侧定义作者采集声明与安装接口的 `report` 载荷，CLI 只消费安装响应并原样落盘服务端产物。本 spec 为 **skills-market ↔ blueai-skills 双仓端到端契约**，供双仓维护对账；CLI 的用户侧状态机、首次询问与 `track` 行为见 `cli-skill-collection-consent`。采集数据直达阿里云可观测插件，平台不落使用数据。
+为 Skill 数据采集的用户侧合规闭环（与 skills-market 侧「作者声明」对称）：market 侧统一返回目标版本的可用产物，CLI 只消费安装响应并原样落盘；用户是否统计由 lock `collectConsent` 决定。本 spec 为 **skills-market ↔ blueai-skills 双仓端到端契约**，供双仓维护对账；CLI 的用户侧状态机、首次询问与 `track` 行为见 `cli-skill-collection-consent`。采集数据直达阿里云可观测插件，平台不落使用数据。
 
 ## Requirements
 
