@@ -28,6 +28,7 @@ import {
   isSkillInstalled,
   getCanonicalPath,
   installWellKnownSkillForAgent,
+  installWellKnownSkillForAgents,
   type InstallMode,
 } from './installer.ts';
 import {
@@ -67,6 +68,7 @@ import {
   saveSelectedAgents,
 } from './skill-lock.ts';
 import { addSkillToLocalLock, computeSkillFolderHash, readLocalLock } from './local-lock.ts';
+import { computeBuildHash } from './build-hash.ts';
 import type { Skill, AgentType, ParsedSource } from './types.ts';
 import { NPX_CMD, EXAMPLE_REPO, SKILLS_SITE, BIN_NAME } from './branding.ts';
 import packageJson from '../package.json' with { type: 'json' };
@@ -1422,6 +1424,51 @@ function formatInstallFailure(
   return `${displayName} 安装失败：${result.message}`;
 }
 
+async function resolveExpectedReleaseSeq(params: {
+  skillId: string;
+  authorId?: string;
+  teamId?: string;
+  releaseId?: string;
+}): Promise<{ ok: true; releaseSeq?: number; version?: string } | { ok: false; message: string }> {
+  const target =
+    params.teamId && params.releaseId
+      ? {
+          scope: 'TEAM' as const,
+          skillId: params.skillId,
+          teamId: params.teamId,
+          releaseId: params.releaseId,
+        }
+      : {
+          scope: params.authorId ? ('PRIVATE' as const) : ('PUBLIC' as const),
+          skillId: params.skillId,
+          ...(params.authorId ? { authorId: params.authorId } : {}),
+        };
+  const checked = await marketProvider.checkBuildBatch([target]);
+  if (!checked.ok) {
+    return { ok: false, message: checked.message || '构建检测失败' };
+  }
+  let item = checked.data.items[0];
+  if (!item?.ok && target.scope === 'PRIVATE' && params.authorId) {
+    const publicCheck = await marketProvider.checkBuildBatch([
+      { scope: 'PUBLIC', skillId: params.skillId },
+    ]);
+    if (publicCheck.ok && publicCheck.data.items[0]?.ok) {
+      item = publicCheck.data.items[0];
+    }
+  }
+  if (!item?.ok) {
+    return { ok: false, message: item?.error?.message ?? '构建检测失败' };
+  }
+  if (item.observabilityEnabled === true && item.releaseSeq === undefined) {
+    return { ok: false, message: 'Market 观测状态缺少 releaseSeq，已 fail-closed' };
+  }
+  return {
+    ok: true,
+    ...(item.observabilityEnabled === true ? { releaseSeq: item.releaseSeq } : {}),
+    ...(item.version ? { version: item.version } : {}),
+  };
+}
+
 async function handleTeamInstall(
   teamId: string,
   teamName: string,
@@ -1720,7 +1767,32 @@ async function preflightTeamInstall(
       continue;
     }
 
-    const result = await marketProvider.installById(s.id, version, undefined, teamId, s.releaseId);
+    const checked = await resolveExpectedReleaseSeq({
+      skillId: s.id,
+      teamId,
+      releaseId: s.releaseId,
+    });
+    if (!checked.ok) {
+      failures.set(getTeamCollectKey(teamId, s.id), checked.message);
+      continue;
+    }
+    const result =
+      checked.releaseSeq === undefined
+        ? await marketProvider.installById(
+            s.id,
+            checked.version ?? version,
+            undefined,
+            teamId,
+            s.releaseId
+          )
+        : await marketProvider.installById(
+            s.id,
+            checked.version ?? version,
+            undefined,
+            teamId,
+            s.releaseId,
+            checked.releaseSeq
+          );
     const key = getTeamCollectKey(teamId, s.id);
     if (!result.ok) {
       failures.set(key, formatInstallFailure(result, s.name));
@@ -1934,14 +2006,35 @@ export async function handleMarketSkill(
   if (options.prefetchedMarketSkill) {
     skill = options.prefetchedMarketSkill;
   } else {
+    const checked = await resolveExpectedReleaseSeq({
+      skillId: resolved.id,
+      authorId: resolved.authorId || author,
+      teamId: resolvedTeamId,
+      releaseId,
+    });
+    if (!checked.ok) {
+      spinner.stop(pc.red('Failed to check build'));
+      p.outro(pc.red(`${displayName}：${checked.message}`));
+      process.exit(1);
+    }
     spinner.start('Downloading skill files...');
-    const installResult = await marketProvider.installById(
-      resolved.id,
-      version,
-      author,
-      resolvedTeamId,
-      releaseId
-    );
+    const installResult =
+      checked.releaseSeq === undefined
+        ? await marketProvider.installById(
+            resolved.id,
+            checked.version ?? version,
+            author,
+            resolvedTeamId,
+            releaseId
+          )
+        : await marketProvider.installById(
+            resolved.id,
+            checked.version ?? version,
+            author,
+            resolvedTeamId,
+            releaseId,
+            checked.releaseSeq
+          );
     if (!installResult.ok) {
       spinner.stop(pc.red('Failed to fetch skill'));
       p.outro(pc.red(formatInstallFailure(installResult, displayName)));
@@ -1954,6 +2047,14 @@ export async function handleMarketSkill(
     spinner.stop(
       `Skill: ${pc.cyan(skill.installName)} ${pc.dim(`v${skill.version}`)} (${skill.files.size} file${skill.files.size > 1 ? 's' : ''})`
     );
+  }
+  if (skill.observabilityEnabled) {
+    const actualBuildHash = computeBuildHash(skill.files);
+    if (!skill.buildHash || actualBuildHash !== skill.buildHash) {
+      spinner.stop(pc.red('Build hash mismatch'));
+      p.outro(pc.red('下载内容与 Market buildHash 不一致，已中止安装'));
+      process.exit(1);
+    }
   }
 
   // Detect agents
@@ -2181,16 +2282,36 @@ export async function handleMarketSkill(
     error?: string;
   }[] = [];
 
-  for (const agent of targetAgents) {
-    const result = await installWellKnownSkillForAgent(skill, agent, {
+  if (installMode === 'copy') {
+    const batchResults = await installWellKnownSkillForAgents(skill, targetAgents, {
       global: installGlobally,
-      mode: installMode,
+      mode: 'copy',
     });
-    results.push({
-      skill: skill.installName,
-      agent: agents[agent].displayName,
-      ...result,
+    targetAgents.forEach((agent, index) => {
+      const result = batchResults[index] ?? {
+        success: false,
+        path: '',
+        mode: 'copy' as const,
+        error: '安装目标为空',
+      };
+      results.push({
+        skill: skill.installName,
+        agent: agents[agent].displayName,
+        ...result,
+      });
     });
+  } else {
+    for (const agent of targetAgents) {
+      const result = await installWellKnownSkillForAgent(skill, agent, {
+        global: installGlobally,
+        mode: installMode,
+      });
+      results.push({
+        skill: skill.installName,
+        agent: agents[agent].displayName,
+        ...result,
+      });
+    }
   }
 
   spinner.stop('Installation complete');
@@ -2227,6 +2348,9 @@ export async function handleMarketSkill(
         skillFolderHash: skill.skillFolderHash,
         skillPath: skill.skillId,
         version: skill.version,
+        ...(skill.observabilityEnabled && skill.releaseSeq !== undefined
+          ? { releaseSeq: skill.releaseSeq }
+          : {}),
         authorId: teamId ? undefined : resolved.authorId,
         ...(teamId ? { teamId } : {}),
         ...(teamSkillId ? { skillTeamId: teamSkillId } : {}),
@@ -2253,6 +2377,9 @@ export async function handleMarketSkill(
             sourceType: 'market',
             computedHash,
             version: skill.version,
+            ...(skill.observabilityEnabled && skill.releaseSeq !== undefined
+              ? { releaseSeq: skill.releaseSeq }
+              : {}),
             skillId: skill.skillId,
             authorId: teamId ? undefined : resolved.authorId,
             ...(teamId ? { teamId } : {}),

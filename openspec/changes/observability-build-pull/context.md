@@ -35,3 +35,19 @@
 - 旧 Market 的未开启观测原版安装保持兼容；观察到 `observabilityEnabled=true` 但缺少 `releaseSeq/buildHash` 时必须 fail-closed。
 - 团队旧 lock 缺 `skillTeamId` 时只影响 `ts_` source 路由；构建检测仍可按 `skillId + teamId + releaseId` 执行。
 - `skillFolderHash` 继续保留兼容，不得替代 `buildHash` 校验。
+
+## 实施决策
+
+- `version + releaseSeq` 判断更新；`buildHash` 只校验当次安装产物，不写 lock。
+- 普通/私有目标按 `authorId` 选择权限身份；团队目标使用 `skillId + teamId + releaseId`，响应序列来自源版本。
+- `add` 在安装前重新检测 releaseSeq；BUILD_CHANGED 或 hash 不一致时 fail-closed，不落盘。
+- 全局/项目 lock 的所有字段更新使用 sidecar lock 串行读改写。
+- copy 模式一次获取全部 Agent 目标锁，全部 staging 后逐目标切换；失败反向回滚，无法回滚时保留恢复目录。
+
+## 实施验证
+
+- `pnpm test -- --run`: 48 files / 669 tests passed。
+- `pnpm format:check`: passed。
+- `npx tsc --noEmit`: passed。
+- `pnpm build`: passed。
+- `openspec validate --changes observability-build-pull`: passed。

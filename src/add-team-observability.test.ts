@@ -34,6 +34,18 @@ vi.mock('./providers/market.ts', () => ({
     resolve: vi.fn(),
     fetchById: vi.fn(),
     installById: vi.fn(),
+    checkBuildBatch: vi.fn(async (items: Array<Record<string, unknown>>) => ({
+      ok: true,
+      data: {
+        items: items.map((item) => ({
+          ok: true,
+          scope: item.scope,
+          skillId: item.skillId,
+          observabilityEnabled: false,
+          available: true,
+        })),
+      },
+    })),
   },
 }));
 
@@ -51,6 +63,13 @@ vi.mock('./installer.ts', async () => {
   return {
     ...actual,
     installWellKnownSkillForAgent: vi.fn(),
+    installWellKnownSkillForAgents: vi.fn(async (_skill: unknown, agents: unknown[]) =>
+      agents.map(() => ({
+        success: true,
+        path: '/tmp/market-skill',
+        mode: 'copy',
+      }))
+    ),
   };
 });
 

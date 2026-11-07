@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as p from '@clack/prompts';
 import { handleMarketSkill } from './add.ts';
 import { marketProvider } from './providers/market.ts';
-import { installWellKnownSkillForAgent } from './installer.ts';
+import { installWellKnownSkillForAgent, installWellKnownSkillForAgents } from './installer.ts';
 import { addSkillToLock } from './skill-lock.ts';
 import { addSkillToLocalLock, readLocalLock } from './local-lock.ts';
 
@@ -24,6 +24,18 @@ vi.mock('./providers/market.ts', () => ({
     resolveTeamSkillInstallTarget: vi.fn(),
     fetchById: vi.fn(),
     installById: vi.fn(),
+    checkBuildBatch: vi.fn(async (items: Array<Record<string, unknown>>) => ({
+      ok: true,
+      data: {
+        items: items.map((item) => ({
+          ok: true,
+          scope: item.scope,
+          skillId: item.skillId,
+          observabilityEnabled: false,
+          available: true,
+        })),
+      },
+    })),
   },
 }));
 
@@ -36,6 +48,13 @@ vi.mock('./installer.ts', async () => {
       path: '/tmp/market-skill',
       mode: 'copy',
     }),
+    installWellKnownSkillForAgents: vi.fn(async (_skill: unknown, agents: unknown[]) =>
+      agents.map(() => ({
+        success: true,
+        path: '/tmp/market-skill',
+        mode: 'copy',
+      }))
+    ),
   };
 });
 
@@ -133,7 +152,7 @@ describe('market install paths', () => {
       undefined,
       undefined
     );
-    expect(installWellKnownSkillForAgent).toHaveBeenCalled();
+    expect(installWellKnownSkillForAgents).toHaveBeenCalled();
   });
 
   it('installs one active artifact when observability is explicit', async () => {
@@ -176,11 +195,11 @@ describe('market install paths', () => {
       expect.objectContaining({ collectConsent: true }),
       expect.any(String)
     );
-    const installCall = vi.mocked(installWellKnownSkillForAgent).mock.calls[0]!;
+    const installCall = vi.mocked(installWellKnownSkillForAgents).mock.calls[0]!;
     expect(installCall[0].files.get('.blueai-skills-market/bsm-obs-run.cjs')).toBe(
       'module.exports = {};'
     );
-    expect(installCall[1]).toBe('claude-code');
+    expect(installCall[1]).toEqual(['claude-code']);
     expect(installCall[2]).toMatchObject({ global: false });
   });
 

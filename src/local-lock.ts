@@ -1,6 +1,7 @@
 import { readFile, writeFile, readdir, stat } from 'fs/promises';
 import { join, relative } from 'path';
 import { createHash } from 'crypto';
+import { withProcessLocks } from './process-lock.ts';
 
 const LOCAL_LOCK_FILE = 'skills-lock.json';
 const CURRENT_VERSION = 1;
@@ -27,6 +28,8 @@ export interface LocalSkillLockEntry {
   computedHash: string;
   /** Installed version (market skills only) */
   version?: string;
+  /** 源版本观测构建序列（market 已开启观测目标） */
+  releaseSeq?: number;
   /** Market skill ID for update checking */
   skillId?: string;
   /** Market skill author ID for private skill verification */
@@ -162,24 +165,24 @@ export async function addSkillToLocalLock(
   entry: LocalSkillLockEntry,
   cwd?: string
 ): Promise<void> {
-  const lock = await readLocalLock(cwd);
-  lock.skills[skillName] = entry;
-  await writeLocalLock(lock, cwd);
+  await withProcessLocks([getLocalLockPath(cwd)], async () => {
+    const lock = await readLocalLock(cwd);
+    lock.skills[skillName] = entry;
+    await writeLocalLock(lock, cwd);
+  });
 }
 
 /**
  * Remove a skill from the local lock file.
  */
 export async function removeSkillFromLocalLock(skillName: string, cwd?: string): Promise<boolean> {
-  const lock = await readLocalLock(cwd);
-
-  if (!(skillName in lock.skills)) {
-    return false;
-  }
-
-  delete lock.skills[skillName];
-  await writeLocalLock(lock, cwd);
-  return true;
+  return withProcessLocks([getLocalLockPath(cwd)], async () => {
+    const lock = await readLocalLock(cwd);
+    if (!(skillName in lock.skills)) return false;
+    delete lock.skills[skillName];
+    await writeLocalLock(lock, cwd);
+    return true;
+  });
 }
 
 function createEmptyLocalLock(): LocalSkillLockFile {

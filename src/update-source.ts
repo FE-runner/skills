@@ -13,6 +13,7 @@ export interface MarketLockUpdateEntry {
   skillId?: string;
   sourceType?: string;
   version?: string;
+  releaseSeq?: number;
   authorId?: string;
   teamId?: string;
   skillTeamId?: string;
@@ -27,43 +28,53 @@ export interface MarketLockUpdateResult {
 
 /**
  * 检查 Market lock entry 是否有更新。
- * 团队单 Skill 必须重新走 resolver；只有普通 Market entry 才调用 /api/skill/check。
+ * 所有 Market entry 统一调用批量构建检测；团队目标只发送身份字段。
  */
 export async function checkMarketLockEntry(
   skillName: string,
   entry: MarketLockUpdateEntry
 ): Promise<MarketLockUpdateResult> {
-  if (entry.skillTeamId) {
-    const result = await marketProvider.resolveTeamSkillInstallTarget(
-      entry.skillTeamId,
-      entry.teamSkillName || skillName
-    );
-    if (!result.ok) {
-      return { hasUpdate: false, error: result.message };
-    }
-    return {
-      hasUpdate:
-        result.data.releaseId !== entry.releaseId || result.data.installVersion !== entry.version,
-    };
-  }
-
   const skillId = entry.skillPath || entry.skillId;
   if (!skillId) {
     return { hasUpdate: false, error: 'Market lock entry 缺少 skillId' };
   }
-
-  try {
-    const checkResult = await marketProvider.check(skillId, entry.authorId);
-    if (!checkResult) {
-      return { hasUpdate: false, error: 'Could not fetch from Skills Market' };
-    }
-    return { hasUpdate: checkResult.currentVersion !== entry.version };
-  } catch (error) {
+  if (entry.skillTeamId && (!entry.teamId || !entry.releaseId)) {
     return {
       hasUpdate: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: '团队 lock 缺少 teamId/releaseId，请重新 add 后再检查',
     };
   }
+
+  const target = entry.skillTeamId
+    ? {
+        scope: 'TEAM' as const,
+        skillId,
+        teamId: entry.teamId!,
+        releaseId: entry.releaseId!,
+      }
+    : {
+        scope: entry.authorId ? ('PRIVATE' as const) : ('PUBLIC' as const),
+        skillId,
+        ...(entry.authorId ? { authorId: entry.authorId } : {}),
+      };
+  const checked = await marketProvider.checkBuildBatch([target]);
+  if (!checked.ok) {
+    return { hasUpdate: false, error: checked.message || '构建检测失败' };
+  }
+  const item = checked.data.items[0];
+  if (!item?.ok) {
+    return { hasUpdate: false, error: item?.error?.message ?? '构建检测失败' };
+  }
+
+  if (item.observabilityEnabled === true) {
+    if (item.releaseSeq === undefined) {
+      return { hasUpdate: false, error: '观测构建响应缺少 releaseSeq' };
+    }
+    return {
+      hasUpdate: item.version !== entry.version || item.releaseSeq !== entry.releaseSeq,
+    };
+  }
+  return { hasUpdate: item.version !== entry.version };
 }
 
 /**

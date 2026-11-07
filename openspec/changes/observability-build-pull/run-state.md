@@ -1,15 +1,15 @@
 # 运行状态
 
 - 变更名: observability-build-pull
-- 阶段: review-plan
+- 阶段: apply
 - 源分支: develop
 - 开发分支: feature/one-way-observability-build-delivery
-- 最后成功 commit: abde40a
-- 下一步安全动作: 统一提交 review-plan 修复后按跨仓顺序进入 apply
+- 最后成功 commit: b9326d5
+- 下一步安全动作: 提交 apply 阶段改动后进入 review-code
 
 ## 任务证据
 
-- 已完成任务: 0/18
+- 已完成任务: 18/18
 
 ## 基线评测
 
@@ -18,11 +18,11 @@
 
 ## 修改后评测（中间）
 
-- not-executed — propose 阶段仅生成规划产物
+- passed — 全量测试、格式检查、TypeScript 与构建通过
 
 ## 修改后评测（最终）
 
-- not-executed — 待 apply 完成后执行
+- passed — 全量测试、格式检查、TypeScript 与构建通过
 
 ## 审查状态
 
@@ -36,7 +36,11 @@
 
 ## 验证
 
-- `openspec validate --changes observability-build-pull` — passed（最终轮审查时，exit=0）
+- `pnpm test -- --run` — passed，48 files / 669 tests
+- `pnpm format:check` — passed
+- `npx tsc --noEmit` — passed
+- `pnpm build` — passed
+- `openspec validate --changes observability-build-pull` — passed
 
 ## 裁决
 

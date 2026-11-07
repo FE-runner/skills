@@ -1,6 +1,7 @@
 import type { RemoteSkill } from './types.ts';
 import type { ApiResult } from '../types.ts';
 import { SKILLS_SITE } from '../branding.ts';
+import { getApiKey } from '../auth.ts';
 
 /**
  * Unwrap the API envelope: { code, message, data } → data
@@ -160,6 +161,9 @@ export interface MarketSkill extends RemoteSkill {
   version: string;
   /** SHA-256 based folder hash for update detection */
   skillFolderHash: string;
+  observabilityEnabled: boolean;
+  releaseSeq?: number;
+  buildHash?: string;
   /** 采集改造信息；存在合法 config + meta.blueai_signature 表示可观测 Skill */
   collect?: unknown;
   /**
@@ -202,8 +206,27 @@ interface InstallResponse {
   /** 二进制文件（标准 Base64，无 data URI 前缀）；没有二进制文件时该字段不出现 */
   binaryFiles?: Record<string, string>;
   skillFolderHash: string;
+  observabilityEnabled: boolean;
+  releaseSeq?: number;
+  buildHash?: string;
   /** 采集改造信息：目标版本可观测时返回（含 config.meta 签名与改造版 files） */
   collect?: unknown;
+}
+
+export type BuildCheckTarget =
+  | { scope: 'PUBLIC' | 'PRIVATE'; skillId: string; authorId?: string }
+  | { scope: 'TEAM'; skillId: string; teamId: string; releaseId: string };
+
+export interface BuildCheckResult {
+  ok: boolean;
+  scope: 'PUBLIC' | 'PRIVATE' | 'TEAM';
+  skillId: string;
+  version?: string;
+  observabilityEnabled?: boolean;
+  releaseSeq?: number;
+  buildHash?: string;
+  available?: boolean;
+  error?: { code: string; message: string };
 }
 
 /**
@@ -330,14 +353,16 @@ export class MarketProvider {
     version?: string,
     author?: string,
     team?: string,
-    releaseId?: string
+    releaseId?: string,
+    expectedReleaseSeq?: number
   ): Promise<ApiResult<MarketSkill>> {
-    const body: Record<string, string> = { id: skillId };
+    const body: Record<string, string | number> = { id: skillId };
     if (version) body.version = version;
     if (team) {
       body.team = team;
       if (releaseId) body.releaseId = releaseId;
     } else if (author) body.author = author;
+    if (expectedReleaseSeq !== undefined) body.releaseSeq = expectedReleaseSeq;
 
     const result = await requestApiResult<InstallResponse>(`${this.apiBase}/api/skill/install`, {
       method: 'POST',
@@ -345,6 +370,28 @@ export class MarketProvider {
       body: JSON.stringify(body),
     });
     if (!result.ok) return result;
+    if (
+      result.data.observabilityEnabled === true &&
+      (result.data.releaseSeq === undefined || !result.data.buildHash)
+    ) {
+      return {
+        ok: false,
+        status: 0,
+        message: 'Market 观测构建响应缺少 releaseSeq/buildHash，已按 fail-closed 终止',
+      };
+    }
+    if (
+      expectedReleaseSeq !== undefined &&
+      result.data.observabilityEnabled === true &&
+      result.data.releaseSeq !== expectedReleaseSeq
+    ) {
+      return {
+        ok: false,
+        status: 409,
+        code: 'BUILD_CHANGED',
+        message: '观测构建已变化，请重新检测后安装',
+      };
+    }
 
     try {
       return { ok: true, data: this.toMarketSkill(result.data, skillId) };
@@ -370,6 +417,24 @@ export class MarketProvider {
   ): Promise<MarketSkill | null> {
     const result = await this.installById(skillId, version, author, team, releaseId);
     return result.ok ? result.data : null;
+  }
+
+  async checkBuildBatch(
+    items: BuildCheckTarget[]
+  ): Promise<ApiResult<{ items: BuildCheckResult[] }>> {
+    if (items.length === 0) return { ok: true, data: { items: [] } };
+    const apiKey = getApiKey();
+    return requestApiResult<{ items: BuildCheckResult[] }>(
+      `${this.apiBase}/api/skill/build/checkBatch`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+        },
+        body: JSON.stringify({ items }),
+      }
+    );
   }
 
   /**
@@ -606,6 +671,9 @@ export class MarketProvider {
       files,
       skillId,
       skillFolderHash: data.skillFolderHash,
+      observabilityEnabled: data.observabilityEnabled === true,
+      ...(data.releaseSeq !== undefined ? { releaseSeq: data.releaseSeq } : {}),
+      ...(data.buildHash !== undefined ? { buildHash: data.buildHash } : {}),
       ...(data.collect !== undefined ? { collect: data.collect } : {}),
       ...(binaryFileErrors.length > 0 ? { binaryFileErrors } : {}),
     };
