@@ -8,7 +8,7 @@ CLI 当前以 `version` 判断 Market 更新，`skillFolderHash` 只记录原包
 
 - 用 `version + releaseSeq` 发现新版本和同版本新构建。
 - 用最终产物 `buildHash` 防止下载内容损坏或构建错配。
-- 安装失败时保留旧目录，成功后一次性推进 lock。
+- 保持原有直接写入流程，所有目标成功后才推进 lock。
 - 普通、私有、团队目标共用一套检测和安装校验。
 
 **Non-Goals:**
@@ -40,39 +40,25 @@ Market provider 新增批量检测方法。`check` 收集当前 scope 的 Market
 
 CLI 对安装响应的 `files` 与 `binaryFiles` 解码为原始字节。路径统一为 `/`，必须是相对路径，禁止 `.`、`..` 和绝对路径；按 UTF-8 路径字节序排序。每项编码为 `<utf8 path 的十进制字节长度>:<utf8 path>:<64 位 lowercase hex sha256(raw bytes)>`，项之间用单个 `\n` 连接，末尾不加换行；对外层 UTF-8 字节串取 SHA-256，输出固定加 `sha256:` 前缀。长度前缀使包含 `:`、换行或其他控制字符的合法文件路径仍可无歧义重建。该算法以 Market 已发布的 buildHash 契约为权威。`observabilityEnabled=true` 时，hash 不一致或响应缺少 `buildHash` 安装失败；`observabilityEnabled=false` 或非 Market 原版响应继续旧兼容路径，不要求 `buildHash`。
 
-### D5: staging 与原子替换
+### D5: 直接写入与失败语义
 
-安装器在目标 canonical 目录同级创建唯一 staging 目录，写入全部文件并完成路径安全检查。成功后：
+`buildHash` 在任何目标目录被修改前完成校验。校验通过后沿用原安装逻辑：
 
-1. 旧目录存在时 rename 为 backup；
-2. staging rename 为 canonical；
-3. 失败时恢复 backup；
-4. 成功清理 backup。
+1. copy 模式对每个 Agent 目标先清理并重建目录，再逐个写文件；
+2. symlink 模式清理并重建 canonical 目录后写文件，再维护 Agent 链接；建链失败时回退到 copy；
+3. 多个 Agent 按目标顺序逐个安装，不预写 staging，不保留 backup，不设完成标记；
+4. 不提供目录级原子替换、崩溃恢复、跨 Agent 全量回滚或 `partialSuccess`；
+5. 某个目标写入失败时，该目标目录允许为空或残缺，后续目标仍继续尝试；最终只要有任一目标失败，整次安装返回失败且不推进 lock。
 
-symlink 模式继续让 agent 链接指向 canonical；copy 模式先为全部 Agent 目标完成 staging 与校验，再逐个切换并保留 backup。任一目标切换失败时，按相反顺序回滚所有已切换目标；只有全部成功后才清理 backup 与推进 lock。若回滚失败，返回部分成功并保留可恢复目录，lock 不推进。
+该取舍降低安装器复杂度；代价是写入中断后不能恢复旧目录，需要用下一次同构建 update 重装覆盖残缺内容。当前 change 不解决同一目标目录的并发写入。
 
-staging/backup 使用包含 pid+随机值的唯一名称；每一步失败按 backup 恢复。获得目标 sidecar lock 后，进程按以下崩溃状态执行恢复：
-
-1. canonical 存在、backup 不存在、staging 存在：旧版本仍有效，只删除 staging；
-2. canonical 不存在、backup 存在：旧目录已 rename、新目录未切换，先把 backup rename 回 canonical；
-3. canonical 存在、backup 存在：新目录已完成 rename 且 staging 在切换前已完整校验，确认 canonical 可读后删除 backup；
-4. canonical 与 backup 均不存在、staging 存在：staging 尚未完成首次安装，删除 staging 并保持目标不存在；
-5. 其他组合或无法确认 canonical 完整：不删除任何目录，报告需要人工恢复。
-
-复制模式对每个 Agent 目标执行同一恢复状态机；回滚或恢复失败时终止整次安装、保留所有可恢复目录，下一次持锁安装继续收敛到同一构建。
-
-并发控制使用项目内 `src/process-lock.ts` 的 sidecar lock，不增加运行时依赖：
-
-1. 每个 canonical/Agent 目标使用 `<target>.install.lock`；
-2. copy 一次涉及多个目标时，先对规范化绝对路径去重并按字节序排序，再一次性依序获取全部目标 sidecar lock；全部锁持续持有到 staging、切换、失败回滚和崩溃恢复动作结束；
-3. 全局 lock 使用 `<getGlobalSkillLockPath()>.lock`，项目 lock 使用 `<cwd>/skills-lock.json.lock`；目标锁全部获得后才获取 scope lock；
-4. 所有 lock 字段更新必须在 scope lock 内完成“读取文件 -> 修改目标字段 -> 临时文件写入 -> rename”，不能让安装一个 Skill 的流程整体覆盖另一个进程刚写入的条目；
-5. 释放顺序为 scope lock 后、目标 canonical lock 按获取顺序反向释放；等待超时则明确失败，不静默跳过；
-6. sidecar 内容记录 pid 与创建时间；持有者已退出或超过安全窗口时可接管，未超时则等待。
+全局和项目 lock 保持原有普通读改写与直接写入，不增加 sidecar lock。并发执行多个 CLI 不是受支持场景；CLI 不做跨进程并发合并承诺。
 
 ### D6: lock 由成功安装结果驱动
 
-安装器返回 completed build metadata；只有全部目标写入成功后才更新当前 scope lock。`add` 仍负责采集 consent 询问，`collectConsent` 与 `releaseSeq` 通过同一个串行化读改写入口独立更新字段，禁止调用方直接 `readSkillLock()` 后整体 `writeSkillLock()`。
+安装器返回每个目标的成功或失败结果；只有全部目标写入成功后才更新全局或项目 lock。`add` 仍负责采集 consent 询问，`collectConsent` 与 `releaseSeq` 通过同一个普通读改写入口独立更新字段。
+
+文件已经全部安装但 lock 写入失败时，CLI 输出明确警告并保持安装成功结果；lock 保留旧值，下一次检测到尚未记录的 `releaseSeq` 时会重新安装。
 
 ### D7: 旧包与团队上下文兼容
 
@@ -81,10 +67,8 @@ staging/backup 使用包含 pid+随机值的唯一名称；每一步失败按 ba
 ## Risks / Trade-offs
 
 - [一次批量检查条目过多导致请求过大] → Client 使用固定分片大小，逐片合并结果；单条 CLI 仍使用一项。
-- [atomic rename 在 Windows 覆盖目录行为不同] → 使用 backup/restore 状态机，失败不丢失旧目录；测试覆盖 Windows 语义或用平台分支。
+- [直接写入过程中失败会留下残缺目标] → CLI 返回失败且不推进 lock；下一次检测到同版本新构建或未记录序列时重新安装覆盖。
 - [旧 Market 不返回 releaseSeq/buildHash] → 新 CLI 仅对 `observabilityEnabled=true` 的观测安装 fail-closed；未开启观测的原版 Market 安装保持旧响应兼容。
-- [两个进程安装不同 Skill 时覆盖同一 lock 文件] → sidecar scope lock 串行化完整读改写，安装文件切换使用独立 canonical lock，二者按固定顺序获取。
-- [进程在 canonical 已备份但 staging 未切换时退出] → 下次持锁安装先识别 backup-only 状态并恢复旧 canonical，绝不把唯一备份当普通残留删除。
 - [安装成功但 lock 写入失败] → 文件已是新版本但 lock 仍旧，下一次 check 会再次拉取；输出明确警告且保留 consent 字段。
 - [同版本 releaseSeq 变化频繁] → 每个 Agent 通过 BlueFlare 限频，CLI check 只读元数据，不拉包。
 
@@ -92,9 +76,8 @@ staging/backup 使用包含 pid+随机值的唯一名称；每一步失败按 ba
 
 1. 先发布 Market additive 字段和批量检测接口。
 2. CLI 读取旧 lock 时保持兼容；已开启目标首次安装成功补 releaseSeq，未开启目标保持原版版本字段。
-3. 切换安装器 staging/atomic 流程，并保留旧目录备份。
+3. 在现有直接写入流程前增加 `buildHash` 校验，并保持全部目标成功后推进 lock。
 4. 切换 check/update 到批量接口；团队和普通目标同一个批次处理。
-5. 切换全局/项目 lock 到 sidecar 串行化读改写。
-6. 验证失败安装、BUILD_CHANGED、hash mismatch、旧 lock、未开启原版、跨 Skill 并发和 copy/symlink 模式。
+5. 验证失败安装、BUILD_CHANGED、hash mismatch、旧 lock、未开启原版和 copy/symlink 模式。
 
 回滚 CLI 版本可恢复旧读取逻辑；新 lock 的 releaseSeq 是可选字段，旧版本忽略后仍按 version 维持基本兼容，但无法识别同版本新构建。

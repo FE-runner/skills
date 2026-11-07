@@ -10,10 +10,8 @@ import {
   writeFile,
   stat,
   realpath,
-  rename,
 } from 'fs/promises';
 import { existsSync } from 'fs';
-import { randomUUID } from 'crypto';
 import { join, basename, normalize, resolve, sep, relative, dirname } from 'path';
 import { homedir, platform } from 'os';
 import type { Skill, AgentType, RemoteSkill } from './types.ts';
@@ -33,11 +31,10 @@ export interface FileBasedSkill {
 import { agents, detectInstalledAgents, isUniversalAgent } from './agents.ts';
 import { AGENTS_DIR, SKILLS_SUBDIR } from './constants.ts';
 import { parseSkillMd } from './skills.ts';
-import { withProcessLocks } from './process-lock.ts';
 
 export type InstallMode = 'symlink' | 'copy';
 
-interface InstallResult {
+export interface InstallResult {
   success: boolean;
   path: string;
   canonicalPath?: string;
@@ -575,99 +572,6 @@ export async function installRemoteSkillForAgent(
   }
 }
 
-interface DirectoryTransactionPaths {
-  target: string;
-  staging: string;
-  backup: string;
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function recoverDirectoryTarget(target: string): Promise<void> {
-  const parent = dirname(target);
-  const base = basename(target);
-  const entries = await readdir(parent).catch(() => [] as string[]);
-  const backups = entries
-    .filter((name) => name.startsWith(`${base}.install-backup-`))
-    .sort()
-    .map((name) => join(parent, name));
-  const stagings = entries
-    .filter((name) => name.startsWith(`${base}.install-staging-`))
-    .map((name) => join(parent, name));
-  const targetExists = await pathExists(target);
-  const backup = backups.at(-1);
-
-  if (targetExists && backup) {
-    await rm(backup, { recursive: true, force: true });
-  } else if (!targetExists && backup) {
-    await rename(backup, target);
-  }
-  for (const staging of stagings) {
-    if (!targetExists || !(await pathExists(staging))) {
-      await rm(staging, { recursive: true, force: true });
-    } else {
-      await rm(staging, { recursive: true, force: true });
-    }
-  }
-  for (const stale of backups) {
-    if (stale !== backup || targetExists) {
-      await rm(stale, { recursive: true, force: true });
-    }
-  }
-}
-
-function transactionPaths(target: string): DirectoryTransactionPaths {
-  const suffix = `${process.pid}-${randomUUID()}`;
-  return {
-    target,
-    staging: `${target}.install-staging-${suffix}`,
-    backup: `${target}.install-backup-${suffix}`,
-  };
-}
-
-async function prepareDirectoryTarget(
-  target: string,
-  writeFiles: (directory: string) => Promise<void>
-): Promise<DirectoryTransactionPaths> {
-  await mkdir(dirname(target), { recursive: true });
-  await recoverDirectoryTarget(target);
-  const paths = transactionPaths(target);
-  await mkdir(paths.staging, { recursive: true });
-  await writeFiles(paths.staging);
-  return paths;
-}
-
-async function switchDirectoryTarget(paths: DirectoryTransactionPaths): Promise<boolean> {
-  const hadTarget = await pathExists(paths.target);
-  if (hadTarget) await rename(paths.target, paths.backup);
-  try {
-    await rename(paths.staging, paths.target);
-  } catch (error) {
-    if (hadTarget) await rename(paths.backup, paths.target).catch(() => {});
-    throw error;
-  }
-  return hadTarget;
-}
-
-async function rollbackDirectoryTarget(
-  paths: DirectoryTransactionPaths,
-  hadTarget: boolean
-): Promise<void> {
-  await rm(paths.target, { recursive: true, force: true });
-  if (hadTarget) await rename(paths.backup, paths.target);
-}
-
-async function finalizeDirectoryTarget(paths: DirectoryTransactionPaths): Promise<void> {
-  await rm(paths.backup, { recursive: true, force: true });
-}
-
 /**
  * Install a well-known skill with multiple files.
  * The skill directory name is derived from the installName field.
@@ -764,26 +668,18 @@ export async function installWellKnownSkillForAgent(
   try {
     // For copy mode, write directly to agent location
     if (installMode === 'copy') {
-      const [result] = await installWellKnownSkillForAgents(skill, [agentType], {
-        ...options,
+      await cleanAndCreateDirectory(agentDir);
+      await writeSkillFiles(agentDir);
+      return {
+        success: true,
+        path: agentDir,
         mode: 'copy',
-      });
-      return (
-        result ?? {
-          success: false,
-          path: agentDir,
-          mode: 'copy',
-          error: '安装目标为空',
-        }
-      );
+      };
     }
 
-    // Symlink mode: atomically switch canonical, then update agent links.
-    await withProcessLocks([canonicalDir], async () => {
-      const paths = await prepareDirectoryTarget(canonicalDir, writeSkillFiles);
-      await switchDirectoryTarget(paths);
-      await finalizeDirectoryTarget(paths);
-    });
+    // Symlink mode: write canonical directory and update agent links.
+    await cleanAndCreateDirectory(canonicalDir);
+    await writeSkillFiles(canonicalDir);
 
     // universal agent 共用 canonical 目录。
     if (isGlobal && isUniversalAgent(agentType)) {
@@ -798,12 +694,9 @@ export async function installWellKnownSkillForAgent(
     const symlinkCreated = await createSymlink(canonicalDir, agentDir);
 
     if (!symlinkCreated) {
-      // Symlink failed, fall back to an atomic copy for the agent directory.
-      await withProcessLocks([agentDir], async () => {
-        const paths = await prepareDirectoryTarget(agentDir, writeSkillFiles);
-        await switchDirectoryTarget(paths);
-        await finalizeDirectoryTarget(paths);
-      });
+      // Symlink failed, fall back to copy.
+      await cleanAndCreateDirectory(agentDir);
+      await writeSkillFiles(agentDir);
 
       return {
         success: true,
@@ -828,113 +721,6 @@ export async function installWellKnownSkillForAgent(
       error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
-}
-
-/**
- * 多 Agent copy 安装：先锁定全部目标，再全部 staging，逐目标切换。
- * 任一目标切换失败会反向回滚已切换目标；回滚失败保留可恢复目录且返回失败。
- */
-export async function installWellKnownSkillForAgents(
-  skill: FileBasedSkill,
-  agentTypes: AgentType[],
-  options: { global?: boolean; cwd?: string; mode?: InstallMode } = {}
-): Promise<InstallResult[]> {
-  const isGlobal = options.global ?? false;
-  const cwd = options.cwd || process.cwd();
-  const installMode = options.mode ?? 'copy';
-  if (installMode !== 'copy') {
-    const results: InstallResult[] = [];
-    for (const agentType of agentTypes) {
-      results.push(await installWellKnownSkillForAgent(skill, agentType, options));
-    }
-    return results;
-  }
-
-  const skillName = sanitizeName(skill.installName);
-  const targets = agentTypes.map((agentType) => {
-    const agentBase = getAgentBaseDir(agentType, isGlobal, cwd);
-    return {
-      agentType,
-      target: join(agentBase, skillName),
-      error:
-        isGlobal && agents[agentType].globalSkillsDir === undefined
-          ? `${agents[agentType].displayName} does not support global skill installation`
-          : null,
-    };
-  });
-  if (targets.some((target) => target.error)) {
-    return targets.map((target) => ({
-      success: false,
-      path: target.target,
-      mode: 'copy',
-      ...(target.error ? { error: target.error } : {}),
-    }));
-  }
-  if (skill.binaryFileErrors?.length) {
-    return targets.map((target) => ({
-      success: false,
-      path: target.target,
-      mode: 'copy',
-      error: `二进制文件内容校验失败，已中止安装：${skill.binaryFileErrors!.join('; ')}`,
-    }));
-  }
-
-  async function writeSkillFiles(targetDir: string): Promise<void> {
-    for (const [filePath, content] of skill.files) {
-      const fullPath = join(targetDir, filePath);
-      if (!isPathSafe(targetDir, fullPath)) continue;
-      const parentDir = dirname(fullPath);
-      if (parentDir !== targetDir) await mkdir(parentDir, { recursive: true });
-      if (typeof content === 'string') await writeFile(fullPath, content, 'utf-8');
-      else await writeFile(fullPath, content);
-    }
-  }
-
-  const uniqueTargets = [...new Map(targets.map((item) => [item.target, item])).values()];
-  const switched: Array<{ path: string; hadTarget: boolean }> = [];
-  const prepared: DirectoryTransactionPaths[] = [];
-  let failure: string | null = null;
-
-  await withProcessLocks(
-    uniqueTargets.map((item) => item.target),
-    async () => {
-      try {
-        for (const item of uniqueTargets) {
-          prepared.push(await prepareDirectoryTarget(item.target, writeSkillFiles));
-        }
-        for (const paths of prepared) {
-          const hadTarget = await switchDirectoryTarget(paths);
-          switched.push({ path: paths.target, hadTarget });
-        }
-      } catch (error) {
-        failure = error instanceof Error ? error.message : '安装失败';
-        for (const paths of [...prepared].reverse()) {
-          const record = switched.find((item) => item.path === paths.target);
-          if (!record) continue;
-          try {
-            await rollbackDirectoryTarget(paths, record.hadTarget);
-          } catch (rollbackError) {
-            failure += `；回滚失败：${
-              rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
-            }`;
-          }
-        }
-      } finally {
-        if (failure === null) {
-          for (const paths of prepared) {
-            await finalizeDirectoryTarget(paths).catch(() => {});
-          }
-        }
-      }
-    }
-  );
-
-  return targets.map((target) => ({
-    success: failure === null,
-    path: target.target,
-    mode: 'copy',
-    ...(failure ? { error: failure } : {}),
-  }));
 }
 
 export interface InstalledSkill {

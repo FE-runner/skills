@@ -1,6 +1,6 @@
 ## Purpose
 
-定义 CLI 通过 Skill 市场批量构建检测拉取不可变观测构建、使用 release 序列判断更新，并在下载校验后原子替换本地 Skill 的完整行为。
+定义 CLI 通过 Skill 市场批量构建检测拉取不可变观测构建、使用 release 序列判断更新，并在下载校验后直接写入本地 Skill 的完整行为。
 
 ## ADDED Requirements
 
@@ -129,96 +129,61 @@ hash 计算 SHALL 覆盖文件相对路径及原始字节；文本和二进制 S
 - **THEN** CLI 不执行观测构建 hash 校验
 - **AND** 保持旧版响应兼容
 
-### Requirement: 原子替换且保留旧版本
+### Requirement: 写盘前校验并直接写入
 
-安装器 SHALL 先把完整文件集合写入唯一 staging 目录，完成路径、二进制、`buildHash` 与文件写入校验后，再原子替换 canonical Skill 目录。目标目录已存在时，替换失败 SHALL 保留原目录及原文件，SHALL NOT 先删除旧版本。backup/staging 名称 SHALL 全局唯一；同一 canonical 目录的并发安装 SHALL 通过 sidecar lock 串行化或明确失败，并定义进程崩溃后残留目录的安全清理规则。
+已开启观测构建的 `buildHash` SHALL 在安装器修改任何目标目录前完成校验。校验通过后，安装器 SHALL 沿用原有直接写入流程：对目标目录执行清理与重建，再逐项写入文件。CLI SHALL NOT 创建 staging、backup 或完成标记，SHALL NOT 执行目录级原子替换、崩溃恢复、跨 Agent 全量回滚或 `partialSuccess`。
 
-copy 模式涉及多个 Agent 目录时，安装器 SHALL 先为全部目标完成 staging 与校验，再逐个切换并保留各自 backup；任一目标切换失败 SHALL 回滚所有已切换目标。只有全部目标成功后才清理 backup 并推进 lock。若回滚本身失败，CLI SHALL 报告部分成功、保持 lock 旧值并保留可恢复 backup/staging；下一次持锁安装 SHALL 按恢复状态机收敛到同一构建。
+copy 模式涉及多个 Agent 目录时，CLI SHALL 按目标顺序逐个安装，不要求先为全部目标预写文件。某个目标写入失败时，该目标目录允许为空或残缺；CLI SHALL 继续尝试剩余目标，并在任一目标失败时返回整次安装失败。
 
-copy 模式 SHALL 在 staging 前对全部目标规范化路径去重、按字节序排序并一次性获取所有目标 sidecar lock；这些锁 SHALL 持续持有到切换、回滚或恢复全部结束。目标锁全部获得后才获取 scope lock，释放时先释放 scope lock，再按目标锁获取顺序反向释放。
-
-获得目标 sidecar lock 后，安装器 SHALL 先执行恢复状态机：canonical 存在且 backup 不存在时只清理 staging；canonical 不存在且 backup 存在时先把 backup rename 回 canonical；canonical 与 backup 均存在时确认 canonical 可读后删除 backup；canonical 与 backup 均不存在时清理未完成首次安装的 staging。其他组合 SHALL 停止并报告人工恢复，SHALL NOT 删除可能唯一有效的旧目录。
-
-全局与项目 lock 的所有字段更新 SHALL 在同一 scope sidecar lock 内完成“读取 -> 修改 -> 临时文件写入 -> rename”，SHALL NOT 允许调用方持有一份旧快照后整体覆盖文件。安装不同 Skill 的两个进程也必须串行化最终 lock 写回，避免 `releaseSeq`、`collectConsent` 或其他条目互相覆盖。
-
-符号链接模式 SHALL 在 canonical 目录原子切换后保持目标 Agent 链接有效；copy 模式 SHALL 对每个目标目录使用同样失败保留语义。
+符号链接模式 SHALL 清理并重建 canonical 目录后写入文件，再维护目标 Agent 链接；建链失败时可回退为 copy。全局与项目 lock SHALL 保持原有普通读改写；并发执行多个 CLI 不是支持场景，本期不提供 sidecar lock。
 
 #### Scenario: 首次安装
 
-- **WHEN** 目标 canonical 目录不存在且校验成功
-- **THEN** 完整 staging 目录原子切换为目标目录
+- **WHEN** 目标目录不存在且 `buildHash` 校验成功
+- **THEN** CLI 清理并创建目标目录后直接写入完整文件
 
 #### Scenario: 升级成功
 
-- **WHEN** 目标目录已有旧版本且新构建完整校验通过
-- **THEN** 原子替换为新目录
+- **WHEN** 目标目录已有旧版本且新构建校验通过
+- **THEN** CLI 清理旧目录并直接写入新文件
 - **AND** Agent 链接继续指向 canonical 目录
 
 #### Scenario: 升级写入失败
 
-- **WHEN** staging 写入、hash 或原子替换失败
-- **THEN** 旧 canonical 目录保持不变
+- **WHEN** 文件写盘过程中发生错误
+- **THEN** 失败目标目录允许为空或残缺
+- **AND** CLI 返回安装失败
 - **AND** CLI 不推进 lock
 
-#### Scenario: copy 模式替换失败
+#### Scenario: copy 模式部分目标失败
 
-- **WHEN** copy 模式某个 Agent 目标目录写入失败
-- **THEN** 所有已经切换的 Agent 目标回滚到各自旧内容
-- **AND** lock 不推进
-
-#### Scenario: copy 模式回滚失败
-
-- **WHEN** 某个 Agent 目标切换失败且回滚另一个已切换目标也失败
-- **THEN** CLI 报告部分成功并保留 backup/staging
-- **AND** lock 保持旧值
-- **AND** 下一次持锁安装按恢复状态机收敛到同一构建
-
-#### Scenario: 同目录并发安装
-
-- **WHEN** 两个 CLI 进程同时安装同一 canonical Skill
-- **THEN** lockfile 使操作串行化或第二个进程明确失败
-- **AND** 不出现两个 staging 同时切换目标目录
-
-#### Scenario: 进程崩溃后残留 staging
-
-- **WHEN** 旧进程留下超过安全窗口的 staging/backup
-- **THEN** 下次安装可在确认无锁持有者后清理残留
-- **AND** 不删除当前 canonical 目录
-
-#### Scenario: 进程在 backup-only 状态崩溃
-
-- **WHEN** canonical 已被 rename 为 backup，但 staging 尚未 rename 为 canonical
-- **THEN** 下次持锁安装先把 backup 恢复为 canonical
-- **AND** 绝不清除唯一的旧版本备份
-
-#### Scenario: 不同 Skill 并发写回 lock
-
-- **WHEN** 两个 CLI 进程同时安装不同 Skill
-- **THEN** 两个进程按 scope sidecar lock 串行读取和写回全局或项目 lock
-- **AND** 两个条目的版本、releaseSeq 与 collectConsent 均不丢失
-
-#### Scenario: 并发 copy 安装目标顺序不同
-
-- **WHEN** 两个 CLI 进程并发安装同一组 Agent 目标但内部枚举顺序不同
-- **THEN** 双方按排序后的同一顺序获取全部目标 sidecar lock
-- **AND** 不发生死锁或交叉回滚
-- **AND** 最终目录状态与最后成功推进的 lock 一致
+- **WHEN** copy 模式某个 Agent 目标写入失败
+- **THEN** CLI 不回滚已经成功写入的其他 Agent 目标
+- **AND** 继续尝试剩余目标
+- **AND** 最终返回安装失败且 lock 保持旧值
 
 ### Requirement: Lock 仅在安装成功后推进
 
-CLI SHALL 仅在安装成功且目标目录已切换后，在 lock 的串行化读改写事务中写入 `version` 与已开启源版本的 `releaseSeq`。`observabilityEnabled=false` 时只更新原版 `version` 相关字段，不要求或写入 `releaseSeq`。安装失败、hash 不一致、releaseSeq 冲突或任一步骤异常时 SHALL 保留 lock 旧值。
+CLI SHALL 仅在全部目标文件都写入成功后，通过 lock 的普通读改写写入 `version` 与已开启源版本的 `releaseSeq`。`observabilityEnabled=false` 时只更新原版 `version` 相关字段，不要求或写入 `releaseSeq`。安装失败、任一目标写入失败、hash 不一致、releaseSeq 冲突或任一步骤异常时 SHALL 保留 lock 旧值。
 
 lock 新增字段 SHALL 向后兼容；读取缺少 `releaseSeq` 的旧 lock 不报错。已开启目标在下一次成功安装后补齐 `releaseSeq`；未开启目标不补齐该字段。
 
 #### Scenario: 安装成功后更新 lock
 
-- **WHEN** `observabilityEnabled=true` 的 Skill 文件原子安装完成
+- **WHEN** `observabilityEnabled=true` 的 Skill 文件已写入全部目标
 - **THEN** lock 更新为响应中的 `version/releaseSeq`
 
 #### Scenario: 安装失败不更新 lock
 
 - **WHEN** 文件校验或落地失败
 - **THEN** lock 保持旧 `version/releaseSeq`
+
+#### Scenario: 文件安装成功但 lock 写入失败
+
+- **WHEN** 全部目标文件已写入但 lock 文件写入失败
+- **THEN** 文件保持已安装内容
+- **AND** lock 保持旧值
+- **AND** CLI 输出明确警告并保持本次安装成功结果
 
 #### Scenario: 旧 lock 兼容
 

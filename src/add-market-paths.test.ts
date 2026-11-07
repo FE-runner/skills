@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as p from '@clack/prompts';
 import { handleMarketSkill } from './add.ts';
 import { marketProvider } from './providers/market.ts';
-import { installWellKnownSkillForAgent, installWellKnownSkillForAgents } from './installer.ts';
+import { installWellKnownSkillForAgent } from './installer.ts';
 import { addSkillToLock } from './skill-lock.ts';
 import { addSkillToLocalLock, readLocalLock } from './local-lock.ts';
 
@@ -48,13 +48,6 @@ vi.mock('./installer.ts', async () => {
       path: '/tmp/market-skill',
       mode: 'copy',
     }),
-    installWellKnownSkillForAgents: vi.fn(async (_skill: unknown, agents: unknown[]) =>
-      agents.map(() => ({
-        success: true,
-        path: '/tmp/market-skill',
-        mode: 'copy',
-      }))
-    ),
   };
 });
 
@@ -152,7 +145,7 @@ describe('market install paths', () => {
       undefined,
       undefined
     );
-    expect(installWellKnownSkillForAgents).toHaveBeenCalled();
+    expect(installWellKnownSkillForAgent).toHaveBeenCalled();
   });
 
   it('installs one active artifact when observability is explicit', async () => {
@@ -195,11 +188,11 @@ describe('market install paths', () => {
       expect.objectContaining({ collectConsent: true }),
       expect.any(String)
     );
-    const installCall = vi.mocked(installWellKnownSkillForAgents).mock.calls[0]!;
+    const installCall = vi.mocked(installWellKnownSkillForAgent).mock.calls[0]!;
     expect(installCall[0].files.get('.blueai-skills-market/bsm-obs-run.cjs')).toBe(
       'module.exports = {};'
     );
-    expect(installCall[1]).toEqual(['claude-code']);
+    expect(installCall[1]).toBe('claude-code');
     expect(installCall[2]).toMatchObject({ global: false });
   });
 
@@ -454,6 +447,93 @@ describe('market install paths', () => {
       expect.any(String)
     );
     expect(p.log.warn).toHaveBeenCalledWith(expect.stringContaining('安装响应不含合法可观测信息'));
+  });
+
+  it('stops before writing when an explicit observability build hash does not match', async () => {
+    vi.mocked(marketProvider.resolve).mockResolvedValue({
+      id: 'id-demo',
+      name: 'demo',
+      currentVersion: '1.0.0',
+      authorId: 'author-id',
+    });
+    vi.mocked(marketProvider.installById).mockResolvedValue({
+      ok: true,
+      data: marketSkill('demo', {
+        observabilityEnabled: true,
+        releaseSeq: 1,
+        buildHash: 'sha256:not-the-downloaded-content',
+      }),
+    } as never);
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('process.exit');
+    }) as never);
+
+    try {
+      await expect(
+        handleMarketSkill(
+          'demo',
+          { type: 'market', url: 'demo', marketName: 'demo' },
+          {
+            agent: ['claude-code'],
+            yes: true,
+            copy: true,
+            global: false,
+            skipPilotStatus: true,
+          },
+          p.spinner()
+        )
+      ).rejects.toThrow('process.exit');
+
+      expect(installWellKnownSkillForAgent).not.toHaveBeenCalled();
+      expect(addSkillToLocalLock).not.toHaveBeenCalled();
+      expect(p.outro).toHaveBeenCalledWith(
+        expect.stringContaining('下载内容与 Market buildHash 不一致')
+      );
+    } finally {
+      exitSpy.mockRestore();
+    }
+  });
+
+  it('keeps files installed and warns when the lock cannot be written', async () => {
+    vi.mocked(addSkillToLocalLock).mockRejectedValueOnce(new Error('lock write failed'));
+
+    const result = await handleMarketSkill(
+      'demo',
+      { type: 'market', url: 'demo', marketName: 'demo' },
+      { agent: ['claude-code'], yes: true, copy: true, global: false },
+      p.spinner()
+    );
+
+    expect(result).toEqual({ fallbackToGitHub: false, installed: true });
+    expect(p.log.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Skill 文件已安装，但安装锁更新失败')
+    );
+  });
+
+  it('returns failure without advancing the lock when one Agent target fails', async () => {
+    vi.mocked(installWellKnownSkillForAgent)
+      .mockResolvedValueOnce({
+        success: true,
+        path: '/tmp/market-skill-first',
+        mode: 'copy',
+      })
+      .mockResolvedValueOnce({
+        success: false,
+        path: '/tmp/market-skill-second',
+        mode: 'copy',
+        error: 'write failed',
+      });
+
+    const result = await handleMarketSkill(
+      'demo',
+      { type: 'market', url: 'demo', marketName: 'demo' },
+      { agent: ['claude-code', 'cursor'], yes: true, copy: true, global: false },
+      p.spinner()
+    );
+
+    expect(result).toEqual({ fallbackToGitHub: false, installed: false });
+    expect(installWellKnownSkillForAgent).toHaveBeenCalledTimes(2);
+    expect(addSkillToLocalLock).not.toHaveBeenCalled();
   });
 
   it('keeps private author/name resolve and install behavior', async () => {

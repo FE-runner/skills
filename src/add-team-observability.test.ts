@@ -63,13 +63,6 @@ vi.mock('./installer.ts', async () => {
   return {
     ...actual,
     installWellKnownSkillForAgent: vi.fn(),
-    installWellKnownSkillForAgents: vi.fn(async (_skill: unknown, agents: unknown[]) =>
-      agents.map(() => ({
-        success: true,
-        path: '/tmp/market-skill',
-        mode: 'copy',
-      }))
-    ),
   };
 });
 

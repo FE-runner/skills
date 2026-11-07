@@ -3,7 +3,6 @@ import { join, dirname } from 'path';
 import { createHash } from 'crypto';
 import { execSync } from 'child_process';
 import { getGlobalSkillLockPath } from './paths.ts';
-import { withProcessLocks } from './process-lock.ts';
 
 const CURRENT_VERSION = 3; // Bumped from 2 to 3 for folder hash support (GitHub tree SHA)
 
@@ -250,17 +249,15 @@ export async function addSkillToLock(
   skillName: string,
   entry: Omit<SkillLockEntry, 'installedAt' | 'updatedAt'>
 ): Promise<void> {
-  await withProcessLocks([getSkillLockPath()], async () => {
-    const lock = await readSkillLock();
-    const now = new Date().toISOString();
-    const existingEntry = lock.skills[skillName];
-    lock.skills[skillName] = {
-      ...entry,
-      installedAt: existingEntry?.installedAt ?? now,
-      updatedAt: now,
-    };
-    await writeSkillLock(lock);
-  });
+  const lock = await readSkillLock();
+  const now = new Date().toISOString();
+  const existingEntry = lock.skills[skillName];
+  lock.skills[skillName] = {
+    ...entry,
+    installedAt: existingEntry?.installedAt ?? now,
+    updatedAt: now,
+  };
+  await writeSkillLock(lock);
 }
 
 /**
@@ -270,27 +267,23 @@ export async function setSkillCollectConsent(
   skillName: string,
   collectConsent: boolean
 ): Promise<boolean> {
-  return withProcessLocks([getSkillLockPath()], async () => {
-    const lock = await readSkillLock();
-    const entry = lock.skills[skillName];
-    if (!entry) return false;
-    entry.collectConsent = collectConsent;
-    await writeSkillLock(lock);
-    return true;
-  });
+  const lock = await readSkillLock();
+  const entry = lock.skills[skillName];
+  if (!entry) return false;
+  entry.collectConsent = collectConsent;
+  await writeSkillLock(lock);
+  return true;
 }
 
 /**
  * Remove a skill from the lock file.
  */
 export async function removeSkillFromLock(skillName: string): Promise<boolean> {
-  return withProcessLocks([getSkillLockPath()], async () => {
-    const lock = await readSkillLock();
-    if (!(skillName in lock.skills)) return false;
-    delete lock.skills[skillName];
-    await writeSkillLock(lock);
-    return true;
-  });
+  const lock = await readSkillLock();
+  if (!(skillName in lock.skills)) return false;
+  delete lock.skills[skillName];
+  await writeSkillLock(lock);
+  return true;
 }
 
 /**
@@ -353,12 +346,10 @@ export async function isPromptDismissed(promptKey: keyof DismissedPrompts): Prom
  * Mark a prompt as dismissed.
  */
 export async function dismissPrompt(promptKey: keyof DismissedPrompts): Promise<void> {
-  await withProcessLocks([getSkillLockPath()], async () => {
-    const lock = await readSkillLock();
-    if (!lock.dismissed) lock.dismissed = {};
-    lock.dismissed[promptKey] = true;
-    await writeSkillLock(lock);
-  });
+  const lock = await readSkillLock();
+  if (!lock.dismissed) lock.dismissed = {};
+  lock.dismissed[promptKey] = true;
+  await writeSkillLock(lock);
 }
 
 /**
@@ -373,9 +364,7 @@ export async function getLastSelectedAgents(): Promise<string[] | undefined> {
  * Save the selected agents to the lock file.
  */
 export async function saveSelectedAgents(agents: string[]): Promise<void> {
-  await withProcessLocks([getSkillLockPath()], async () => {
-    const lock = await readSkillLock();
-    lock.lastSelectedAgents = agents;
-    await writeSkillLock(lock);
-  });
+  const lock = await readSkillLock();
+  lock.lastSelectedAgents = agents;
+  await writeSkillLock(lock);
 }

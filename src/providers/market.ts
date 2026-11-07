@@ -363,10 +363,14 @@ export class MarketProvider {
       if (releaseId) body.releaseId = releaseId;
     } else if (author) body.author = author;
     if (expectedReleaseSeq !== undefined) body.releaseSeq = expectedReleaseSeq;
+    const apiKey = team ? getApiKey() : null;
 
     const result = await requestApiResult<InstallResponse>(`${this.apiBase}/api/skill/install`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+      },
       body: JSON.stringify(body),
     });
     if (!result.ok) return result;
@@ -424,7 +428,7 @@ export class MarketProvider {
   ): Promise<ApiResult<{ items: BuildCheckResult[] }>> {
     if (items.length === 0) return { ok: true, data: { items: [] } };
     const apiKey = getApiKey();
-    return requestApiResult<{ items: BuildCheckResult[] }>(
+    const result = await requestApiResult<{ items: BuildCheckResult[] }>(
       `${this.apiBase}/api/skill/build/checkBatch`,
       {
         method: 'POST',
@@ -435,6 +439,35 @@ export class MarketProvider {
         body: JSON.stringify({ items }),
       }
     );
+    if (!result.ok) return result;
+    const responseItems = result.data?.items;
+    if (
+      !Array.isArray(responseItems) ||
+      responseItems.length !== items.length ||
+      responseItems.some((item, index) => {
+        const expected = items[index];
+        return (
+          !expected ||
+          !item ||
+          typeof item.ok !== 'boolean' ||
+          item.scope !== expected.scope ||
+          item.skillId !== expected.skillId ||
+          (item.ok &&
+            (typeof item.version !== 'string' ||
+              item.version.length === 0 ||
+              typeof item.observabilityEnabled !== 'boolean' ||
+              (item.observabilityEnabled === true &&
+                (typeof item.releaseSeq !== 'number' || !Number.isInteger(item.releaseSeq)))))
+        );
+      })
+    ) {
+      return {
+        ok: false,
+        status: 0,
+        message: 'Market 批量构建检测响应不完整或顺序不一致',
+      };
+    }
+    return result;
   }
 
   /**

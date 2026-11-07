@@ -7,5 +7,5 @@
 
 ### Requirement: update 命令支持私有技能更新
 
-**Reason**: 更新触发条件改为 `version + releaseSeq`，安装必须带构建校验和原子替换。
+**Reason**: 更新触发条件改为 `version + releaseSeq`，安装必须在写盘前完成构建校验。
 **Migration**: 使用 `observability-build-pull` 的更新与安装要求；私有 source 仍保留 author 信息。

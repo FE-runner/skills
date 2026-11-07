@@ -44,6 +44,44 @@ describe('Market build contract', () => {
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer sk-build-check');
   });
 
+  it('checkBuildBatch 遇到空项时返回 fail-closed，而不是抛出 TypeError', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        response({
+          items: [null],
+        })
+      )
+    );
+
+    await expect(
+      marketProvider.checkBuildBatch([{ scope: 'PUBLIC', skillId: 'skill-a' }])
+    ).resolves.toEqual({
+      ok: false,
+      status: 0,
+      message: 'Market 批量构建检测响应不完整或顺序不一致',
+    });
+  });
+
+  it('checkBuildBatch 遇到非 boolean ok 时返回 fail-closed', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        response({
+          items: [{ ok: 'false', scope: 'PUBLIC', skillId: 'skill-a' }],
+        })
+      )
+    );
+
+    await expect(
+      marketProvider.checkBuildBatch([{ scope: 'PUBLIC', skillId: 'skill-a' }])
+    ).resolves.toEqual({
+      ok: false,
+      status: 0,
+      message: 'Market 批量构建检测响应不完整或顺序不一致',
+    });
+  });
+
   it('观测安装解析 releaseSeq/buildHash', async () => {
     vi.stubGlobal(
       'fetch',

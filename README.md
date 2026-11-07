@@ -330,7 +330,7 @@ npx blueai-skills update
 npx blueai-skills update -g
 ```
 
-Market 技能通过批量构建检测比较 `version + releaseSeq`；同版本产生新观测构建时也会标记更新。安装时校验 `buildHash`，使用 staging、失败回滚和原子替换，失败保留旧目录。GitHub 技能通过文件夹 hash 比对检测更新。CLI 不增加 daemon 或系统定时任务，自动巡检由 BlueFlare 调用 `check/update`。
+Market 技能通过批量构建检测比较 `version + releaseSeq`；同版本产生新观测构建时也会标记更新。安装时在修改目标目录前校验 `buildHash`，再按原逻辑清理并直接写入；多个 Agent 任一目标失败时整次安装返回失败且不推进 lock。GitHub 技能通过文件夹 hash 比对检测更新。CLI 不增加 daemon 或系统定时任务，自动巡检由 BlueFlare 调用 `check/update`。
 
 ### `blueai-skills init`
 

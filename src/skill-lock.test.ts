@@ -31,12 +31,10 @@ function entry(name: string, releaseSeq: number) {
 }
 
 describe('skill lock 字段合并', () => {
-  it('不同 Skill 并发写回不丢 releaseSeq', async () => {
+  it('不同 Skill 依次写回保留 releaseSeq', async () => {
     const { addSkillToLock, readSkillLock } = await import('./skill-lock.ts');
-    await Promise.all([
-      addSkillToLock('one', entry('one', 1)),
-      addSkillToLock('two', entry('two', 2)),
-    ]);
+    await addSkillToLock('one', entry('one', 1));
+    await addSkillToLock('two', entry('two', 2));
     const lock = await readSkillLock();
     expect(lock.skills.one?.releaseSeq).toBe(1);
     expect(lock.skills.two?.releaseSeq).toBe(2);
