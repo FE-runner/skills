@@ -4,7 +4,7 @@
 - 阶段: review-code
 - 源分支: develop
 - 开发分支: feature/one-way-observability-build-delivery
-- 最后成功 commit: 9732eb7；本轮 review-code 最终简化待统一提交
+- 最后成功 commit: 97aef83
 - 下一步安全动作: 可进入归档前验证
 
 ## 任务证据
