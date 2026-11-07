@@ -4,25 +4,29 @@ Skill 市场将同一产品版本可能对应多个不可变观测构建。CLI �
 
 ## What Changes
 
-- lock 增加 `releaseSeq`，Market Skill 的更新判断统一使用 `version + releaseSeq`；`buildHash` 只在安装响应中校验，不长期保存。
+- lock 增加 `releaseSeq`，Market 已开启观测的 Skill 使用 `version + releaseSeq` 更新判断；`buildHash` 只在安装响应中校验，不长期保存。
 - `add`、`check`、`update` 对普通、私有和团队 Skill 都调用 Skill 市场的批量构建检测能力，单条检查使用一个 item。
-- 安装响应只接受当前目标版本的 active observability build；无产物或 release 序列已变化时 fail-closed，不回退原版。
+- 检测返回 `observabilityEnabled=false` 时继续走未开启观测的原版安装；已开启观测的 Skill 只接受当前目标版本 active build，无产物或 release 序列已变化时 fail-closed。
+- 团队 Skill 是源个人 Skill 的引用副本：`teamId + releaseId` 只用于权限和 approved release 校验，`releaseSeq/buildHash` 读取该 release 引用的源 `skillId + version`，不维护团队级观测序列。
 - 安装改为 staging 写入、`buildHash` 校验和原子替换；失败时保留旧安装目录。
-- 安装成功后才推进 lock 中的 `version/releaseSeq`；失败不更新本地构建状态。
+- 崩溃恢复区分 staging-only、backup-only 和 canonical+backup 状态；backup-only 时优先恢复旧 canonical。
+- 全局和项目 lock 的读取、修改、写回使用跨进程 sidecar lock 串行化，避免不同 Skill 并发安装覆盖彼此的 `releaseSeq`、`collectConsent` 等字段。
+- 安装成功后才推进 lock：已开启观测目标更新 `version/releaseSeq`，未开启目标只更新原版字段；失败不更新本地构建状态。
 - CLI 不增加 daemon、常驻进程或系统定时任务；自动巡检由 BlueFlare 外部触发。
 - 本地源码 upgrade、`instrument` 和本地改造发布链路不在本期范围。
-- **BREAKING**：lock 增加构建序列字段，并把 Market 更新判定从版本号升级为 `version + releaseSeq`。
+- **BREAKING**：lock 增加构建序列字段，并把 Market 已开启观测 Skill 的更新判定从版本号升级为 `version + releaseSeq`。
 
 ## Capabilities
 
 ### New Capabilities
 
-- `observability-build-pull`: 定义 Market Skill 的批量构建检测、`version + releaseSeq` 更新判断、`buildHash` 产物校验和原子安装。
+- `observability-build-pull`: 定义 Market Skill 的批量构建检测、源版本 `version + releaseSeq` 更新判断、`buildHash` 产物校验、崩溃恢复和原子安装。
 
 ### Modified Capabilities
 
 - `private-skill-lifecycle`: 移除旧的普通 Market `check/update` 专用调用要求，由新构建拉取能力统一承接。
 - `team-release-install`: 移除旧的团队 check/update 判定要求，由新构建拉取能力承接团队目标。
+- `skill-install-file-content`: 旧 Market 响应兼容规则收窄为非观测构建路径；观测构建缺少 `buildHash` 时 fail-closed。
 
 ## Impact
 
