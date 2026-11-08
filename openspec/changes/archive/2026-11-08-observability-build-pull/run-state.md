@@ -1,11 +1,12 @@
 # 运行状态
 
 - 变更名: observability-build-pull
-- 阶段: review-code
+- 阶段: archived
 - 源分支: develop
 - 开发分支: feature/one-way-observability-build-delivery
 - 最后成功 commit: 97aef83
-- 下一步安全动作: 可进入归档前验证
+- 下一步安全动作: 等待分支收尾确认
+- testMode: normal（来源：宿主默认配置）
 
 ## 任务证据
 
@@ -47,6 +48,9 @@
 - `npx tsc --noEmit` — passed
 - `pnpm build` — passed
 - `openspec validate --changes observability-build-pull` — passed
+- 归档门禁 `pnpm test -- --run` — exit 0，46 files / 668 tests passed
+- 归档门禁 `npx tsc --noEmit` — exit 0
+- 生产构建 — skipped，归档门禁不执行 build
 
 ## 裁决
 
