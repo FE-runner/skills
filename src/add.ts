@@ -67,6 +67,7 @@ import {
   saveSelectedAgents,
 } from './skill-lock.ts';
 import { addSkillToLocalLock, computeSkillFolderHash, readLocalLock } from './local-lock.ts';
+import { computeBuildHash } from './build-hash.ts';
 import type { Skill, AgentType, ParsedSource } from './types.ts';
 import { NPX_CMD, EXAMPLE_REPO, SKILLS_SITE, BIN_NAME } from './branding.ts';
 import packageJson from '../package.json' with { type: 'json' };
@@ -804,7 +805,7 @@ async function handleWellKnownSkills(
   }
 
   // Add to skill lock file for update tracking (only for global installs)
-  if (successful.length > 0 && installGlobally) {
+  if (successful.length > 0 && failed.length === 0 && installGlobally) {
     const successfulSkillNames = new Set(successful.map((r) => r.skill));
     for (const skill of selectedSkills) {
       if (successfulSkillNames.has(skill.installName)) {
@@ -823,7 +824,7 @@ async function handleWellKnownSkills(
   }
 
   // Add to local lock file for project-scoped installs
-  if (successful.length > 0 && !installGlobally) {
+  if (successful.length > 0 && failed.length === 0 && !installGlobally) {
     const successfulSkillNames = new Set(successful.map((r) => r.skill));
     for (const skill of selectedSkills) {
       if (successfulSkillNames.has(skill.installName)) {
@@ -1273,7 +1274,7 @@ async function handleCosSkills(
   }
 
   // Add to skill lock file for update tracking (only for global installs)
-  if (successful.length > 0 && installGlobally) {
+  if (successful.length > 0 && failed.length === 0 && installGlobally) {
     const successfulSkillNames = new Set(successful.map((r) => r.skill));
     for (const skill of selectedSkills) {
       if (successfulSkillNames.has(skill.installName)) {
@@ -1292,7 +1293,7 @@ async function handleCosSkills(
   }
 
   // Add to local lock file for project-scoped installs
-  if (successful.length > 0 && !installGlobally) {
+  if (successful.length > 0 && failed.length === 0 && !installGlobally) {
     const successfulSkillNames = new Set(successful.map((r) => r.skill));
     for (const skill of selectedSkills) {
       if (successfulSkillNames.has(skill.installName)) {
@@ -1420,6 +1421,51 @@ function formatInstallFailure(
     return `网络错误：${result.message}`;
   }
   return `${displayName} 安装失败：${result.message}`;
+}
+
+async function resolveExpectedReleaseSeq(params: {
+  skillId: string;
+  authorId?: string;
+  teamId?: string;
+  releaseId?: string;
+}): Promise<{ ok: true; releaseSeq?: number; version?: string } | { ok: false; message: string }> {
+  const target =
+    params.teamId && params.releaseId
+      ? {
+          scope: 'TEAM' as const,
+          skillId: params.skillId,
+          teamId: params.teamId,
+          releaseId: params.releaseId,
+        }
+      : {
+          scope: params.authorId ? ('PRIVATE' as const) : ('PUBLIC' as const),
+          skillId: params.skillId,
+          ...(params.authorId ? { authorId: params.authorId } : {}),
+        };
+  const checked = await marketProvider.checkBuildBatch([target]);
+  if (!checked.ok) {
+    return { ok: false, message: checked.message || '构建检测失败' };
+  }
+  let item = checked.data.items[0];
+  if (!item?.ok && target.scope === 'PRIVATE' && params.authorId) {
+    const publicCheck = await marketProvider.checkBuildBatch([
+      { scope: 'PUBLIC', skillId: params.skillId },
+    ]);
+    if (publicCheck.ok && publicCheck.data.items[0]?.ok) {
+      item = publicCheck.data.items[0];
+    }
+  }
+  if (!item?.ok) {
+    return { ok: false, message: item?.error?.message ?? '构建检测失败' };
+  }
+  if (item.observabilityEnabled === true && item.releaseSeq === undefined) {
+    return { ok: false, message: 'Market 观测状态缺少 releaseSeq，已 fail-closed' };
+  }
+  return {
+    ok: true,
+    ...(item.observabilityEnabled === true ? { releaseSeq: item.releaseSeq } : {}),
+    ...(item.version ? { version: item.version } : {}),
+  };
 }
 
 async function handleTeamInstall(
@@ -1720,7 +1766,32 @@ async function preflightTeamInstall(
       continue;
     }
 
-    const result = await marketProvider.installById(s.id, version, undefined, teamId, s.releaseId);
+    const checked = await resolveExpectedReleaseSeq({
+      skillId: s.id,
+      teamId,
+      releaseId: s.releaseId,
+    });
+    if (!checked.ok) {
+      failures.set(getTeamCollectKey(teamId, s.id), checked.message);
+      continue;
+    }
+    const result =
+      checked.releaseSeq === undefined
+        ? await marketProvider.installById(
+            s.id,
+            checked.version ?? version,
+            undefined,
+            teamId,
+            s.releaseId
+          )
+        : await marketProvider.installById(
+            s.id,
+            checked.version ?? version,
+            undefined,
+            teamId,
+            s.releaseId,
+            checked.releaseSeq
+          );
     const key = getTeamCollectKey(teamId, s.id);
     if (!result.ok) {
       failures.set(key, formatInstallFailure(result, s.name));
@@ -1934,14 +2005,35 @@ export async function handleMarketSkill(
   if (options.prefetchedMarketSkill) {
     skill = options.prefetchedMarketSkill;
   } else {
+    const checked = await resolveExpectedReleaseSeq({
+      skillId: resolved.id,
+      authorId: resolved.authorId || author,
+      teamId: resolvedTeamId,
+      releaseId,
+    });
+    if (!checked.ok) {
+      spinner.stop(pc.red('Failed to check build'));
+      p.outro(pc.red(`${displayName}：${checked.message}`));
+      process.exit(1);
+    }
     spinner.start('Downloading skill files...');
-    const installResult = await marketProvider.installById(
-      resolved.id,
-      version,
-      author,
-      resolvedTeamId,
-      releaseId
-    );
+    const installResult =
+      checked.releaseSeq === undefined
+        ? await marketProvider.installById(
+            resolved.id,
+            checked.version ?? version,
+            author,
+            resolvedTeamId,
+            releaseId
+          )
+        : await marketProvider.installById(
+            resolved.id,
+            checked.version ?? version,
+            author,
+            resolvedTeamId,
+            releaseId,
+            checked.releaseSeq
+          );
     if (!installResult.ok) {
       spinner.stop(pc.red('Failed to fetch skill'));
       p.outro(pc.red(formatInstallFailure(installResult, displayName)));
@@ -1954,6 +2046,14 @@ export async function handleMarketSkill(
     spinner.stop(
       `Skill: ${pc.cyan(skill.installName)} ${pc.dim(`v${skill.version}`)} (${skill.files.size} file${skill.files.size > 1 ? 's' : ''})`
     );
+  }
+  if (skill.observabilityEnabled) {
+    const actualBuildHash = computeBuildHash(skill.files);
+    if (!skill.buildHash || actualBuildHash !== skill.buildHash) {
+      spinner.stop(pc.red('Build hash mismatch'));
+      p.outro(pc.red('下载内容与 Market buildHash 不一致，已中止安装'));
+      process.exit(1);
+    }
   }
 
   // Detect agents
@@ -2170,6 +2270,14 @@ export async function handleMarketSkill(
 
   spinner.start('Installing skill...');
 
+  const sourceIdentifier = teamSkillId
+    ? `ts_${teamSkillId}/${skillName}`
+    : teamId
+      ? `market/team/${teamId}/${skill.installName}`
+      : parsed.marketAuthor
+        ? `market/${parsed.marketAuthor}/${skill.installName}`
+        : `market/${skill.installName}`;
+
   const results: {
     skill: string;
     agent: string;
@@ -2180,6 +2288,58 @@ export async function handleMarketSkill(
     symlinkFailed?: boolean;
     error?: string;
   }[] = [];
+
+  const persistMarketLock = async (
+    installedResults: Array<{ success: boolean; path: string; canonicalPath?: string }>
+  ) => {
+    if (installedResults.length === 0 || installedResults.some((result) => !result.success)) {
+      return;
+    }
+    if (installGlobally) {
+      await addSkillToLock(skill.installName, {
+        source: sourceIdentifier,
+        sourceType: 'market',
+        sourceUrl: skill.sourceUrl,
+        skillFolderHash: skill.skillFolderHash,
+        skillPath: skill.skillId,
+        version: skill.version,
+        ...(skill.observabilityEnabled && skill.releaseSeq !== undefined
+          ? { releaseSeq: skill.releaseSeq }
+          : {}),
+        authorId: teamId ? undefined : resolved.authorId,
+        ...(teamId ? { teamId } : {}),
+        ...(teamSkillId ? { skillTeamId: teamSkillId } : {}),
+        ...(releaseId ? { releaseId } : {}),
+        ...(teamSkillId ? { teamSkillName: skillName } : {}),
+        ...(writeCollectConsent !== undefined ? { collectConsent: writeCollectConsent } : {}),
+      });
+      return;
+    }
+
+    const installDir = installedResults[0]?.canonicalPath || installedResults[0]?.path;
+    if (!installDir) return;
+    const computedHash = await computeSkillFolderHash(installDir);
+    await addSkillToLocalLock(
+      skill.installName,
+      {
+        source: sourceIdentifier,
+        sourceType: 'market',
+        computedHash,
+        version: skill.version,
+        ...(skill.observabilityEnabled && skill.releaseSeq !== undefined
+          ? { releaseSeq: skill.releaseSeq }
+          : {}),
+        skillId: skill.skillId,
+        authorId: teamId ? undefined : resolved.authorId,
+        ...(teamId ? { teamId } : {}),
+        ...(teamSkillId ? { skillTeamId: teamSkillId } : {}),
+        ...(releaseId ? { releaseId } : {}),
+        ...(teamSkillId ? { teamSkillName: skillName } : {}),
+        ...(writeCollectConsent !== undefined ? { collectConsent: writeCollectConsent } : {}),
+      },
+      cwd
+    );
+  };
 
   for (const agent of targetAgents) {
     const result = await installWellKnownSkillForAgent(skill, agent, {
@@ -2192,6 +2352,17 @@ export async function handleMarketSkill(
       ...result,
     });
   }
+  if (results.every((result) => result.success)) {
+    try {
+      await persistMarketLock(results);
+    } catch (error) {
+      p.log.warn(
+        `Skill 文件已安装，但安装锁更新失败：${
+          error instanceof Error ? error.message : String(error)
+        }。下次 check/update 可能重新安装。`
+      );
+    }
+  }
 
   spinner.stop('Installation complete');
 
@@ -2200,14 +2371,6 @@ export async function handleMarketSkill(
   const failed = results.filter((r) => !r.success);
 
   // Track installation
-  const sourceIdentifier = teamSkillId
-    ? `ts_${teamSkillId}/${skillName}`
-    : teamId
-      ? `market/team/${teamId}/${skill.installName}`
-      : parsed.marketAuthor
-        ? `market/${parsed.marketAuthor}/${skill.installName}`
-        : `market/${skill.installName}`;
-
   track({
     event: 'install',
     source: sourceIdentifier,
@@ -2216,58 +2379,6 @@ export async function handleMarketSkill(
     ...(installGlobally && { global: '1' }),
     sourceType: 'market',
   });
-
-  // Add to skill lock file for update tracking (only for global installs)
-  if (successful.length > 0 && installGlobally) {
-    try {
-      await addSkillToLock(skill.installName, {
-        source: sourceIdentifier,
-        sourceType: 'market',
-        sourceUrl: skill.sourceUrl,
-        skillFolderHash: skill.skillFolderHash,
-        skillPath: skill.skillId,
-        version: skill.version,
-        authorId: teamId ? undefined : resolved.authorId,
-        ...(teamId ? { teamId } : {}),
-        ...(teamSkillId ? { skillTeamId: teamSkillId } : {}),
-        ...(releaseId ? { releaseId } : {}),
-        ...(teamSkillId ? { teamSkillName: skillName } : {}),
-        ...(writeCollectConsent !== undefined ? { collectConsent: writeCollectConsent } : {}),
-      });
-    } catch {
-      // Don't fail installation if lock file update fails
-    }
-  }
-
-  // Add to local lock file for project-scoped installs
-  if (successful.length > 0 && !installGlobally) {
-    try {
-      const matchingResult = successful.find((r) => r.skill === skill!.installName);
-      const installDir = matchingResult?.canonicalPath || matchingResult?.path;
-      if (installDir) {
-        const computedHash = await computeSkillFolderHash(installDir);
-        await addSkillToLocalLock(
-          skill.installName,
-          {
-            source: sourceIdentifier,
-            sourceType: 'market',
-            computedHash,
-            version: skill.version,
-            skillId: skill.skillId,
-            authorId: teamId ? undefined : resolved.authorId,
-            ...(teamId ? { teamId } : {}),
-            ...(teamSkillId ? { skillTeamId: teamSkillId } : {}),
-            ...(releaseId ? { releaseId } : {}),
-            ...(teamSkillId ? { teamSkillName: skillName } : {}),
-            ...(writeCollectConsent !== undefined ? { collectConsent: writeCollectConsent } : {}),
-          },
-          cwd
-        );
-      }
-    } catch {
-      // Don't fail installation if lock file update fails
-    }
-  }
 
   if (successful.length > 0) {
     const symlinkFailures = successful.filter((r) => r.mode === 'symlink' && r.symlinkFailed);
@@ -2317,7 +2428,7 @@ export async function handleMarketSkill(
     pc.green('Done!') + pc.dim('  Review skills before use; they run with full agent permissions.')
   );
 
-  return { fallbackToGitHub: false, installed: successful.length > 0 };
+  return { fallbackToGitHub: false, installed: results.length > 0 && failed.length === 0 };
 }
 
 export async function runAdd(args: string[], options: AddOptions = {}): Promise<void> {
@@ -2983,7 +3094,7 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
     }
 
     // Add to skill lock file for update tracking (only for global installs)
-    if (successful.length > 0 && installGlobally && normalizedSource) {
+    if (successful.length > 0 && failed.length === 0 && installGlobally && normalizedSource) {
       const successfulSkillNames = new Set(successful.map((r) => r.skill));
       for (const skill of selectedSkills) {
         const skillDisplayName = getSkillDisplayName(skill);
@@ -3020,7 +3131,7 @@ export async function runAdd(args: string[], options: AddOptions = {}): Promise<
     }
 
     // Add to local lock file for project-scoped installs
-    if (successful.length > 0 && !installGlobally) {
+    if (successful.length > 0 && failed.length === 0 && !installGlobally) {
       const successfulSkillNames = new Set(successful.map((r) => r.skill));
       for (const skill of selectedSkills) {
         const skillDisplayName = getSkillDisplayName(skill);

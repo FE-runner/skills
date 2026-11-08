@@ -639,6 +639,7 @@ async function runUpdate(args: string[] = []): Promise<void> {
   console.log();
 
   const updates: Array<{ name: string; installUrl: string }> = [];
+  const checkErrors: Array<{ name: string; error: string }> = [];
   let checkedCount = 0;
 
   if (isGlobal) {
@@ -654,12 +655,17 @@ async function runUpdate(args: string[] = []): Promise<void> {
         checkedCount++;
         try {
           const checkResult = await checkMarketLockEntry(skillName, entry);
-          if (checkResult.hasUpdate) {
+          if (checkResult.error) {
+            checkErrors.push({ name: skillName, error: checkResult.error });
+          } else if (checkResult.hasUpdate) {
             const installUrl = buildMarketUpdateInstallSource(skillName, entry);
             updates.push({ name: skillName, installUrl });
           }
-        } catch {
-          // 跳过检查失败的技能
+        } catch (error) {
+          checkErrors.push({
+            name: skillName,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
         }
       } else if (entry.sourceType === 'github' && entry.skillFolderHash && entry.skillPath) {
         checkedCount++;
@@ -675,8 +681,11 @@ async function runUpdate(args: string[] = []): Promise<void> {
             const installUrl = buildUpdateInstallSource(entry);
             updates.push({ name: skillName, installUrl });
           }
-        } catch {
-          // 跳过检查失败的技能
+        } catch (error) {
+          checkErrors.push({
+            name: skillName,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
         }
       } else {
         // 无法自动检查的技能
@@ -696,8 +705,21 @@ async function runUpdate(args: string[] = []): Promise<void> {
       return;
     }
 
-    if (updates.length === 0) {
+    if (updates.length === 0 && checkErrors.length === 0) {
       console.log(`${TEXT}✓ All skills are up to date${RESET}`);
+      printSkippedSkills(skipped);
+      console.log();
+      return;
+    }
+
+    if (checkErrors.length > 0) {
+      console.log(`${DIM}Could not check ${checkErrors.length} skill(s)${RESET}`);
+      for (const item of checkErrors) {
+        console.log(`  ${DIM}✗${RESET} ${item.name}: ${item.error}`);
+      }
+      console.log();
+    }
+    if (updates.length === 0) {
       printSkippedSkills(skipped);
       console.log();
       return;
@@ -769,12 +791,17 @@ async function runUpdate(args: string[] = []): Promise<void> {
         checkedCount++;
         try {
           const checkResult = await checkMarketLockEntry(skillName, entry);
-          if (checkResult.hasUpdate) {
+          if (checkResult.error) {
+            checkErrors.push({ name: skillName, error: checkResult.error });
+          } else if (checkResult.hasUpdate) {
             const installUrl = buildMarketUpdateInstallSource(skillName, entry);
             updates.push({ name: skillName, installUrl });
           }
-        } catch {
-          // 跳过检查失败的技能
+        } catch (error) {
+          checkErrors.push({
+            name: skillName,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
         }
       }
     }
@@ -785,8 +812,20 @@ async function runUpdate(args: string[] = []): Promise<void> {
       return;
     }
 
-    if (updates.length === 0) {
+    if (updates.length === 0 && checkErrors.length === 0) {
       console.log(`${TEXT}✓ All skills are up to date${RESET}`);
+      console.log();
+      return;
+    }
+
+    if (checkErrors.length > 0) {
+      console.log(`${DIM}Could not check ${checkErrors.length} skill(s)${RESET}`);
+      for (const item of checkErrors) {
+        console.log(`  ${DIM}✗${RESET} ${item.name}: ${item.error}`);
+      }
+      console.log();
+    }
+    if (updates.length === 0) {
       console.log();
       return;
     }

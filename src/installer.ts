@@ -34,7 +34,7 @@ import { parseSkillMd } from './skills.ts';
 
 export type InstallMode = 'symlink' | 'copy';
 
-interface InstallResult {
+export interface InstallResult {
   success: boolean;
   path: string;
   canonicalPath?: string;
@@ -670,7 +670,6 @@ export async function installWellKnownSkillForAgent(
     if (installMode === 'copy') {
       await cleanAndCreateDirectory(agentDir);
       await writeSkillFiles(agentDir);
-
       return {
         success: true,
         path: agentDir,
@@ -678,7 +677,7 @@ export async function installWellKnownSkillForAgent(
       };
     }
 
-    // Symlink mode: write to canonical location and symlink to agent location
+    // Symlink mode: write canonical directory and update agent links.
     await cleanAndCreateDirectory(canonicalDir);
     await writeSkillFiles(canonicalDir);
 
@@ -695,7 +694,7 @@ export async function installWellKnownSkillForAgent(
     const symlinkCreated = await createSymlink(canonicalDir, agentDir);
 
     if (!symlinkCreated) {
-      // Symlink failed, fall back to copy
+      // Symlink failed, fall back to copy.
       await cleanAndCreateDirectory(agentDir);
       await writeSkillFiles(agentDir);
 

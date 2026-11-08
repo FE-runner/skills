@@ -27,6 +27,8 @@ export interface LocalSkillLockEntry {
   computedHash: string;
   /** Installed version (market skills only) */
   version?: string;
+  /** 源版本观测构建序列（market 已开启观测目标） */
+  releaseSeq?: number;
   /** Market skill ID for update checking */
   skillId?: string;
   /** Market skill author ID for private skill verification */
@@ -172,11 +174,7 @@ export async function addSkillToLocalLock(
  */
 export async function removeSkillFromLocalLock(skillName: string, cwd?: string): Promise<boolean> {
   const lock = await readLocalLock(cwd);
-
-  if (!(skillName in lock.skills)) {
-    return false;
-  }
-
+  if (!(skillName in lock.skills)) return false;
   delete lock.skills[skillName];
   await writeLocalLock(lock, cwd);
   return true;

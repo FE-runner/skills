@@ -34,6 +34,18 @@ vi.mock('./providers/market.ts', () => ({
     resolve: vi.fn(),
     fetchById: vi.fn(),
     installById: vi.fn(),
+    checkBuildBatch: vi.fn(async (items: Array<Record<string, unknown>>) => ({
+      ok: true,
+      data: {
+        items: items.map((item) => ({
+          ok: true,
+          scope: item.scope,
+          skillId: item.skillId,
+          observabilityEnabled: false,
+          available: true,
+        })),
+      },
+    })),
   },
 }));
 
