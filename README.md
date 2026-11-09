@@ -70,7 +70,7 @@ npx blueai-skills add ./my-local-skills
 | `--copy`                  | 复制文件到 Agent 目录而非使用符号链接                                                                                                              |
 | `-y, --yes`               | 跳过所有确认提示；未指定 `-g` 时默认安装到**项目**，安装方式默认为**符号链接**（多 Agent）或复制（单 Agent）                                       |
 | `--all`                   | 将所有技能安装到所有 Agent，无需确认                                                                                                               |
-| `--observability`         | 本次显式使用可观测版本（项目级与全局均支持）；未传时沿用当前范围已有采集状态与首次询问                                                             |
+| `--observability`         | 本次显式记录 `collectConsent=true` 并跳过询问；安装文件仍由服务端返回的 active artifact 决定                                                       |
 
 ### 示例
 
@@ -108,13 +108,13 @@ npx blueai-skills add ts_<skillTeamId>/<skillName>
 # 安装团队全部技能，指定 Agent 和全局范围，静默执行
 npx blueai-skills add t_<teamId>/<teamName> -a claude-code -g -y
 
-# 项目级安装并显式使用可观测版本
+# 项目级安装并显式同意数据采集
 npx blueai-skills add owner/repo --observability
 
-# 全局安装并显式使用可观测版本
+# 全局安装并显式同意数据采集
 npx blueai-skills add owner/repo -g --observability
 
-# 团队一键安装并显式使用可观测版本
+# 团队一键安装并显式同意数据采集
 npx blueai-skills add t_<teamId>/<teamName> -g --observability
 ```
 
@@ -137,7 +137,7 @@ npx blueai-skills add t_<teamId>/<teamName> -a claude-code -g -y
 npx blueai-skills add ts_<skillTeamId>/<skillName> -a claude-code -g -y
 ```
 
-支持全部 `add` 选项：`--agent`、`--global`、`--copy`、`--yes`、`--observability`。Agent、安装范围和安装方式在循环开始前统一询问一次，后续每个技能静默复用同一配置；项目级与全局安装都会保存各自的采集决定，传 `--observability` 时，团队中带有效采集配置的 Skill 直接安装可观测版本。
+支持全部 `add` 选项：`--agent`、`--global`、`--copy`、`--yes`、`--observability`。Agent、安装范围和安装方式在循环开始前统一询问一次，后续每个技能静默复用同一配置；项目级与全局安装都会保存各自的采集决定。每个团队 Skill 只请求一次 release-bound 安装响应，同一响应既用于识别可观测 Skill 也用于落盘；传 `--observability` 时为参与本次安装的每个 Skill 记录 `collectConsent=true`。
 
 ### 安装范围
 
@@ -286,7 +286,9 @@ npx blueai-skills obs uninstall [--purge]
 npx blueai-skills obs --help
 ```
 
-项目级和全局安装都支持 `--observability`，会跳过采集询问并直接选择可观测版本。采集状态按范围隔离：全局记录在 `~/.agents/.skill-lock.json`，项目级记录在当前项目的 `skills-lock.json`。若本机未安装监测插件：已登录用户会询问是否**自动创建接入记录（主机名命名）并安装 LoongSuite Pilot**；未登录提示先 `login`；`-y`/非交互环境只保留指引不自动执行。
+项目级和全局安装都支持 `--observability`，会跳过采集询问并记录 `collectConsent=true`；它不切换安装文件，CLI 始终安装 Market 返回的 active artifact。采集状态按范围隔离：全局记录在 `~/.agents/.skill-lock.json`，项目级记录在当前项目的 `skills-lock.json`。仅有可观测 Skill 且 `collectConsent=true` 时才引导 LoongSuite Pilot：已登录用户会询问是否**自动创建接入记录（主机名命名）并安装 LoongSuite Pilot**；未登录提示先 `login`；`-y`/非交互环境只保留指引不自动执行。
+
+本 CLI 版本要求 Market 支持“安装请求无 `report`、active artifact + `OBS_VERSION_UNAVAILABLE`”契约，需与 `skills-market` 配套发布；旧 Market 不兼容。
 
 本地联调：默认连生产平台，可用 `SKILLS_SITE` 指向本地服务（如本地平台跑在 3001）：
 
@@ -328,7 +330,7 @@ npx blueai-skills update
 npx blueai-skills update -g
 ```
 
-Market 技能通过版本号比对检测更新；GitHub 技能通过文件夹 hash 比对检测更新。
+Market 技能通过批量构建检测比较 `version + releaseSeq`；同版本产生新观测构建时也会标记更新。安装时在修改目标目录前校验 `buildHash`，再按原逻辑清理并直接写入；多个 Agent 任一目标失败时整次安装返回失败且不推进 lock。GitHub 技能通过文件夹 hash 比对检测更新。CLI 不增加 daemon 或系统定时任务，自动巡检由 BlueFlare 调用 `check/update`。
 
 ### `blueai-skills init`
 

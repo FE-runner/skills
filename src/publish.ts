@@ -296,6 +296,7 @@ export async function runPublish(args: string[]): Promise<void> {
   }
 
   const { data } = pushResult;
+  const teamPublication = data.teamPublication;
   if (isPublic && data.status === 'PENDING') {
     console.log(`✓ 已提交审核`);
     console.log(`  名称: ${data.name}`);
@@ -308,7 +309,15 @@ export async function runPublish(args: string[]): Promise<void> {
     console.log(`  状态: ${data.visibility} / ${data.status}`);
   }
 
-  if (teamIds && teamIds.length > 0) {
+  if (teamPublication) {
+    console.error(
+      `部分成功: Skill 已推送，但团队发布失败 (HTTP ${teamPublication.status}): ${teamPublication.message}`
+    );
+    console.error(
+      `  已推送版本: ${data.currentVersion}；不要通过再次 publish 更换版本号重试，可单独重试团队发布`
+    );
+    process.exitCode = 1;
+  } else if (teamIds && teamIds.length > 0) {
     console.log(`✓ 已提交团队审核: ${teamIds.join(', ')}`);
   }
 }

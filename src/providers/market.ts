@@ -1,6 +1,7 @@
 import type { RemoteSkill } from './types.ts';
 import type { ApiResult } from '../types.ts';
 import { SKILLS_SITE } from '../branding.ts';
+import { getApiKey } from '../auth.ts';
 
 /**
  * Unwrap the API envelope: { code, message, data } → data
@@ -160,7 +161,10 @@ export interface MarketSkill extends RemoteSkill {
   version: string;
   /** SHA-256 based folder hash for update detection */
   skillFolderHash: string;
-  /** 采集改造信息（fetchById 传 report=true 且作者开启时带返） */
+  observabilityEnabled: boolean;
+  releaseSeq?: number;
+  buildHash?: string;
+  /** 采集改造信息；存在合法 config + meta.blueai_signature 表示可观测 Skill */
   collect?: unknown;
   /**
    * `binaryFiles` 中未通过严格 Base64 校验的条目（`<path>: <原因>`）。
@@ -181,6 +185,13 @@ export interface TeamSkillInstallTarget {
   releaseId: string;
 }
 
+export interface TeamPublicationWarning {
+  success: false;
+  teamIds: string[];
+  status: number;
+  message: string;
+}
+
 /**
  * Install API response shape from the market.
  */
@@ -195,8 +206,27 @@ interface InstallResponse {
   /** 二进制文件（标准 Base64，无 data URI 前缀）；没有二进制文件时该字段不出现 */
   binaryFiles?: Record<string, string>;
   skillFolderHash: string;
-  /** 采集改造信息：report=true 且作者开启采集时返回（含 config.meta 签名与改造版 files） */
+  observabilityEnabled: boolean;
+  releaseSeq?: number;
+  buildHash?: string;
+  /** 采集改造信息：目标版本可观测时返回（含 config.meta 签名与改造版 files） */
   collect?: unknown;
+}
+
+export type BuildCheckTarget =
+  | { scope: 'PUBLIC' | 'PRIVATE'; skillId: string; authorId?: string }
+  | { scope: 'TEAM'; skillId: string; teamId: string; releaseId: string };
+
+export interface BuildCheckResult {
+  ok: boolean;
+  scope: 'PUBLIC' | 'PRIVATE' | 'TEAM';
+  skillId: string;
+  version?: string;
+  observabilityEnabled?: boolean;
+  releaseSeq?: number;
+  buildHash?: string;
+  available?: boolean;
+  error?: { code: string; message: string };
 }
 
 /**
@@ -313,42 +343,131 @@ export class MarketProvider {
   }
 
   /**
-   * Install a skill by its market ID.
-   * Pass `author` for private skills (userId format).
-   * Pass `team` for team skills (teamId format),优先于 author。
+   * 按 Market ID 安装 Skill，并保留失败状态码与服务端错误码。
+   *
+   * 安装接口始终返回目标版本当前可用产物；`report` 已从契约移除。
+   * `author` 用于私有 Skill，`team` 优先于 author；团队安装必须携带 releaseId。
+   */
+  async installById(
+    skillId: string,
+    version?: string,
+    author?: string,
+    team?: string,
+    releaseId?: string,
+    expectedReleaseSeq?: number
+  ): Promise<ApiResult<MarketSkill>> {
+    const body: Record<string, string | number> = { id: skillId };
+    if (version) body.version = version;
+    if (team) {
+      body.team = team;
+      if (releaseId) body.releaseId = releaseId;
+    } else if (author) body.author = author;
+    if (expectedReleaseSeq !== undefined) body.releaseSeq = expectedReleaseSeq;
+    const apiKey = team ? getApiKey() : null;
+
+    const result = await requestApiResult<InstallResponse>(`${this.apiBase}/api/skill/install`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+    if (!result.ok) return result;
+    if (
+      result.data.observabilityEnabled === true &&
+      (result.data.releaseSeq === undefined || !result.data.buildHash)
+    ) {
+      return {
+        ok: false,
+        status: 0,
+        message: 'Market 观测构建响应缺少 releaseSeq/buildHash，已按 fail-closed 终止',
+      };
+    }
+    if (
+      expectedReleaseSeq !== undefined &&
+      result.data.observabilityEnabled === true &&
+      result.data.releaseSeq !== expectedReleaseSeq
+    ) {
+      return {
+        ok: false,
+        status: 409,
+        code: 'BUILD_CHANGED',
+        message: '观测构建已变化，请重新检测后安装',
+      };
+    }
+
+    try {
+      return { ok: true, data: this.toMarketSkill(result.data, skillId) };
+    } catch (err) {
+      return {
+        ok: false,
+        status: 0,
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  /**
+   * 兼容只读调用：不关心失败分类时返回 MarketSkill 或 null。
+   * 安装主流程应使用 installById()，以保留 409 OBS_VERSION_UNAVAILABLE 等错误码。
    */
   async fetchById(
     skillId: string,
     version?: string,
     author?: string,
     team?: string,
-    report?: boolean,
     releaseId?: string
   ): Promise<MarketSkill | null> {
-    try {
-      const body: Record<string, string | boolean> = { id: skillId };
-      if (version) body.version = version;
-      if (team) {
-        body.team = team;
-        if (releaseId) body.releaseId = releaseId;
-      } else if (author) body.author = author;
-      // Market 契约（SkillInstallBody）report 为 boolean；发字符串 'true' 会被
-      // 路由的 `body.report === true` 判 false，导致采集配置永不下发
-      if (report) body.report = true;
-      const url = `${this.apiBase}/api/skill/install`;
+    const result = await this.installById(skillId, version, author, team, releaseId);
+    return result.ok ? result.data : null;
+  }
 
-      const res = await fetch(url, {
+  async checkBuildBatch(
+    items: BuildCheckTarget[]
+  ): Promise<ApiResult<{ items: BuildCheckResult[] }>> {
+    if (items.length === 0) return { ok: true, data: { items: [] } };
+    const apiKey = getApiKey();
+    const result = await requestApiResult<{ items: BuildCheckResult[] }>(
+      `${this.apiBase}/api/skill/build/checkBatch`,
+      {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) return null;
-
-      const data = unwrapEnvelope<InstallResponse>(await res.json());
-      return this.toMarketSkill(data, skillId);
-    } catch {
-      return null;
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+        },
+        body: JSON.stringify({ items }),
+      }
+    );
+    if (!result.ok) return result;
+    const responseItems = result.data?.items;
+    if (
+      !Array.isArray(responseItems) ||
+      responseItems.length !== items.length ||
+      responseItems.some((item, index) => {
+        const expected = items[index];
+        return (
+          !expected ||
+          !item ||
+          typeof item.ok !== 'boolean' ||
+          item.scope !== expected.scope ||
+          item.skillId !== expected.skillId ||
+          (item.ok &&
+            (typeof item.version !== 'string' ||
+              item.version.length === 0 ||
+              typeof item.observabilityEnabled !== 'boolean' ||
+              (item.observabilityEnabled === true &&
+                (typeof item.releaseSeq !== 'number' || !Number.isInteger(item.releaseSeq)))))
+        );
+      })
+    ) {
+      return {
+        ok: false,
+        status: 0,
+        message: 'Market 批量构建检测响应不完整或顺序不一致',
+      };
     }
+    return result;
   }
 
   /**
@@ -386,6 +505,7 @@ export class MarketProvider {
       currentVersion: string;
       visibility: string;
       status: string;
+      teamPublication?: TeamPublicationWarning;
     }>
   > {
     const body: Record<string, unknown> = { skillMd };
@@ -408,6 +528,7 @@ export class MarketProvider {
       currentVersion: string;
       visibility: string;
       status: string;
+      teamPublication?: TeamPublicationWarning;
     }>(`${this.apiBase}/api/skill/push`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -424,6 +545,7 @@ export class MarketProvider {
         currentVersion: data.currentVersion,
         visibility: data.visibility,
         status: data.status,
+        ...(data.teamPublication ? { teamPublication: data.teamPublication } : {}),
       },
     };
   }
@@ -582,6 +704,9 @@ export class MarketProvider {
       files,
       skillId,
       skillFolderHash: data.skillFolderHash,
+      observabilityEnabled: data.observabilityEnabled === true,
+      ...(data.releaseSeq !== undefined ? { releaseSeq: data.releaseSeq } : {}),
+      ...(data.buildHash !== undefined ? { buildHash: data.buildHash } : {}),
       ...(data.collect !== undefined ? { collect: data.collect } : {}),
       ...(binaryFileErrors.length > 0 ? { binaryFileErrors } : {}),
     };

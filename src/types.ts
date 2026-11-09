@@ -93,7 +93,7 @@ export interface ParsedSource {
 
 /**
  * 统一的 API 调用结果判别联合类型。
- * 供 `MarketProvider` 新增的写操作方法（push/publishToTeam/withdraw/resolveMine）使用，
+ * 供 `MarketProvider` 需要保留失败分类的方法（installById/push/publishToTeam/withdraw/resolveMine）使用，
  * 保留 HTTP 状态码、服务端错误码/消息/校验详情，不像既有只读方法那样把失败折叠成 null。
  */
 export type ApiResult<T> =

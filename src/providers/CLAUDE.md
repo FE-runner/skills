@@ -36,7 +36,8 @@ import { wellKnownProvider, cosProvider, marketProvider } from './providers/inde
 | 方法 | 说明 |
 | --- | --- |
 | `resolve(name, author?)` | 按名称（+可选作者）解析技能，返回 `ResolveResponse \| null` |
-| `fetchById(...)` | 按 ID 拉取技能内容 |
+| `installById(...)` | 按 ID 安装 Skill，返回可保留 HTTP/业务错误码的 `ApiResult<MarketSkill>` |
+| `fetchById(...)` | 兼容包装：按 ID 拉取技能内容，失败返回 `null` |
 | `check(skillId, author?)` | 检查更新（供 `skills check` 使用） |
 | `push(...)` | 推送 SKILL.md + 附属文件到 Market（`skills publish` 核心调用） |
 | `publishToTeam(...)` | 发布后分发给团队（`publish --team <id1,id2>`） |

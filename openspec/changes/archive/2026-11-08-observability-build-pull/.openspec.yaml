@@ -1,0 +1,6 @@
+schema: spec-driven
+created: 2026-11-06
+lyx:
+  isolation: branch
+  sourceBranch: develop
+  developmentBranch: feature/one-way-observability-build-delivery
