@@ -1,0 +1,7 @@
+schema: spec-driven
+created: 2026-11-06
+lyx:
+  isolation: worktree
+  sourceBranch: develop
+  developmentBranch: feature/observable-version-gate-cli
+  worktreePath: /Users/ly/.ly/worktrees/skills-cli/feature/observable-version-gate-cli

@@ -395,6 +395,12 @@ describe('parseAddOptions', () => {
     expect(result.source).toEqual(['source']);
     expect(result.options.observability).toBe(true);
   });
+
+  it('should parse the internal collect-consent recheck flag', () => {
+    const result = parseAddOptions(['source', '-y', '--recheck-collect-consent']);
+    expect(result.options.yes).toBe(true);
+    expect(result.options.recheckCollectConsent).toBe(true);
+  });
 });
 
 describe('find-skills prompt with -y flag', () => {

@@ -76,23 +76,22 @@ describe('update-source', () => {
       ).toBe('author-1/private-demo');
     });
 
-    it('uses resolver for a ts_ entry and never calls generic Market check', async () => {
-      const resolveTeam = vi
-        .spyOn(marketProvider, 'resolveTeamSkillInstallTarget')
-        .mockResolvedValue({
-          ok: true,
-          data: {
-            skillTeamId: 'skill-team-a',
-            teamId: 'team-a',
-            teamName: 'Team A',
-            skillId: 'skill-1',
-            skillName: 'demo',
-            displayName: 'Demo',
-            installVersion: '2.0.0',
-            releaseId: 'release-2',
-          },
-        });
-      const genericCheck = vi.spyOn(marketProvider, 'check');
+    it('uses batch build check for a ts_ entry', async () => {
+      const buildCheck = vi.spyOn(marketProvider, 'checkBuildBatch').mockResolvedValue({
+        ok: true,
+        data: {
+          items: [
+            {
+              ok: true,
+              scope: 'TEAM',
+              skillId: 'skill-1',
+              version: '2.0.0',
+              observabilityEnabled: true,
+              releaseSeq: 2,
+            },
+          ],
+        },
+      });
 
       const result = await checkMarketLockEntry('demo', {
         source: 'ts_skill-team-a/demo',
@@ -105,18 +104,17 @@ describe('update-source', () => {
       });
 
       expect(result).toEqual({ hasUpdate: true });
-      expect(resolveTeam).toHaveBeenCalledWith('skill-team-a', 'team-release-name');
-      expect(genericCheck).not.toHaveBeenCalled();
+      expect(buildCheck).toHaveBeenCalledWith([
+        {
+          scope: 'TEAM',
+          skillId: 'skill-1',
+          teamId: 'team-a',
+          releaseId: 'release-1',
+        },
+      ]);
     });
 
-    it('returns resolver failure without generic fallback', async () => {
-      vi.spyOn(marketProvider, 'resolveTeamSkillInstallTarget').mockResolvedValue({
-        ok: false,
-        status: 404,
-        message: 'Team Skill not found',
-      });
-      const genericCheck = vi.spyOn(marketProvider, 'check');
-
+    it('fails closed when a team lock lacks target context', async () => {
       const result = await checkMarketLockEntry('demo', {
         source: 'ts_skill-team-a/demo',
         skillPath: 'skill-1',
@@ -126,26 +124,41 @@ describe('update-source', () => {
         teamSkillName: 'team-release-name',
       });
 
-      expect(result).toEqual({ hasUpdate: false, error: 'Team Skill not found' });
-      expect(genericCheck).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        hasUpdate: false,
+        error: '团队 lock 缺少 teamId/releaseId，请重新 add 后再检查',
+      });
     });
 
-    it('keeps the generic Market check path for entries without skillTeamId', async () => {
-      const genericCheck = vi.spyOn(marketProvider, 'check').mockResolvedValue({
-        currentVersion: '2.0.0',
+    it('compares version and releaseSeq for a private entry', async () => {
+      const buildCheck = vi.spyOn(marketProvider, 'checkBuildBatch').mockResolvedValue({
+        ok: true,
+        data: {
+          items: [
+            {
+              ok: true,
+              scope: 'PRIVATE',
+              skillId: 'skill-1',
+              version: '2.0.0',
+              observabilityEnabled: true,
+              releaseSeq: 4,
+            },
+          ],
+        },
       });
-      const resolveTeam = vi.spyOn(marketProvider, 'resolveTeamSkillInstallTarget');
 
       const result = await checkMarketLockEntry('private-demo', {
         source: 'market/author-1/private-demo',
         skillId: 'skill-1',
         version: '1.0.0',
+        releaseSeq: 3,
         authorId: 'author-1',
       });
 
       expect(result).toEqual({ hasUpdate: true });
-      expect(genericCheck).toHaveBeenCalledWith('skill-1', 'author-1');
-      expect(resolveTeam).not.toHaveBeenCalled();
+      expect(buildCheck).toHaveBeenCalledWith([
+        { scope: 'PRIVATE', skillId: 'skill-1', authorId: 'author-1' },
+      ]);
     });
   });
 });

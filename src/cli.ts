@@ -160,9 +160,9 @@ ${BOLD}Observability:${RESET}
   obs uninstall [--purge]  Uninstall LoongSuite Pilot on this machine
                            (--purge also deletes local data in ~/.loongsuite-pilot)
 ${BOLD}Collection Consent:${RESET}
-  track list               List global skills and their collection-consent status (on/off/未定夺)
-  track on <skill>         Install the monitored build for a global skill (consent=true)
-  track off <skill>        Revert to the original build for a global skill (consent=false)
+  track list               List global skills and their collection-consent status
+  track on <skill>         Record consent=true for a global skill (no reinstall)
+  track off <skill>        Record consent=false for a global skill (no reinstall)
 ${BOLD}Publishing:${RESET}
   login <api-key>          Save your Skills Market API Key for publish/withdraw
   whoami                   Show the user your API Key is currently logged in as
@@ -189,7 +189,7 @@ ${BOLD}Add Options:${RESET}
   --copy                 Copy files instead of symlinking to agent directories
   --all                  Shorthand for --skill '*' --agent '*' -y
   --full-depth           Search all subdirectories even when a root SKILL.md exists
-  --observability        Use the monitored build for project or global installs
+  --observability        Record collection consent=true and skip the consent prompt
 
 ${BOLD}Remove Options:${RESET}
   -g, --global           Remove from global scope
@@ -213,8 +213,8 @@ ${BOLD}Options:${RESET}
 
 ${BOLD}Track Options:${RESET}
   track list               List global skills and their collection consent status
-  track on <skill>         Install the monitored build (consent=true)
-  track off <skill>        Revert to the original build (consent=false)
+  track on <skill>         Record consent=true without reinstalling
+  track off <skill>        Record consent=false without reinstalling
 
 ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ${BIN_NAME} add ${EXAMPLE_REPO}
@@ -259,8 +259,8 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ${BIN_NAME} obs uninstall               ${DIM}# uninstall LoongSuite Pilot (--purge removes local data)${RESET}
 
   ${DIM}$${RESET} ${BIN_NAME} track list                       ${DIM}# list collection consent for global skills${RESET}
-  ${DIM}$${RESET} ${BIN_NAME} track on my-skill                ${DIM}# switch to monitored build + consent=true${RESET}
-  ${DIM}$${RESET} ${BIN_NAME} track off my-skill               ${DIM}# revert to original build + consent=false${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} track on my-skill                ${DIM}# record collection consent=true${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} track off my-skill               ${DIM}# record collection consent=false${RESET}
 
 Discover more skills at ${TEXT}${SKILLS_SITE}/${RESET}
 `);
@@ -639,6 +639,7 @@ async function runUpdate(args: string[] = []): Promise<void> {
   console.log();
 
   const updates: Array<{ name: string; installUrl: string }> = [];
+  const checkErrors: Array<{ name: string; error: string }> = [];
   let checkedCount = 0;
 
   if (isGlobal) {
@@ -654,12 +655,17 @@ async function runUpdate(args: string[] = []): Promise<void> {
         checkedCount++;
         try {
           const checkResult = await checkMarketLockEntry(skillName, entry);
-          if (checkResult.hasUpdate) {
+          if (checkResult.error) {
+            checkErrors.push({ name: skillName, error: checkResult.error });
+          } else if (checkResult.hasUpdate) {
             const installUrl = buildMarketUpdateInstallSource(skillName, entry);
             updates.push({ name: skillName, installUrl });
           }
-        } catch {
-          // 跳过检查失败的技能
+        } catch (error) {
+          checkErrors.push({
+            name: skillName,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
         }
       } else if (entry.sourceType === 'github' && entry.skillFolderHash && entry.skillPath) {
         checkedCount++;
@@ -675,8 +681,11 @@ async function runUpdate(args: string[] = []): Promise<void> {
             const installUrl = buildUpdateInstallSource(entry);
             updates.push({ name: skillName, installUrl });
           }
-        } catch {
-          // 跳过检查失败的技能
+        } catch (error) {
+          checkErrors.push({
+            name: skillName,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
         }
       } else {
         // 无法自动检查的技能
@@ -696,8 +705,21 @@ async function runUpdate(args: string[] = []): Promise<void> {
       return;
     }
 
-    if (updates.length === 0) {
+    if (updates.length === 0 && checkErrors.length === 0) {
       console.log(`${TEXT}✓ All skills are up to date${RESET}`);
+      printSkippedSkills(skipped);
+      console.log();
+      return;
+    }
+
+    if (checkErrors.length > 0) {
+      console.log(`${DIM}Could not check ${checkErrors.length} skill(s)${RESET}`);
+      for (const item of checkErrors) {
+        console.log(`  ${DIM}✗${RESET} ${item.name}: ${item.error}`);
+      }
+      console.log();
+    }
+    if (updates.length === 0) {
       printSkippedSkills(skipped);
       console.log();
       return;
@@ -722,11 +744,15 @@ async function runUpdate(args: string[] = []): Promise<void> {
         );
         continue;
       }
-      const result = spawnSync(process.execPath, [cliEntry, 'add', update.installUrl, '-g', '-y'], {
-        stdio: ['inherit', 'pipe', 'pipe'],
-        encoding: 'utf-8',
-        shell: process.platform === 'win32',
-      });
+      const result = spawnSync(
+        process.execPath,
+        [cliEntry, 'add', update.installUrl, '-g', '-y', '--recheck-collect-consent'],
+        {
+          stdio: 'inherit',
+          encoding: 'utf-8',
+          shell: process.platform === 'win32',
+        }
+      );
 
       if (result.status === 0) {
         successCount++;
@@ -765,12 +791,17 @@ async function runUpdate(args: string[] = []): Promise<void> {
         checkedCount++;
         try {
           const checkResult = await checkMarketLockEntry(skillName, entry);
-          if (checkResult.hasUpdate) {
+          if (checkResult.error) {
+            checkErrors.push({ name: skillName, error: checkResult.error });
+          } else if (checkResult.hasUpdate) {
             const installUrl = buildMarketUpdateInstallSource(skillName, entry);
             updates.push({ name: skillName, installUrl });
           }
-        } catch {
-          // 跳过检查失败的技能
+        } catch (error) {
+          checkErrors.push({
+            name: skillName,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
         }
       }
     }
@@ -781,8 +812,20 @@ async function runUpdate(args: string[] = []): Promise<void> {
       return;
     }
 
-    if (updates.length === 0) {
+    if (updates.length === 0 && checkErrors.length === 0) {
       console.log(`${TEXT}✓ All skills are up to date${RESET}`);
+      console.log();
+      return;
+    }
+
+    if (checkErrors.length > 0) {
+      console.log(`${DIM}Could not check ${checkErrors.length} skill(s)${RESET}`);
+      for (const item of checkErrors) {
+        console.log(`  ${DIM}✗${RESET} ${item.name}: ${item.error}`);
+      }
+      console.log();
+    }
+    if (updates.length === 0) {
       console.log();
       return;
     }
@@ -797,10 +840,10 @@ async function runUpdate(args: string[] = []): Promise<void> {
     for (const update of updates) {
       console.log(`${TEXT}Updating ${update.name}...${RESET}`);
 
-      const flags = ['-y'];
+      const flags = ['-y', '--recheck-collect-consent'];
       const selfArgs = [process.argv[1]!, 'add', update.installUrl, ...flags];
       const result = spawnSync(process.execPath, selfArgs, {
-        stdio: ['inherit', 'pipe', 'pipe'],
+        stdio: 'inherit',
       });
 
       if (result.status === 0) {
@@ -892,7 +935,9 @@ async function main(): Promise<void> {
         showHelp();
         break;
       }
-      showLogo();
+      if (!restArgs.includes('--recheck-collect-consent')) {
+        showLogo();
+      }
       const { source: addSource, options: addOpts } = parseAddOptions(restArgs);
       await runAdd(addSource, addOpts);
       break;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getCollectFailureReason, hasValidCollect } from './collect.ts';
+import { hasValidCollect } from './collect.ts';
 
 describe('hasValidCollect', () => {
   it('accepts collect with config and blueai_signature', () => {
@@ -10,7 +10,7 @@ describe('hasValidCollect', () => {
     ).toBe(true);
   });
 
-  it('rejects failure fallback with only reason', () => {
+  it('rejects collect with only reason', () => {
     expect(hasValidCollect({ collect: { reason: 'frontmatter 解析失败' } })).toBe(false);
   });
 
@@ -29,18 +29,8 @@ describe('hasValidCollect', () => {
       })
     ).toBe(false);
   });
-});
 
-describe('getCollectFailureReason', () => {
-  it('returns reason for failure fallback', () => {
-    expect(getCollectFailureReason({ collect: { reason: '改造失败' } })).toBe('改造失败');
-  });
-
-  it('returns undefined for valid collect', () => {
-    expect(
-      getCollectFailureReason({
-        collect: { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } },
-      })
-    ).toBeUndefined();
+  it('rejects non-object collect', () => {
+    expect(hasValidCollect({ collect: 'signature' })).toBe(false);
   });
 });

@@ -27,6 +27,8 @@ export interface LocalSkillLockEntry {
   computedHash: string;
   /** Installed version (market skills only) */
   version?: string;
+  /** 源版本观测构建序列（market 已开启观测目标） */
+  releaseSeq?: number;
   /** Market skill ID for update checking */
   skillId?: string;
   /** Market skill author ID for private skill verification */
@@ -39,7 +41,7 @@ export interface LocalSkillLockEntry {
   releaseId?: string;
   /** Team release name used by `ts_` resolver; may differ from install directory name */
   teamSkillName?: string;
-  /** 采集知情同意（三态）：缺失 = 首次未定夺；true = 开（监测版）；false = 关（原版）。 */
+  /** 采集知情同意（三态）：缺失 = 首次未定夺；true = 同意统计；false = 拒绝统计。 */
   collectConsent?: boolean;
 }
 
@@ -172,11 +174,7 @@ export async function addSkillToLocalLock(
  */
 export async function removeSkillFromLocalLock(skillName: string, cwd?: string): Promise<boolean> {
   const lock = await readLocalLock(cwd);
-
-  if (!(skillName in lock.skills)) {
-    return false;
-  }
-
+  if (!(skillName in lock.skills)) return false;
   delete lock.skills[skillName];
   await writeLocalLock(lock, cwd);
   return true;

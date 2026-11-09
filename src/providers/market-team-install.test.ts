@@ -6,12 +6,12 @@ describe('MarketProvider team install', () => {
     vi.unstubAllGlobals();
   });
 
-  it('sends id, team, version, releaseId and report with team priority', async () => {
+  it('sends id, team, version and releaseId with team priority, without report', async () => {
     const fetchMock = vi.fn(
       async (_url: string, _init?: RequestInit) =>
         new Response(
           JSON.stringify({
-            code: 0,
+            code: 'SUCCESS',
             data: {
               name: 'team-skill',
               description: 'desc',
@@ -29,14 +29,7 @@ describe('MarketProvider team install', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const provider = new MarketProvider();
-    const result = await provider.fetchById(
-      'skill-1',
-      '2.0.0',
-      'author-1',
-      'team-1',
-      true,
-      'release-1'
-    );
+    const result = await provider.fetchById('skill-1', '2.0.0', 'author-1', 'team-1', 'release-1');
 
     expect(result?.version).toBe('2.0.0');
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
@@ -45,7 +38,6 @@ describe('MarketProvider team install', () => {
       version: '2.0.0',
       team: 'team-1',
       releaseId: 'release-1',
-      report: true,
     });
     expect(body).not.toHaveProperty('author');
   });

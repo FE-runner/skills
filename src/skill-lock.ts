@@ -28,6 +28,8 @@ export interface SkillLockEntry {
   skillFolderHash: string;
   /** Installed version (market skills only) */
   version?: string;
+  /** 源版本观测构建序列（market 已开启观测目标） */
+  releaseSeq?: number;
   /** Market skill author ID for private skill verification */
   authorId?: string;
   /** Market Team ID for team release installs */
@@ -38,7 +40,7 @@ export interface SkillLockEntry {
   releaseId?: string;
   /** Team release name used by `ts_` resolver; may differ from install display name */
   teamSkillName?: string;
-  /** 采集知情同意（三态）：缺失 = 首次未定夺；true = 开（监测版）；false = 关（原版） */
+  /** 采集知情同意（三态）：缺失 = 首次未定夺；true = 同意统计；false = 拒绝统计 */
   collectConsent?: boolean;
   /** ISO timestamp when the skill was first installed */
   installedAt: string;
@@ -249,16 +251,28 @@ export async function addSkillToLock(
 ): Promise<void> {
   const lock = await readSkillLock();
   const now = new Date().toISOString();
-
   const existingEntry = lock.skills[skillName];
-
   lock.skills[skillName] = {
     ...entry,
     installedAt: existingEntry?.installedAt ?? now,
     updatedAt: now,
   };
-
   await writeSkillLock(lock);
+}
+
+/**
+ * 只更新采集同意状态，保留版本、hash、team/release 等其它 lock 字段。
+ */
+export async function setSkillCollectConsent(
+  skillName: string,
+  collectConsent: boolean
+): Promise<boolean> {
+  const lock = await readSkillLock();
+  const entry = lock.skills[skillName];
+  if (!entry) return false;
+  entry.collectConsent = collectConsent;
+  await writeSkillLock(lock);
+  return true;
 }
 
 /**
@@ -266,11 +280,7 @@ export async function addSkillToLock(
  */
 export async function removeSkillFromLock(skillName: string): Promise<boolean> {
   const lock = await readSkillLock();
-
-  if (!(skillName in lock.skills)) {
-    return false;
-  }
-
+  if (!(skillName in lock.skills)) return false;
   delete lock.skills[skillName];
   await writeSkillLock(lock);
   return true;
@@ -337,9 +347,7 @@ export async function isPromptDismissed(promptKey: keyof DismissedPrompts): Prom
  */
 export async function dismissPrompt(promptKey: keyof DismissedPrompts): Promise<void> {
   const lock = await readSkillLock();
-  if (!lock.dismissed) {
-    lock.dismissed = {};
-  }
+  if (!lock.dismissed) lock.dismissed = {};
   lock.dismissed[promptKey] = true;
   await writeSkillLock(lock);
 }
