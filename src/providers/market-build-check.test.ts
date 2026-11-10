@@ -45,7 +45,7 @@ describe('Market build contract', () => {
     expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
   });
 
-  it('TEAM checkBuildBatch 携带鉴权', async () => {
+  it('TEAM checkBuildBatch 不携带鉴权', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       response({
         items: [
@@ -72,7 +72,7 @@ describe('Market build contract', () => {
     ]);
     expect(result.ok).toBe(true);
     const init = fetchMock.mock.calls[0]![1] as RequestInit;
-    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer sk-build-check');
+    expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
   });
 
   it('checkBuildBatch 遇到空项时返回 fail-closed，而不是抛出 TypeError', async () => {

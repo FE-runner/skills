@@ -1,4 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('../auth.ts', () => ({
+  getApiKey: vi.fn(() => 'sk-team-install'),
+}));
+
 import { MarketProvider } from './market.ts';
 
 describe('MarketProvider team install', () => {
@@ -40,6 +45,9 @@ describe('MarketProvider team install', () => {
       releaseId: 'release-1',
     });
     expect(body).not.toHaveProperty('author');
+    expect(
+      (fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>).Authorization
+    ).toBeUndefined();
   });
 
   it('keeps legacy team install body when releaseId is omitted', async () => {

@@ -363,14 +363,10 @@ export class MarketProvider {
       if (releaseId) body.releaseId = releaseId;
     } else if (author) body.author = author;
     if (expectedReleaseSeq !== undefined) body.releaseSeq = expectedReleaseSeq;
-    const apiKey = team ? getApiKey() : null;
 
     const result = await requestApiResult<InstallResponse>(`${this.apiBase}/api/skill/install`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
     if (!result.ok) return result;
@@ -427,15 +423,11 @@ export class MarketProvider {
     items: BuildCheckTarget[]
   ): Promise<ApiResult<{ items: BuildCheckResult[] }>> {
     if (items.length === 0) return { ok: true, data: { items: [] } };
-    const apiKey = items.some((item) => item.scope === 'TEAM') ? getApiKey() : null;
     const result = await requestApiResult<{ items: BuildCheckResult[] }>(
       `${this.apiBase}/api/skill/build/checkBatch`,
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items }),
       }
     );
