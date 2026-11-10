@@ -427,7 +427,7 @@ export class MarketProvider {
     items: BuildCheckTarget[]
   ): Promise<ApiResult<{ items: BuildCheckResult[] }>> {
     if (items.length === 0) return { ok: true, data: { items: [] } };
-    const apiKey = getApiKey();
+    const apiKey = items.some((item) => item.scope === 'TEAM') ? getApiKey() : null;
     const result = await requestApiResult<{ items: BuildCheckResult[] }>(
       `${this.apiBase}/api/skill/build/checkBatch`,
       {

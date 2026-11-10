@@ -18,13 +18,40 @@ function response(data: unknown): Response {
 }
 
 describe('Market build contract', () => {
-  it('checkBuildBatch 只发送目标身份并保留顺序', async () => {
+  it.each([
+    { scope: 'PUBLIC' as const, skillId: 'skill-a' },
+    { scope: 'PRIVATE' as const, skillId: 'skill-a', authorId: 'author-a' },
+  ])('$scope checkBuildBatch 只发送目标身份且不携带鉴权', async (item) => {
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as {
+        items: Array<Record<string, unknown>>;
+      };
+      return response({
+        items: body.items.map((target) => ({
+          ok: true,
+          ...target,
+          version: '1.0.0',
+          observabilityEnabled: false,
+          available: true,
+        })),
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await marketProvider.checkBuildBatch([item]);
+    expect(result.ok).toBe(true);
+    const init = fetchMock.mock.calls[0]![1] as RequestInit;
+    expect(JSON.parse(String(init.body))).toEqual({ items: [item] });
+    expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
+  });
+
+  it('TEAM checkBuildBatch 携带鉴权', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       response({
         items: [
           {
             ok: true,
-            scope: 'PUBLIC',
+            scope: 'TEAM',
             skillId: 'skill-a',
             version: '1.0.0',
             observabilityEnabled: false,
@@ -35,12 +62,16 @@ describe('Market build contract', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await marketProvider.checkBuildBatch([{ scope: 'PUBLIC', skillId: 'skill-a' }]);
+    const result = await marketProvider.checkBuildBatch([
+      {
+        scope: 'TEAM',
+        skillId: 'skill-a',
+        teamId: 'team-a',
+        releaseId: 'release-a',
+      },
+    ]);
     expect(result.ok).toBe(true);
     const init = fetchMock.mock.calls[0]![1] as RequestInit;
-    expect(JSON.parse(String(init.body))).toEqual({
-      items: [{ scope: 'PUBLIC', skillId: 'skill-a' }],
-    });
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer sk-build-check');
   });
 
