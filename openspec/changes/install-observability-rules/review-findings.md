@@ -17,3 +17,21 @@
    建议: 将标题改为“`publish --public --no-collect` 为什么直接报错”或等价表述，正文继续说明不读文件、不请求 Market、不创建版本。
    可自动修复：否
    影响落地：否
+
+## 代码审查
+
+- 执行轮次：3
+- 记录时间：2026-11-16
+- 基线：`19ce40788d82d1e7aa05de5df71bc63185e91790`
+
+1. [src/cli.ts:749; src/cli.ts:843; src/cli.ts:938; src/add.ts:3427] — 旧内部参数 `--recheck-collect-consent` 仍由 update 子进程传入，但 `parseAddOptions` 已不再识别它，参数会被静默忽略；logo 隐藏逻辑仍依赖这个失效参数。当前 update 行为正常，属于后续清理和回归风险。
+   问题细节：update 内部参数接口与解析器不一致。
+   建议: 移除两个 `spawnSync` 参数中的旧 flag，并为嵌套 add 的 logo 隐藏定义独立、受支持的内部机制；补测试核对实际 spawn 参数。
+   可自动修复：否
+   影响落地：否
+
+2. [openspec/specs/cli-skill-collection-consent/spec.md:23; openspec/changes/install-observability-rules/specs/cli-skill-collection-consent/spec.md:5] — Requirement 标题仍为“安装时确定并重新确认 consent”，但现有选择在 lock 为 `true`/`false` 时直接复用，只有缺失时才询问，标题中的“重新确认”已不符合正文和代码。
+   问题细节：标题术语与实际行为不一致。
+   建议: 将两处标题统一改为“安装时确定并复用 consent”或“consent 三态确定与复用”。
+   可自动修复：是
+   影响落地：否
