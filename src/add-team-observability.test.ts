@@ -120,6 +120,7 @@ describe('team install observability confirmation', () => {
     process.exitCode = undefined;
     vi.clearAllMocks();
 
+    vi.mocked(p.select).mockResolvedValue(true);
     vi.mocked(p.confirm).mockResolvedValueOnce(true).mockResolvedValueOnce(true);
     vi.mocked(getApiKey).mockReturnValue('sk-test');
     vi.mocked(getAllLockedSkills).mockResolvedValue({});
@@ -209,9 +210,14 @@ describe('team install observability confirmation', () => {
       copy: true,
     });
 
-    const messages = vi.mocked(p.confirm).mock.calls.map(([options]) => options.message);
-    expect(messages.some((message) => message.includes('数据采集'))).toBe(true);
-    expect(messages.some((message) => message.includes('LoongSuite Pilot'))).toBe(true);
+    const messages = vi.mocked(p.select).mock.calls.map(([options]) => options.message);
+    expect(messages.some((message) => message.includes('观测方式'))).toBe(true);
+    expect(p.note).toHaveBeenCalledWith(expect.stringContaining('开启观测后'), '开发者改进计划');
+    expect(
+      vi
+        .mocked(p.confirm)
+        .mock.calls.some(([options]) => options.message.includes('LoongSuite Pilot'))
+    ).toBe(true);
     expect(createRecordAndInstallPilot).toHaveBeenCalledTimes(1);
     expect(marketProvider.resolve).not.toHaveBeenCalled();
     for (const call of vi.mocked(marketProvider.installById).mock.calls) {
@@ -317,7 +323,7 @@ describe('team install observability confirmation', () => {
     );
   });
 
-  it('reconfirms an existing team opt-out once when interactive', async () => {
+  it('reuses an existing team opt-out without reopening the choice', async () => {
     const baseEntry = {
       source: 'market/skill-a',
       sourceType: 'market',
@@ -343,14 +349,10 @@ describe('team install observability confirmation', () => {
       copy: true,
     });
 
-    const consentPrompt = vi
-      .mocked(p.confirm)
-      .mock.calls.map(([options]) => options.message)
-      .find((message) => message.includes('上次选择不采集'));
-    expect(consentPrompt).toBeDefined();
+    expect(p.select).not.toHaveBeenCalled();
     expect(addSkillToLock).toHaveBeenCalledWith(
       'skill-a',
-      expect.objectContaining({ teamId: 'team-id', collectConsent: true })
+      expect.objectContaining({ teamId: 'team-id', collectConsent: false })
     );
     expect(addSkillToLock).toHaveBeenCalledWith(
       'skill-b',
@@ -446,7 +448,7 @@ describe('team install observability confirmation', () => {
     expect(addSkillToLock).not.toHaveBeenCalled();
   });
 
-  it('records consent=true without probing when an explicit team skill is non-observable', async () => {
+  it('ignores explicit observability for a non-observable team skill', async () => {
     vi.mocked(p.confirm).mockReset();
     vi.mocked(marketProvider.installById).mockImplementation(
       async (id: string, _version?: string, _author?: string) =>
@@ -469,7 +471,8 @@ describe('team install observability confirmation', () => {
 
     const noCollectCall = vi.mocked(addSkillToLock).mock.calls.find(([name]) => name === 'skill-b');
 
-    expect(noCollectCall?.[1]).toMatchObject({ collectConsent: true });
+    expect(noCollectCall?.[1]).toMatchObject({ teamId: 'team-id' });
+    expect(noCollectCall?.[1]).not.toHaveProperty('collectConsent');
     expect(marketProvider.installById).toHaveBeenCalledTimes(2);
   });
 

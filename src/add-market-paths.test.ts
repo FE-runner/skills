@@ -197,6 +197,7 @@ describe('market install paths', () => {
   });
 
   it('asks once for project-level collection consent and keeps the same file', async () => {
+    vi.mocked(p.select).mockResolvedValue(true);
     vi.mocked(p.confirm).mockResolvedValue(true);
     vi.mocked(marketProvider.installById).mockResolvedValue({
       ok: true,
@@ -213,8 +214,9 @@ describe('market install paths', () => {
       p.spinner()
     );
 
-    expect(p.confirm).toHaveBeenCalledWith(
-      expect.objectContaining({ message: expect.stringContaining('是否同意数据采集') })
+    expect(p.note).toHaveBeenCalledWith(expect.stringContaining('开启观测后'), '开发者改进计划');
+    expect(p.select).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining('请选择观测方式') })
     );
     expect(marketProvider.installById).toHaveBeenCalledTimes(1);
     expect(addSkillToLocalLock).toHaveBeenCalledWith(
@@ -294,7 +296,8 @@ describe('market install paths', () => {
     );
   });
 
-  it('reconfirms an existing project-level collection opt-out when interactive', async () => {
+  it('reuses an existing project-level collection opt-out when interactive', async () => {
+    vi.mocked(p.confirm).mockResolvedValue(true);
     vi.mocked(readLocalLock).mockResolvedValue({
       version: 1,
       skills: {
@@ -312,8 +315,6 @@ describe('market install paths', () => {
         collect: { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } },
       }),
     } as never);
-    vi.mocked(p.confirm).mockResolvedValue(true);
-
     await handleMarketSkill(
       'demo',
       { type: 'market', url: 'demo', marketName: 'demo' },
@@ -326,18 +327,16 @@ describe('market install paths', () => {
       p.spinner()
     );
 
-    expect(p.confirm).toHaveBeenCalledWith(
-      expect.objectContaining({ message: expect.stringContaining('上次选择不采集') })
-    );
+    expect(p.select).not.toHaveBeenCalled();
     expect(marketProvider.installById).toHaveBeenCalledTimes(1);
     expect(addSkillToLocalLock).toHaveBeenCalledWith(
       'demo',
-      expect.objectContaining({ collectConsent: true }),
+      expect.objectContaining({ collectConsent: false }),
       expect.any(String)
     );
   });
 
-  it('reconfirms an existing opt-out during update when the internal recheck flag is set', async () => {
+  it('reuses an existing opt-out during update even when the internal recheck flag is set', async () => {
     vi.mocked(readLocalLock).mockResolvedValue({
       version: 1,
       skills: {
@@ -355,15 +354,12 @@ describe('market install paths', () => {
         collect: { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } },
       }),
     } as never);
-    vi.mocked(p.confirm).mockResolvedValue(true);
-
     await handleMarketSkill(
       'demo',
       { type: 'market', url: 'demo', marketName: 'demo' },
       {
         agent: ['claude-code'],
         yes: true,
-        recheckCollectConsent: true,
         copy: true,
         global: false,
         skipPilotStatus: true,
@@ -371,12 +367,10 @@ describe('market install paths', () => {
       p.spinner()
     );
 
-    expect(p.confirm).toHaveBeenCalledWith(
-      expect.objectContaining({ message: expect.stringContaining('上次选择不采集') })
-    );
+    expect(p.select).not.toHaveBeenCalled();
     expect(addSkillToLocalLock).toHaveBeenCalledWith(
       'demo',
-      expect.objectContaining({ collectConsent: true }),
+      expect.objectContaining({ collectConsent: false }),
       expect.any(String)
     );
   });
@@ -421,7 +415,7 @@ describe('market install paths', () => {
     );
   });
 
-  it('writes consent=true for explicit observability on a non-observable response', async () => {
+  it('ignores explicit observability on a non-observable response', async () => {
     vi.mocked(marketProvider.installById).mockResolvedValue({
       ok: true,
       data: marketSkill('demo'),
@@ -443,10 +437,10 @@ describe('market install paths', () => {
 
     expect(addSkillToLocalLock).toHaveBeenCalledWith(
       'demo',
-      expect.objectContaining({ collectConsent: true }),
+      expect.not.objectContaining({ collectConsent: expect.anything() }),
       expect.any(String)
     );
-    expect(p.log.warn).toHaveBeenCalledWith(expect.stringContaining('安装响应不含合法可观测信息'));
+    expect(p.log.warn).toHaveBeenCalledWith(expect.stringContaining('--observability 已忽略'));
   });
 
   it('stops before writing when an explicit observability build hash does not match', async () => {
