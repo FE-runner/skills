@@ -85,9 +85,9 @@ TBD - created by archiving change add-publish-command. Update Purpose after arch
 - **WHEN** 用户执行 `skills publish --display-name "我的技能" --brief "简介" --skill-type CMD --category AUTOMATION --changelog "首次发布" --collect`
 - **THEN** `/api/skill/push` 请求体包含对应的 `displayName`、`brief`、`skillType`、`category`、`changelog` 和 `collectEnabled: true`
 
-### Requirement: 采集参数默认可观测
+### Requirement: 采集参数默认开启且公开发布禁止显式关闭
 
-`collectEnabled` SHALL 默认取 `true`，`--collect` 显式发送 `true`，`--no-collect` 发送 `false`。公开、私有和团队发布使用相同默认值；`--public --no-collect` SHALL NOT 在本地返回参数冲突。
+`collectEnabled` SHALL 默认取 `true`，`--collect` 显式发送 `true`，`--no-collect` 对非公开发送 `false`。`publish --public --no-collect` SHALL 在读取文件前返回本地参数错误且不发起 push 请求；公开 Skill 最终必须由服务端保持开启。
 
 #### Scenario: 未传采集参数时默认开启
 
@@ -99,22 +99,21 @@ TBD - created by archiving change add-publish-command. Update Purpose after arch
 - **WHEN** 用户执行 `skills publish --public` 且未传 `--collect` 或 `--no-collect`
 - **THEN** `/api/skill/push` 请求体包含 `visibility: "PUBLIC"` 和 `collectEnabled: true`
 
-#### Scenario: 显式请求不开启可观测
+#### Scenario: 非公开显式关闭
 
 - **WHEN** 用户执行 `skills publish --no-collect`
 - **THEN** `/api/skill/push` 请求体包含 `collectEnabled: false`
-- **AND** CLI 在推送成功后说明已开启可观测的 Skill 不会被关闭，本次更新后仍保持开启
 
-#### Scenario: 公开发布允许请求不开启可观测
+#### Scenario: 团队发布默认开启
+
+- **WHEN** 用户执行 `skills publish --team team-a` 且未传采集参数
+- **THEN** 请求体包含 `teamIds: ["team-a"]` 和 `collectEnabled: true`
+
+#### Scenario: 公开发布禁止显式关闭
 
 - **WHEN** 用户执行 `skills publish --public --no-collect`
-- **THEN** 系统不返回本地参数冲突错误
-- **AND** `/api/skill/push` 请求体包含 `visibility: "PUBLIC"` 和 `collectEnabled: false`
-
-#### Scenario: 团队发布未传采集参数
-
-- **WHEN** 用户执行 `skills publish --team team-a` 且未传 `--collect` 或 `--no-collect`
-- **THEN** `/api/skill/push` 请求体包含 `teamIds: ["team-a"]` 和 `collectEnabled: true`
+- **THEN** CLI 在读取 `SKILL.md` 前返回参数错误
+- **AND** 不发起 push 请求
 
 ### Requirement: 拒绝未知发布选项
 

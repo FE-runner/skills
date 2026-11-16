@@ -97,9 +97,9 @@ describe('publish', () => {
       expect(opts.teamIds).toEqual(['team-a']);
     });
 
-    it('allows --public together with --no-collect', () => {
+    it('rejects --public together with --no-collect', () => {
       const opts = parsePublishOptions(['--public', '--no-collect']);
-      expect(opts.error).toBeUndefined();
+      expect(opts.error).toContain('公开发布必须开启可观测');
       expect(opts.public).toBe(true);
       expect(opts.collectEnabled).toBe(false);
     });
@@ -598,29 +598,22 @@ describe('publish', () => {
       expect(metadata).toMatchObject({ collectEnabled: true });
     });
 
-    it('allows --public --no-collect and requests observability remain off', async () => {
-      vi.mocked(marketProvider.push).mockResolvedValue({
-        ok: true,
-        data: {
-          skillId: 's1',
-          name: 'my-skill',
-          currentVersion: '',
-          visibility: 'PUBLIC',
-          status: 'PENDING',
-        },
-      });
-
+    it('rejects --public --no-collect before reading files', async () => {
+      rmSync(join(dir, 'SKILL.md'));
       await runPublish([dir, '--public', '--no-collect']);
 
-      expect(process.exitCode).toBeUndefined();
-      const [, , , , visibility, , metadata] = vi.mocked(marketProvider.push).mock.calls[0]!;
-      expect(visibility).toBe('PUBLIC');
-      expect(metadata).toMatchObject({ collectEnabled: false });
+      expect(process.exitCode).toBe(1);
+      expect(marketProvider.push).not.toHaveBeenCalled();
       expect(
-        logSpy.mock.calls.some((args: unknown[]) =>
-          String(args[0]).includes('可观测一旦开启后不可关闭')
+        errorSpy.mock.calls.some(([message]: unknown[]) =>
+          String(message).includes('公开发布必须开启')
         )
       ).toBe(true);
+      expect(
+        errorSpy.mock.calls.some(([message]: unknown[]) =>
+          String(message).includes('SKILL.md 不存在')
+        )
+      ).toBe(false);
     });
 
     it('ignores legacy Market force source fields without printing them', async () => {

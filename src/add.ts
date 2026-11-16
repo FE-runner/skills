@@ -434,12 +434,47 @@ export interface AddOptions {
   collectConsent?: boolean;
   /** 本次显式写入 collectConsent=true 并跳过询问；不切换安装文件来源 */
   observability?: true;
+  /** 内部嵌套调用隐藏 Logo，不参与安装行为 */
+  skipLogo?: true;
   /** 团队流程已统一处理监测插件状态，跳过单 Skill 的重复检查 */
   skipPilotStatus?: boolean;
   /** 团队预取的单次安装响应；设置后不再请求 Market */
   prefetchedMarketSkill?: MarketSkill;
-  /** update 内部重装时即使带 -y，也允许对可观测 Skill 重新确认采集同意 */
-  recheckCollectConsent?: boolean;
+}
+
+const OBSERVABILITY_CONSENT_NOTICE = [
+  '开启观测后，Skill 开发者只会收到脱敏后的 Skill 级使用与执行数据，',
+  '用于发现失败动作、改进和优化 Skill；不收集非 Skill 的其他 trace 数据，',
+  '也不包含个人隐私或商业隐私信息。',
+  '',
+  '关闭观测后，不采集该 Skill 的任何 trace 日志，',
+  '开发者无法据此对 Skill 做出有效优化。',
+  '',
+  '请明确选择：开启观测 / 关闭观测',
+].join('\n');
+
+async function promptObservabilityConsent(message: string): Promise<boolean> {
+  p.note(OBSERVABILITY_CONSENT_NOTICE, '开发者改进计划');
+  for (;;) {
+    const selected = await p.select({
+      message,
+      initialValue: '__unset__',
+      options: [
+        { value: '__unset__', label: '请选择观测方式', hint: '必须先移动光标并明确选择' },
+        { value: 'on', label: '开启观测', hint: '仅采集该 Skill 的脱敏级观测数据' },
+        { value: 'off', label: '关闭观测', hint: '不启用观测统计' },
+      ],
+    });
+    if (p.isCancel(selected)) {
+      p.cancel('Installation cancelled');
+      process.exit(0);
+    }
+    if (selected === '__unset__') {
+      p.log.warn('请先选择开启观测或关闭观测');
+      continue;
+    }
+    return selected === 'on';
+  }
 }
 
 /**
@@ -1474,6 +1509,7 @@ async function handleTeamInstall(
   options: AddOptions,
   spinner: ReturnType<typeof p.spinner>
 ): Promise<void> {
+  const canPrompt = process.stdin.isTTY && !options.yes && !process.env.CI;
   spinner.start(`Fetching skills for team "${teamName}"...`);
 
   let teamData: TeamInstallData | null = null;
@@ -1532,7 +1568,7 @@ async function handleTeamInstall(
     const installedAgents = await detectInstalledAgents();
     const validAgents = Object.keys(agents) as AgentType[];
 
-    if (installedAgents.length === 1 || options.yes) {
+    if (installedAgents.length === 1 || !canPrompt) {
       targetAgents = ensureUniversalAgents(
         installedAgents.length > 0 ? installedAgents : validAgents
       );
@@ -1563,7 +1599,7 @@ async function handleTeamInstall(
   // scope 选择（project vs global），仅在未通过 --global 指定且非 -y 模式时交互
   let installGlobally = options.global ?? false;
   const supportsGlobal = targetAgents.some((a) => agents[a]?.globalSkillsDir !== undefined);
-  if (options.global === undefined && !options.yes && supportsGlobal) {
+  if (options.global === undefined && canPrompt && supportsGlobal) {
     const scope = await p.select({
       message: 'Installation scope',
       options: [
@@ -1580,7 +1616,7 @@ async function handleTeamInstall(
 
   // 安装方式选择（symlink vs copy），仅在未通过 --copy 指定且非 -y 模式时交互
   let useCopy = options.copy ?? false;
-  if (!options.copy && !options.yes) {
+  if (!options.copy && canPrompt) {
     const modeChoice = await p.select({
       message: 'Installation method',
       options: [
@@ -1615,7 +1651,8 @@ async function handleTeamInstall(
     teamId,
     options,
     installGlobally,
-    cwd
+    cwd,
+    canPrompt
   );
   if (teamInstallDecision.showPilotStatus) {
     await promptForPilotInstallation(teamInstallDecision.allowPilotPrompt);
@@ -1749,7 +1786,8 @@ async function preflightTeamInstall(
   teamId: string,
   options: AddOptions,
   installGlobally: boolean,
-  cwd: string
+  cwd: string,
+  canPrompt: boolean
 ): Promise<TeamInstallDecision> {
   const installResults = new Map<string, MarketSkill>();
   const consentByKey = new Map<string, boolean>();
@@ -1808,7 +1846,7 @@ async function preflightTeamInstall(
 
     if (hasValidCollect(skill)) {
       const locked = await getTeamSkillConsent(teamId, skill.installName, installGlobally, cwd);
-      if (locked === true) {
+      if (locked === true || locked === false) {
         consentByKey.set(key, locked);
       } else {
         recheckConsentKeys.push(key);
@@ -1817,19 +1855,13 @@ async function preflightTeamInstall(
   }
 
   let recheckedConsent = options.collectConsent;
-  const canPrompt = process.stdin.isTTY && (!options.yes || options.recheckCollectConsent === true);
   if (recheckedConsent === undefined && recheckConsentKeys.length > 0) {
     if (!canPrompt) {
       recheckedConsent = false;
     } else {
-      const confirmed = await p.confirm({
-        message: `本团队有 ${recheckConsentKeys.length} 个可观测 skill 需要重新确认数据采集（上次选择不采集或尚未定夺，安装文件不变），是否同意统计？`,
-      });
-      if (p.isCancel(confirmed)) {
-        p.cancel('Installation cancelled');
-        process.exit(0);
-      }
-      recheckedConsent = !!confirmed;
+      recheckedConsent = await promptObservabilityConsent(
+        `本团队有 ${recheckConsentKeys.length} 个可观测 Skill 尚未选择观测方式，请选择`
+      );
     }
   }
 
@@ -1847,7 +1879,7 @@ async function preflightTeamInstall(
     consentByKey,
     failures,
     showPilotStatus: hasEnabledObservable,
-    allowPilotPrompt: hasEnabledObservable && !options.yes && !!process.stdin.isTTY,
+    allowPilotPrompt: hasEnabledObservable && canPrompt,
   };
 }
 
@@ -1906,6 +1938,7 @@ export async function handleMarketSkill(
   options: AddOptions,
   spinner: ReturnType<typeof p.spinner>
 ): Promise<{ fallbackToGitHub: boolean; installed: boolean }> {
+  const canPrompt = process.stdin.isTTY && !options.yes && !process.env.CI;
   // Name-based install: [author/]name[@version]
   let skillName = parsed.marketName || source;
   let author = parsed.marketAuthor;
@@ -2080,9 +2113,11 @@ export async function handleMarketSkill(
     spinner.stop(`${totalAgents} agents`);
 
     if (installedAgents.length === 0) {
-      if (options.yes) {
+      if (!canPrompt) {
         targetAgents = validAgents as AgentType[];
-        p.log.info('Installing to all agents');
+        p.log.info(
+          options.yes ? 'Installing to all agents' : 'Non-interactive: installing to all agents'
+        );
       } else {
         p.log.info('Select agents to install skills to');
 
@@ -2103,9 +2138,9 @@ export async function handleMarketSkill(
 
         targetAgents = selected as AgentType[];
       }
-    } else if (installedAgents.length === 1 || options.yes) {
-      // -y 项目安装时，优先使用项目中已有的 agent 目录
-      if (options.yes && !options.global) {
+    } else if (installedAgents.length === 1 || !canPrompt) {
+      // 非交互项目安装时，优先使用项目中已有的 agent 目录
+      if (!canPrompt && !options.global) {
         const projectAgents = await detectProjectAgents();
         if (projectAgents.length > 0) {
           targetAgents = ensureUniversalAgents(projectAgents);
@@ -2139,7 +2174,7 @@ export async function handleMarketSkill(
 
   const supportsGlobal = targetAgents.some((a) => agents[a].globalSkillsDir !== undefined);
 
-  if (options.global === undefined && !options.yes && supportsGlobal) {
+  if (options.global === undefined && canPrompt && supportsGlobal) {
     const scope = await p.select({
       message: 'Installation scope',
       options: [
@@ -2166,7 +2201,7 @@ export async function handleMarketSkill(
 
   let installMode: InstallMode = options.copy ? 'copy' : 'symlink';
 
-  if (!options.copy && !options.yes) {
+  if (!options.copy && canPrompt) {
     const modeChoice = await p.select({
       message: 'Installation method',
       options: [
@@ -2205,20 +2240,20 @@ export async function handleMarketSkill(
     : `可稍后运行 ${pc.cyan(`${BIN_NAME} add ${displayName} --observability`)} 开启`;
 
   if (options.observability === true) {
-    writeCollectConsent = true;
-    if (!collectCapable) {
+    if (collectCapable) {
+      writeCollectConsent = true;
+    } else {
+      writeCollectConsent = locked === 'missing' ? undefined : locked;
       p.log.warn(
-        `「${skill.installName}」安装响应不含合法可观测信息；已按 --observability 记录统计同意，安装文件保持本次响应内容。`
+        `「${skill.installName}」未提供可观测能力，--observability 已忽略；未修改观测同意状态。`
       );
     }
   } else if (collectCapable) {
-    if (locked === true) {
-      writeCollectConsent = true;
+    if (locked === true || locked === false) {
+      writeCollectConsent = locked;
     } else if (options.collectConsent !== undefined) {
       writeCollectConsent = options.collectConsent;
     } else {
-      const canPrompt =
-        process.stdin.isTTY && (!options.yes || options.recheckCollectConsent === true);
       if (!canPrompt) {
         writeCollectConsent = false;
         p.log.message(
@@ -2227,13 +2262,9 @@ export async function handleMarketSkill(
           )
         );
       } else {
-        const confirmed = await p.confirm({
-          message:
-            locked === false
-              ? `「${skill.installName}」上次选择不采集，本次是否改为同意数据采集？(安装文件不变，${toggleHint})`
-              : `「${skill.installName}」包含可观测文件，是否同意数据采集？(安装文件不变，${toggleHint})`,
-        });
-        writeCollectConsent = !p.isCancel(confirmed) && !!confirmed;
+        writeCollectConsent = await promptObservabilityConsent(
+          `「${skill.installName}」首次安装，请选择观测方式（安装文件不变，${toggleHint}）`
+        );
       }
     }
   } else if (locked !== 'missing') {
@@ -2243,7 +2274,7 @@ export async function handleMarketSkill(
 
   // 只有可观测 Skill 且最终同意统计时才引导采集插件。
   if (collectCapable && writeCollectConsent === true && !options.skipPilotStatus) {
-    await promptForPilotInstallation(!options.yes);
+    await promptForPilotInstallation(canPrompt);
   }
 
   // Build installation summary
@@ -2259,7 +2290,7 @@ export async function handleMarketSkill(
   console.log();
   p.note(summaryLines.join('\n'), 'Installation Summary');
 
-  if (!options.yes) {
+  if (canPrompt) {
     const confirmed = await p.confirm({ message: 'Proceed with installation?' });
 
     if (p.isCancel(confirmed) || !confirmed) {
@@ -3405,8 +3436,8 @@ export function parseAddOptions(args: string[]): { source: string[]; options: Ad
       options.copy = true;
     } else if (arg === '--observability') {
       options.observability = true;
-    } else if (arg === '--recheck-collect-consent') {
-      options.recheckCollectConsent = true;
+    } else if (arg === '--no-logo') {
+      options.skipLogo = true;
     } else if (arg && !arg.startsWith('-')) {
       source.push(arg);
     }

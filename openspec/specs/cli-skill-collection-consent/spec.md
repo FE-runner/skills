@@ -2,7 +2,7 @@
 
 ## Purpose
 
-为 `skills` CLI 用户提供 Skill 采集知情同意与状态管理：可观测 Skill 在首次安装以及后续交互重装、更新时确认统计同意，`collectConsent=true` 永久复用，`false` 在后续交互安装中重新确认。以当前 scope 对应 lock 的 `skills[<skillName>].collectConsent` 三态判定采集状态。全局安装复用 `.agents/.skill-lock.json`（开发版与正式版一致），项目级安装复用项目根目录的 `skills-lock.json`，均不新建独立状态文件。`track list/on/off` 仍只管理全局技能且只改写 consent；项目级技能可再次执行 `add --observability` 显式同意统计。
+为 `skills` CLI 用户提供 Skill 采集知情同意与状态管理：可观测 Skill 首次交互安装时必须明确选择，`collectConsent=true` 或 `false` 在后续安装中直接复用，非交互首次安装默认关闭；`--observability` 仅对可观测 Skill 强制同意。以当前 scope 对应 lock 的 `skills[<skillName>].collectConsent` 三态判定采集状态。全局安装复用 `.agents/.skill-lock.json`（开发版与正式版一致），项目级安装复用项目根目录的 `skills-lock.json`，均不新建独立状态文件。`track list/on/off` 仍只管理全局技能且只改写 consent；项目级技能可再次执行 `add --observability` 显式同意统计。
 
 ## Requirements
 
@@ -20,43 +20,60 @@ CLI SHALL 仅在安装响应含对象型 `collect.config` 与非空字符串 `co
 - **WHEN** 未显式传 `--observability`，且响应不含 `collect` 或 `collect` 缺少 config/签名
 - **THEN** CLI 不询问采集，不写 `collectConsent`
 
-### Requirement: 安装时确定并重新确认 consent
+### Requirement: 安装时确定并复用 consent
 
-`add` 安装 Skill 时 SHALL 只请求一次目标版本安装产物。若 Skill 可观测且当前 scope lock 的 `collectConsent` 为 `true`，CLI SHALL 复用同意状态且不重复询问。`collectConsent` 缺失或为 `false` 时，交互安装、重装和 `update` SHALL 询问是否同意统计：同意写 `true`，拒绝写 `false`。无论选择为何，落盘文件均为同一份服务端响应。非交互环境 SHALL 保持 `false` 且不询问。
+`add` 安装可观测 Skill 时 SHALL 只请求一次目标版本安装产物。当前 scope lock 缺少 `collectConsent` 时，交互安装 SHALL 在展示“开发者改进计划”声明后要求用户明确选择开启或关闭，选择项 SHALL NOT 预选；非交互安装 SHALL 默认写入 `false` 且不中断。lock 已有 `true` 或 `false` 时 CLI SHALL 直接复用，不得重复询问。显式 `--observability` SHALL 优先写入 `true`。无论选择为何，落盘文件均为同一份服务端响应。
 
 #### Scenario: 首次同意
 
-- **WHEN** 可观测 Skill 首次安装，用户同意统计
-- **THEN** CLI 安装响应文件并写 `collectConsent=true`
+- **WHEN** 可观测 Skill 首次交互安装且 lock 缺少 `collectConsent`，用户选择开启
+- **THEN** CLI 写 `collectConsent=true`
 
 #### Scenario: 首次拒绝
 
-- **WHEN** 可观测 Skill 首次安装，用户拒绝统计
-- **THEN** CLI 仍安装同一份响应文件并写 `collectConsent=false`
+- **WHEN** 可观测 Skill 首次交互安装且 lock 缺少 `collectConsent`，用户选择关闭
+- **THEN** CLI 写 `collectConsent=false`
 
-#### Scenario: 已拒绝后交互重装或更新
+#### Scenario: 选择无预选
 
-- **WHEN** 当前 scope lock 的 `collectConsent=false`，用户交互重装或执行 `update`
-- **THEN** CLI 再次询问是否同意统计，并仅在用户同意时改为 `collectConsent=true`
+- **WHEN** CLI 展示首次安装采集选择
+- **THEN** 开启和关闭均不处于默认选中状态
 
 #### Scenario: 已同意后重装
 
-- **WHEN** 当前 scope lock 的 `collectConsent=true`
-- **THEN** CLI 不重复询问，继续写 `collectConsent=true`
+- **WHEN** lock 的 `collectConsent=true`
+- **THEN** CLI 不重复询问并继续写 `true`
+
+#### Scenario: 已拒绝后交互重装或更新
+
+- **WHEN** lock 的 `collectConsent=false`
+- **THEN** CLI 不重复询问并继续写 `false`
 
 #### Scenario: 非交互安装
 
-- **WHEN** `-y` 或非 TTY 环境遇到 consent 缺失或 `false` 的可观测 Skill
-- **THEN** CLI 不询问，保持或写 `collectConsent=false`，文件仍为服务端 active artifact
+- **WHEN** `-y`、非 TTY 或 CI 首次遇到 lock 缺少选择的可观测 Skill
+- **THEN** CLI 不询问、写 `collectConsent=false` 并继续安装
+
+#### Scenario: 显式开启覆盖旧拒绝
+
+- **WHEN** 用户执行 `add <skill> --observability` 且 lock 原为 `false`
+- **THEN** CLI 写 `collectConsent=true`
 
 ### Requirement: add --observability 只强制 consent
 
-`add --observability` SHALL 在本次安装写 `collectConsent=true` 并跳过询问。该开关 SHALL NOT 触发额外安装请求，也 SHALL NOT 在可观测产物不可用时回退原版。非可观测 Skill 仍安装原版，但显式 flag 仍写 `true`，不额外探测。
+`add --observability` SHALL 在安装响应可观测时写 `collectConsent=true` 并跳过询问。该开关 SHALL NOT 触发额外安装请求，也 SHALL NOT 在可观测产物不可用时回退原版。响应不可观测时，该参数 SHALL 被忽略：正常安装，SHALL NOT 写入或修改 `collectConsent`，SHALL NOT 报错。
 
 #### Scenario: 显式打开 consent
 
 - **WHEN** 用户执行 `add <skill> --observability` 且响应为可观测 Skill
-- **THEN** CLI 安装该响应文件一次并写 consent=true
+- **THEN** CLI 安装该响应文件一次并写 `collectConsent=true`
+
+#### Scenario: 显式开启不可观测 Skill
+
+- **WHEN** 用户执行 `add <skill> --observability` 且响应不可观测
+- **THEN** CLI 正常安装并忽略该参数
+- **AND** 不写 `collectConsent=true`
+- **AND** 不修改已有 `collectConsent`
 
 #### Scenario: 可观测版本不可用
 
@@ -77,35 +94,47 @@ CLI SHALL 仅在安装响应含对象型 `collect.config` 与非空字符串 `co
 - **WHEN** 可观测 Skill 安装且 consent=false
 - **THEN** CLI 不提示 Pilot、不自动安装插件，但仍落盘服务端文件
 
-### Requirement: 团队安装一次询问 consent
+### Requirement: 团队安装一次确定、复用或询问 consent
 
-团队批量安装 SHALL 在安装前收集团队内可观测 Skill，并对 consent 缺失或为 `false` 的项发起一次团队级询问；`true` 项直接复用并不参与重复询问。同意时把待确认项写 `true`，拒绝或非交互时保持或写 `false`。显式传 `--observability` 时跳过询问，并为本次团队安装参与的每个 Skill 写 `true`，包括响应不可观测的 Skill。每个 Skill 的文件均来自各自一次安装响应；CLI SHALL NOT 用 `report` 探测或替换包。安装失败的 Skill SHALL NOT 写 `collectConsent`。
+团队批量安装 SHALL 在安装前收集团队内可观测 Skill，并对 lock 缺少 `collectConsent` 的项发起一次团队级明确选择；lock 已为 `true` 或 `false` 的项直接复用。选择前 SHALL 展示开发者改进计划声明，选择项 SHALL NOT 预选。非交互环境无显式参数时 SHALL 对待定夺项写 `false` 并继续安装。显式 `--observability` 时 SHALL 为安装成功的可观测 Skill 写 `true`。不可观测 Skill SHALL NOT 写 consent；任一 Skill 安装失败时 SHALL NOT 写入或修改该 Skill 的 consent。
 
 #### Scenario: 团队同意
 
-- **WHEN** 团队含 consent 未定夺的可观测 Skill 且用户同意
-- **THEN** 这些 Skill 写 consent=true，文件仍按各自响应安装
+- **WHEN** 团队含首次未定夺的可观测 Skill 且用户选择开启
+- **THEN** 这些 Skill 写 `collectConsent=true`
 
 #### Scenario: 团队拒绝
 
-- **WHEN** 用户拒绝团队级询问
-- **THEN** 这些 Skill 写 consent=false，文件不解包为原版
+- **WHEN** 团队含首次未定夺的可观测 Skill 且用户选择关闭
+- **THEN** 这些 Skill 写 `collectConsent=false`
 
-#### Scenario: 团队已拒绝项重新确认
+#### Scenario: 团队已拒绝项保持拒绝
 
 - **WHEN** 团队安装中某可观测 Skill 的 lock 为 `collectConsent=false`
-- **THEN** 该 Skill 进入同一次团队询问，用户同意后改为 `true`
+- **THEN** CLI 不重新询问并保持 `collectConsent=false`
+
+#### Scenario: 团队静默默认关闭
+
+- **WHEN** 团队批量安装使用 `-y` 且未传观测参数，存在首次未定夺的可观测 Skill
+- **THEN** 这些 Skill 写 `collectConsent=false`
+- **AND** 安装继续
 
 #### Scenario: 团队无可观测 Skill
 
-- **WHEN** 团队内无可观测 Skill
-- **THEN** CLI 不询问；未显式传 `--observability` 时不写 collectConsent
+- **WHEN** 团队批次没有任何可观测 Skill
+- **THEN** CLI 不发起团队级观测选择
+- **AND** 不写 `collectConsent`
 
 #### Scenario: 团队显式开启采集
 
-- **WHEN** 团队安装传入 `--observability`，无论响应是否含合法 `collect`
-- **THEN** CLI 跳过团队询问，并为参与本次安装的每个 Skill 写 `collectConsent=true`
-- **AND** 各 Skill 仍安装服务端返回的响应文件
+- **WHEN** 团队批量安装传入 `--observability`
+- **THEN** 参与本次安装的可观测 Skill 写 `collectConsent=true`
+
+#### Scenario: 团队单项安装失败
+
+- **WHEN** 团队批量安装中某可观测 Skill 安装失败
+- **THEN** CLI 不为该 Skill 写入或修改 `collectConsent`
+- **AND** 其他成功 Skill 继续按团队选择或 lock 复用规则处理
 
 ### Requirement: lock 三态判定采集状态
 

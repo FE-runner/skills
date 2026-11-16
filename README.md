@@ -70,7 +70,7 @@ npx blueai-skills add ./my-local-skills
 | `--copy`                  | 复制文件到 Agent 目录而非使用符号链接                                                                                                              |
 | `-y, --yes`               | 跳过所有确认提示；未指定 `-g` 时默认安装到**项目**，安装方式默认为**符号链接**（多 Agent）或复制（单 Agent）                                       |
 | `--all`                   | 将所有技能安装到所有 Agent，无需确认                                                                                                               |
-| `--observability`         | 本次显式记录 `collectConsent=true` 并跳过询问；安装文件仍由服务端返回的 active artifact 决定                                                       |
+| `--observability`         | 显式开启观测并记录 `collectConsent=true`；不传时交互安装要求选择，`-y`/CI 默认关闭                                                                 |
 
 ### 示例
 
@@ -88,7 +88,7 @@ npx blueai-skills add owner/repo --skill "Skill With Spaces"
 npx blueai-skills add a2ui-components -a claude-code -a opencode
 
 # 非交互式安装（适用于 CI/CD）
-npx blueai-skills add a2ui-components -g -a claude-code -y
+npx blueai-skills add a2ui-components -g -a claude-code -y --observability
 
 # 将仓库中所有技能安装到所有 Agent
 npx blueai-skills add owner/repo --all
@@ -243,22 +243,22 @@ npx blueai-skills withdraw my-skill
 
 `publish` 支持的参数：
 
-| 参数                         | 说明                                                      |
-| ---------------------------- | --------------------------------------------------------- |
-| `[path]`                     | 本地技能目录，缺省为当前目录                              |
-| `--display-name <name>`      | 市场展示名称，不修改 `SKILL.md` 的 `name`                 |
-| `--brief <text>`             | 技能简介，最多 128 个字符；不传时由服务端 AI 生成         |
-| `--skill-type <type>`        | `SKILL`、`TOOL`、`CMD`、`MCP` 或 `PLUGIN`；不传时自动推断 |
-| `--category <name>`          | 技能分类；不传时更新继承原值、新建默认为 `OTHER`          |
-| `--version <x.y.z>`          | 覆盖版本号；不传时由服务端自动递增                        |
-| `--changelog <text>`         | 变更日志，最多 512 个字符；不传时由服务端 AI 生成         |
-| `--public`                   | 发布为公开 Skill，进入审核；默认私有                      |
-| `--collect`                  | 显式开启可观测；默认即开启，开启后不可关闭                |
-| `--no-collect`               | 仅确保尚未开启可观测的 Skill 不开启，不能关闭已经开启的可观测 |
-| `--team <id1,id2>`           | 发布到指定团队，多个团队 ID 用逗号分隔                    |
-| `--api-key <key>`            | 本次请求临时使用指定 API Key                              |
+| 参数                    | 说明                                                          |
+| ----------------------- | ------------------------------------------------------------- |
+| `[path]`                | 本地技能目录，缺省为当前目录                                  |
+| `--display-name <name>` | 市场展示名称，不修改 `SKILL.md` 的 `name`                     |
+| `--brief <text>`        | 技能简介，最多 128 个字符；不传时由服务端 AI 生成             |
+| `--skill-type <type>`   | `SKILL`、`TOOL`、`CMD`、`MCP` 或 `PLUGIN`；不传时自动推断     |
+| `--category <name>`     | 技能分类；不传时更新继承原值、新建默认为 `OTHER`              |
+| `--version <x.y.z>`     | 覆盖版本号；不传时由服务端自动递增                            |
+| `--changelog <text>`    | 变更日志，最多 512 个字符；不传时由服务端 AI 生成             |
+| `--public`              | 发布为公开 Skill，进入审核；默认私有                          |
+| `--collect`             | 显式开启可观测；默认即开启，开启后不可关闭                    |
+| `--no-collect`          | 仅确保尚未开启可观测的 Skill 不开启，不能关闭已经开启的可观测 |
+| `--team <id1,id2>`      | 发布到指定团队，多个团队 ID 用逗号分隔                        |
+| `--api-key <key>`       | 本次请求临时使用指定 API Key                                  |
 
-不传采集参数时默认开启可观测，等价于 `--collect`。可观测状态一旦开启后不可关闭，不区分公开、私有或团队发布范围；使用 `--no-collect` 更新已经开启可观测的 Skill 时，CLI 会提示本次更新后仍保持开启。
+不传采集参数时默认开启可观测，等价于 `--collect`。可观测状态一旦开启后不可关闭，不区分公开、私有或团队发布范围；使用 `--no-collect` 更新已经开启可观测的 Skill 时，CLI 会提示本次更新后仍保持开启。`--public --no-collect` 会在读取文件前由 CLI 本地报错，不会发起 push。
 
 ### Agent 可观测（obs）
 
@@ -291,7 +291,7 @@ npx blueai-skills obs uninstall [--purge]
 npx blueai-skills obs --help
 ```
 
-项目级和全局安装都支持 `--observability`，会跳过采集询问并记录 `collectConsent=true`；它不切换安装文件，CLI 始终安装 Market 返回的 active artifact。采集状态按范围隔离：全局记录在 `~/.agents/.skill-lock.json`，项目级记录在当前项目的 `skills-lock.json`。仅有可观测 Skill 且 `collectConsent=true` 时才引导 LoongSuite Pilot：已登录用户会询问是否**自动创建接入记录（主机名命名）并安装 LoongSuite Pilot**；未登录提示先 `login`；`-y`/非交互环境只保留指引不自动执行。
+项目级和全局安装都支持 `--observability`。该参数显式开启观测；不传时，交互安装会展示开发者改进计划并要求选择，`-y`/CI 环境默认关闭。lock 已有选择时直接复用。它不切换安装文件，CLI 始终安装 Market 返回的 active artifact。采集状态按范围隔离：全局记录在 `~/.agents/.skill-lock.json`，项目级记录在当前项目的 `skills-lock.json`。仅有可观测 Skill 且 `collectConsent=true` 时才引导 LoongSuite Pilot。
 
 本 CLI 版本要求 Market 支持“安装请求无 `report`、active artifact + `OBS_VERSION_UNAVAILABLE`”契约，需与 `skills-market` 配套发布；旧 Market 不兼容。
 

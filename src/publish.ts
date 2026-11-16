@@ -192,6 +192,10 @@ export function parsePublishOptions(args: string[]): PublishOptions {
     }
   }
 
+  if (!error && isPublic && collectEnabled === false) {
+    error = '公开发布必须开启可观测，不能使用 --no-collect';
+  }
+
   return {
     path: resolve(path ?? process.cwd()),
     version,

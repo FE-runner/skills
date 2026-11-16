@@ -1,5 +1,8 @@
 import { marketProvider } from './providers/market.ts';
 
+export const GLOBAL_UPDATE_ADD_FLAGS = ['-g', '-y', '--no-logo'] as const;
+export const LOCAL_UPDATE_ADD_FLAGS = ['-y', '--no-logo'] as const;
+
 export interface UpdateSourceEntry {
   source: string;
   sourceUrl: string;
