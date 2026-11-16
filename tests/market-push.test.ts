@@ -89,4 +89,63 @@ describe('MarketProvider.push', () => {
       collectEnabled: false,
     });
   });
+
+  it('preserves collection force source fields', async () => {
+    mockFetchOnce({
+      code: 'SUCCESS',
+      data: {
+        id: 's1',
+        name: 'my-skill',
+        currentVersion: '',
+        visibility: 'PUBLIC',
+        status: 'PENDING',
+        collectForcedBySignature: true,
+        collectForcedByVisibility: true,
+        collectForcedReason: 'SIGNATURE_FIELD_PRESENT',
+      },
+    });
+    const provider = new MarketProvider();
+
+    const result = await provider.push(
+      '---\nname: my-skill\n---\nbody',
+      [],
+      undefined,
+      'sk-test',
+      'PUBLIC'
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        collectForcedBySignature: true,
+        collectForcedByVisibility: true,
+        collectForcedReason: 'SIGNATURE_FIELD_PRESENT',
+      },
+    });
+  });
+
+  it('normalizes missing force source fields for older Market responses', async () => {
+    mockFetchOnce({
+      code: 'SUCCESS',
+      data: {
+        id: 's1',
+        name: 'my-skill',
+        currentVersion: '1.0.0',
+        visibility: 'PRIVATE',
+        status: 'APPROVED',
+      },
+    });
+    const provider = new MarketProvider();
+
+    const result = await provider.push('---\nname: my-skill\n---\nbody', [], undefined, 'sk-test');
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        collectForcedBySignature: false,
+        collectForcedByVisibility: false,
+        collectForcedReason: null,
+      },
+    });
+  });
 });

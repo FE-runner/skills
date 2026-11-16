@@ -1,17 +1,17 @@
 # 运行状态
 
 - 变更名: consume-observable-upload-contract
-- 阶段: review-plan-fix
+- 阶段: apply-complete
 - 源分支: master
 - 开发分支: feature/unify-observable-upload-signature
 - 执行模式: full-auto
-- 流水线阶段: apply
-- 最后成功 commit: e3cfdaba4b6aebb7eb4ea64bd69d8a5be56eee55（propose）
-- 下一步安全动作: 提交 review-plan 统一修复后立即进入 apply
+- 流水线阶段: review-code
+- 最后成功 commit: 3f18fea（review-plan 快照）
+- 下一步安全动作: 创建 apply 阶段 commit 后立即进入 review-code
 
 ## 任务证据
 
-- 已完成任务: 0/10
+- 已完成任务: 11/11
 
 ## 基线评测
 
@@ -19,11 +19,15 @@
 
 ## 修改后评测（中间）
 
-- cli: not-executed — 尚未进入实施
+- publish/provider: passed — 50/50
+- install/update regression: passed — 42/42
 
 ## 修改后评测（最终）
 
-- cli: not-executed — 尚未进入实施
+- 全量测试: passed — 46 文件、679 用例
+- typecheck: passed — `pnpm type-check`
+- format: passed — `pnpm format:check`
+- build: passed — `pnpm build`
 
 ## 审查状态
 
@@ -33,6 +37,8 @@
 ## 验证
 
 - openspec validate: passed — `openspec validate --changes consume-observable-upload-contract`
+- 任务 1.1-3.2、4.3: passed — publish/provider 50 个测试，安装/更新回归 42 个测试
+- 任务 4.1、4.2: passed — 全量 679/679，typecheck/format/build 均退出 0
 
 ## 裁决
 

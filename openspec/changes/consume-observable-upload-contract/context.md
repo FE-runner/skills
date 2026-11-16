@@ -23,3 +23,10 @@
 
 - 旧 Market 若不返回强制字段，Provider 必须默认 false/null，不阻断发布。
 - 签名和公开同时命中时两个布尔均为 true，但原因码只表达签名优先。
+
+## 实施决策
+
+- 参数冲突在 `parsePublishOptions` 返回 `error`，`runPublish` 在读取 SKILL.md、凭证和网络请求前退出。
+- `runPublish` 计算 `collectEnabled: isPublic ? true : collectEnabled`，PUBLIC 不再受三态透传影响。
+- Provider 对缺失强制字段运行期归一为 false/false/null，响应类型保留可选字段以兼容已有测试替身和旧 Market。
+- README 只说明公开采集约束；外部 companion skill 文档继续作为独立 follow-up。

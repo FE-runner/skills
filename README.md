@@ -235,6 +235,9 @@ npx blueai-skills publish --public
 npx blueai-skills publish --collect
 npx blueai-skills publish --no-collect
 
+# 公开 Skill 必须开启采集；以下冲突组合会在本地直接报错
+npx blueai-skills publish --public --no-collect
+
 # 撤回处于 PENDING 状态的公开 Skill
 npx blueai-skills withdraw my-skill
 ```
@@ -250,8 +253,8 @@ npx blueai-skills withdraw my-skill
 | `--category <name>`          | 技能分类；不传时更新继承原值、新建默认为 `OTHER`          |
 | `--version <x.y.z>`          | 覆盖版本号；不传时由服务端自动递增                        |
 | `--changelog <text>`         | 变更日志，最多 512 个字符；不传时由服务端 AI 生成         |
-| `--public`                   | 发布为公开 Skill，进入审核；默认私有                      |
-| `--collect` / `--no-collect` | 开启或关闭数据采集改造；更新时不传则保持原值              |
+| `--public`                   | 发布为公开 Skill，进入审核，并强制开启数据采集；默认私有  |
+| `--collect` / `--no-collect` | 开启或关闭私有 Skill 采集；`--public --no-collect` 会报错 |
 | `--team <id1,id2>`           | 发布到指定团队，多个团队 ID 用逗号分隔                    |
 | `--api-key <key>`            | 本次请求临时使用指定 API Key                              |
 
