@@ -1,13 +1,13 @@
 # 运行状态
 
 - 变更名: default-observability-publish-policy
-- 阶段: apply
+- 阶段: review-code
 - 源分支: master
 - 开发分支: null
 - 执行模式: full-auto
-- 流水线阶段: apply
-- 最后成功 commit: b13ec72（review-plan 快照）
-- 下一步安全动作: 提交 apply 阶段 commit 后立即进入 review-code
+- 流水线阶段: review-code
+- 最后成功 commit: ea5c027（apply）
+- 下一步安全动作: review-code 已正常清零，可执行 `@lyx-archive`
 
 ## 任务证据
 
@@ -45,6 +45,10 @@
 - review-plan 第 2 轮: 0 个 Critical，4 个 Warning；影响落地=是 Warning 4 由主会话按外部 AGENTS 规则覆盖为可自动修复并已修复，其余 Warning 待快照
 - review-plan 第 3 轮: 0 个 Critical，3 个 Warning；无影响落地项，剩余 Warning 落快照
 - review-plan 终止类型: normal
+- review-code 第 1 轮: 0 个 Critical，2 个 Warning；影响落地=是 Warning 1 已修复，Warning 2 待快照
+- review-code 第 2 轮: 0 个 Critical，1 个 Warning；“全部最新”问题已解决，但同一文档暴露新的失败明细描述问题，已修复
+- review-code 第 3 轮: 0 个 Critical，0 个 Warning；影响落地项已解决，正常清零
+- review-code 终止类型: normal
 
 ## 验证
 

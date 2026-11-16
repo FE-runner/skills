@@ -104,7 +104,7 @@ Checking 2 skill(s) for updates...
 Run npx blueai-skills update to update all skills
 ```
 
-检查失败不会显示为“全部最新”。CLI 会单独列出无法检查的 Skill 和错误原因。
+存在无法检查的 Skill 时，`check` 即使没有发现更新，也可能先输出 `✓ All skills are up to date`。全局 `check` 随后列出无法检查的 Skill 名称和 `source`；项目级 `check` 可能只输出 `Could not check N skill(s)`，不展开名称或具体原因。判断检查结果时不能只看“全部最新”这一行。
 
 ## 更新过程
 
