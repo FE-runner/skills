@@ -1,0 +1,7 @@
+schema: spec-driven
+created: 2026-11-16
+lyx:
+  isolation: branch
+  sourceBranch: master
+  developmentBranch: feature/unify-observable-upload-signature
+  worktreePath: null

@@ -192,6 +192,10 @@ export function parsePublishOptions(args: string[]): PublishOptions {
     }
   }
 
+  if (!error && isPublic && collectEnabled === false) {
+    error = '公开 Skill 必须开启数据采集，不能同时使用 --public 和 --no-collect';
+  }
+
   return {
     path: resolve(path ?? process.cwd()),
     version,
@@ -274,7 +278,7 @@ export async function runPublish(args: string[]): Promise<void> {
       skillType,
       category,
       changelog,
-      collectEnabled,
+      collectEnabled: isPublic ? true : collectEnabled,
     }
   );
   if (!pushResult.ok) {
@@ -307,6 +311,19 @@ export async function runPublish(args: string[]): Promise<void> {
     console.log(`  名称: ${data.name}`);
     console.log(`  版本: ${data.currentVersion}`);
     console.log(`  状态: ${data.visibility} / ${data.status}`);
+  }
+
+  const forcedBySignature = data.collectForcedBySignature ?? false;
+  const forcedByVisibility = data.collectForcedByVisibility ?? false;
+  if (forcedBySignature || forcedByVisibility) {
+    const sources = [
+      ...(forcedBySignature ? ['上传包签名'] : []),
+      ...(forcedByVisibility ? ['公开 Skill'] : []),
+    ].join('、');
+    console.log(`  采集: Market 已强制开启（${sources}）`);
+    if (data.collectForcedReason) {
+      console.log(`  强制来源: ${data.collectForcedReason}`);
+    }
   }
 
   if (teamPublication) {

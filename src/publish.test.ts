@@ -96,6 +96,12 @@ describe('publish', () => {
       expect(opts.teamIds).toEqual(['team-a']);
     });
 
+    it('rejects --public together with --no-collect', () => {
+      const opts = parsePublishOptions(['--public', '--no-collect']);
+      expect(opts.error).toContain('--public');
+      expect(opts.error).toContain('--no-collect');
+    });
+
     it('parses upload metadata options', () => {
       const opts = parsePublishOptions([
         '--display-name',
@@ -492,6 +498,140 @@ describe('publish', () => {
 
       const [, , , , visibility] = vi.mocked(marketProvider.push).mock.calls[0]!;
       expect(visibility).toBe('PUBLIC');
+    });
+
+    it('normalizes collectEnabled=true for PUBLIC requests', async () => {
+      vi.mocked(marketProvider.push).mockResolvedValue({
+        ok: true,
+        data: {
+          skillId: 's1',
+          name: 'my-skill',
+          currentVersion: '',
+          visibility: 'PUBLIC',
+          status: 'PENDING',
+        },
+      });
+
+      await runPublish([dir, '--public']);
+
+      const [, , , , , , metadata] = vi.mocked(marketProvider.push).mock.calls[0]!;
+      expect(metadata).toMatchObject({ collectEnabled: true });
+    });
+
+    it('rejects --public --no-collect before reading files or sending a request', async () => {
+      await runPublish([dir, '--public', '--no-collect']);
+
+      expect(process.exitCode).toBe(1);
+      expect(marketProvider.push).not.toHaveBeenCalled();
+      expect(
+        errorSpy.mock.calls.some((args: unknown[]) =>
+          String(args[0]).includes('公开 Skill 必须开启数据采集')
+        )
+      ).toBe(true);
+    });
+
+    it('prints Market force source for a signature-only response', async () => {
+      vi.mocked(marketProvider.push).mockResolvedValue({
+        ok: true,
+        data: {
+          skillId: 's1',
+          name: 'my-skill',
+          currentVersion: '1.0.0',
+          visibility: 'PRIVATE',
+          status: 'APPROVED',
+          collectForcedBySignature: true,
+          collectForcedByVisibility: false,
+          collectForcedReason: 'SIGNATURE_FIELD_PRESENT',
+        },
+      });
+
+      await runPublish([dir]);
+
+      expect(
+        logSpy.mock.calls.some((args: unknown[]) =>
+          String(args[0]).includes('Market 已强制开启（上传包签名）')
+        )
+      ).toBe(true);
+      expect(
+        logSpy.mock.calls.some((args: unknown[]) =>
+          String(args[0]).includes('SIGNATURE_FIELD_PRESENT')
+        )
+      ).toBe(true);
+    });
+
+    it('prints Market force source for public visibility', async () => {
+      vi.mocked(marketProvider.push).mockResolvedValue({
+        ok: true,
+        data: {
+          skillId: 's1',
+          name: 'my-skill',
+          currentVersion: '',
+          visibility: 'PUBLIC',
+          status: 'PENDING',
+          collectForcedBySignature: false,
+          collectForcedByVisibility: true,
+          collectForcedReason: 'PUBLIC_VISIBILITY',
+        },
+      });
+
+      await runPublish([dir, '--public']);
+
+      expect(
+        logSpy.mock.calls.some((args: unknown[]) =>
+          String(args[0]).includes('Market 已强制开启（公开 Skill）')
+        )
+      ).toBe(true);
+    });
+
+    it('prints both force sources and signature reason when both match', async () => {
+      vi.mocked(marketProvider.push).mockResolvedValue({
+        ok: true,
+        data: {
+          skillId: 's1',
+          name: 'my-skill',
+          currentVersion: '',
+          visibility: 'PUBLIC',
+          status: 'PENDING',
+          collectForcedBySignature: true,
+          collectForcedByVisibility: true,
+          collectForcedReason: 'SIGNATURE_FIELD_PRESENT',
+        },
+      });
+
+      await runPublish([dir, '--public']);
+
+      expect(
+        logSpy.mock.calls.some((args: unknown[]) =>
+          String(args[0]).includes('上传包签名、公开 Skill')
+        )
+      ).toBe(true);
+      expect(
+        logSpy.mock.calls.some((args: unknown[]) =>
+          String(args[0]).includes('SIGNATURE_FIELD_PRESENT')
+        )
+      ).toBe(true);
+    });
+
+    it('does not print force source when neither source matches', async () => {
+      vi.mocked(marketProvider.push).mockResolvedValue({
+        ok: true,
+        data: {
+          skillId: 's1',
+          name: 'my-skill',
+          currentVersion: '0.0.1',
+          visibility: 'PRIVATE',
+          status: 'APPROVED',
+          collectForcedBySignature: false,
+          collectForcedByVisibility: false,
+          collectForcedReason: null,
+        },
+      });
+
+      await runPublish([dir]);
+
+      expect(
+        logSpy.mock.calls.some((args: unknown[]) => String(args[0]).includes('Market 已强制开启'))
+      ).toBe(false);
     });
 
     it('does not pass visibility when --public is omitted', async () => {

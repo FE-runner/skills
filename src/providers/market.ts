@@ -497,6 +497,9 @@ export class MarketProvider {
       currentVersion: string;
       visibility: string;
       status: string;
+      collectForcedBySignature?: boolean;
+      collectForcedByVisibility?: boolean;
+      collectForcedReason?: 'SIGNATURE_FIELD_PRESENT' | 'PUBLIC_VISIBILITY' | null;
       teamPublication?: TeamPublicationWarning;
     }>
   > {
@@ -520,6 +523,9 @@ export class MarketProvider {
       currentVersion: string;
       visibility: string;
       status: string;
+      collectForcedBySignature?: boolean;
+      collectForcedByVisibility?: boolean;
+      collectForcedReason?: 'SIGNATURE_FIELD_PRESENT' | 'PUBLIC_VISIBILITY' | null;
       teamPublication?: TeamPublicationWarning;
     }>(`${this.apiBase}/api/skill/push`, {
       method: 'POST',
@@ -537,6 +543,9 @@ export class MarketProvider {
         currentVersion: data.currentVersion,
         visibility: data.visibility,
         status: data.status,
+        collectForcedBySignature: data.collectForcedBySignature === true,
+        collectForcedByVisibility: data.collectForcedByVisibility === true,
+        collectForcedReason: data.collectForcedReason ?? null,
         ...(data.teamPublication ? { teamPublication: data.teamPublication } : {}),
       },
     };
