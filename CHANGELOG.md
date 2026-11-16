@@ -2,6 +2,24 @@
 
 > 本 CHANGELOG 仅记录 BMC 内部 Fork（`-bmc` 标签）自身的改动，不包含上游 `blueai-skills` 原始项目的版本历史。
 
+## [1.4.7-bmc2.1.0] - 2026-11-16
+
+### 新功能
+
+- **安装观测选择统一**：可观测 Skill 首次交互安装改为无预选必选，lock 已有 `true`/`false` 直接复用；裸 `-y`、非 TTY 和 CI 默认关闭且不中断。
+- **公开发布采集校验**：`publish --public --no-collect` 在读取文件前本地报错，避免发出与公开强制采集冲突的请求。
+
+### 修复
+
+- **非交互安装阻塞**：单 Skill 与团队批量安装统一使用 TTY、`-y`、CI 判断，消除无 TTY 时停在确认框的问题。
+- **占位选择被误接受**：观测选择增加显式 sentinel，回车不会把占位项当作开启。
+- **不可观测 Skill 参数误写**：`add --observability` 对不可观测 Skill 改为 no-op，不写入虚假 consent。
+- **update 内部参数失效**：嵌套 update 改用受支持的 `--no-logo`，移除已失效的采集重确认参数。
+
+### 变更
+
+- **文档与规范**：同步 README、OpenSpec 主规范和 `blueai-skills-cli` 配套 Skill 的安装、发布与排查口径。
+
 ## [1.4.7-bmc1.11.1] - 2026-11-10
 
 ### 修复
