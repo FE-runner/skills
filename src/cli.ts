@@ -26,6 +26,8 @@ import {
   buildUpdateInstallSource,
   checkMarketLockEntry,
   formatSourceInput,
+  GLOBAL_UPDATE_ADD_FLAGS,
+  LOCAL_UPDATE_ADD_FLAGS,
 } from './update-source.ts';
 import {
   NPX_CMD,
@@ -746,7 +748,7 @@ async function runUpdate(args: string[] = []): Promise<void> {
       }
       const result = spawnSync(
         process.execPath,
-        [cliEntry, 'add', update.installUrl, '-g', '-y', '--recheck-collect-consent'],
+        [cliEntry, 'add', update.installUrl, ...GLOBAL_UPDATE_ADD_FLAGS],
         {
           stdio: 'inherit',
           encoding: 'utf-8',
@@ -840,8 +842,7 @@ async function runUpdate(args: string[] = []): Promise<void> {
     for (const update of updates) {
       console.log(`${TEXT}Updating ${update.name}...${RESET}`);
 
-      const flags = ['-y', '--recheck-collect-consent'];
-      const selfArgs = [process.argv[1]!, 'add', update.installUrl, ...flags];
+      const selfArgs = [process.argv[1]!, 'add', update.installUrl, ...LOCAL_UPDATE_ADD_FLAGS];
       const result = spawnSync(process.execPath, selfArgs, {
         stdio: 'inherit',
       });
@@ -935,10 +936,10 @@ async function main(): Promise<void> {
         showHelp();
         break;
       }
-      if (!restArgs.includes('--recheck-collect-consent')) {
+      const { source: addSource, options: addOpts } = parseAddOptions(restArgs);
+      if (!addOpts.skipLogo) {
         showLogo();
       }
-      const { source: addSource, options: addOpts } = parseAddOptions(restArgs);
       await runAdd(addSource, addOpts);
       break;
     }

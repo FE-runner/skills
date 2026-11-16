@@ -434,6 +434,8 @@ export interface AddOptions {
   collectConsent?: boolean;
   /** 本次显式写入 collectConsent=true 并跳过询问；不切换安装文件来源 */
   observability?: true;
+  /** 内部嵌套调用隐藏 Logo，不参与安装行为 */
+  skipLogo?: true;
   /** 团队流程已统一处理监测插件状态，跳过单 Skill 的重复检查 */
   skipPilotStatus?: boolean;
   /** 团队预取的单次安装响应；设置后不再请求 Market */
@@ -3434,6 +3436,8 @@ export function parseAddOptions(args: string[]): { source: string[]; options: Ad
       options.copy = true;
     } else if (arg === '--observability') {
       options.observability = true;
+    } else if (arg === '--no-logo') {
+      options.skipLogo = true;
     } else if (arg && !arg.startsWith('-')) {
       source.push(arg);
     }

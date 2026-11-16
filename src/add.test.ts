@@ -395,6 +395,12 @@ describe('parseAddOptions', () => {
     expect(result.source).toEqual(['source']);
     expect(result.options.observability).toBe(true);
   });
+
+  it('should parse --no-logo as an internal flag', () => {
+    const result = parseAddOptions(['source', '--no-logo']);
+    expect(result.source).toEqual(['source']);
+    expect(result.options.skipLogo).toBe(true);
+  });
 });
 
 describe('find-skills prompt with -y flag', () => {

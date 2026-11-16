@@ -5,6 +5,8 @@ import {
   buildUpdateInstallSource,
   checkMarketLockEntry,
   formatSourceInput,
+  GLOBAL_UPDATE_ADD_FLAGS,
+  LOCAL_UPDATE_ADD_FLAGS,
 } from './update-source.ts';
 
 describe('update-source', () => {
@@ -22,6 +24,16 @@ describe('update-source', () => {
     it('returns source unchanged when ref is missing', () => {
       expect(formatSourceInput('https://github.com/owner/repo.git')).toBe(
         'https://github.com/owner/repo.git'
+      );
+    });
+  });
+
+  describe('update add flags', () => {
+    it('uses supported no-logo flags for nested add calls', () => {
+      expect(GLOBAL_UPDATE_ADD_FLAGS).toEqual(['-g', '-y', '--no-logo']);
+      expect(LOCAL_UPDATE_ADD_FLAGS).toEqual(['-y', '--no-logo']);
+      expect([...GLOBAL_UPDATE_ADD_FLAGS, ...LOCAL_UPDATE_ADD_FLAGS]).not.toContain(
+        '--recheck-collect-consent'
       );
     });
   });
