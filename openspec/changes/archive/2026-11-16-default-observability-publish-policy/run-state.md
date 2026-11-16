@@ -1,13 +1,13 @@
 # 运行状态
 
 - 变更名: default-observability-publish-policy
-- 阶段: review-code
+- 阶段: archived
 - 源分支: master
 - 开发分支: null
 - 执行模式: full-auto
-- 流水线阶段: review-code
-- 最后成功 commit: ea5c027（apply）
-- 下一步安全动作: review-code 已正常清零，可执行 `@lyx-archive`
+- 流水线阶段: none
+- 最后成功 commit: 6a7f205（review-code fix）
+- 下一步安全动作: 完成
 
 ## 任务证据
 
@@ -52,6 +52,14 @@
 
 ## 验证
 
+- final testMode: normal — 来源：宿主默认 `[host].testMode`
+- 归档前测试: passed — `pnpm test -- --run`，46 文件、679 用例，退出码 0
+- 归档前 typecheck: passed — `pnpm type-check`，退出码 0
+- 生产构建: skipped — 归档门禁不执行 build
+- 归档前 Warning 核对: skipped — 用户选择 N，快照保持原样
+- delta spec 同步: passed — `cli-publish` 主 spec 已移除旧要求并加入默认可观测要求
+- specs 校验: passed — `openspec validate --specs`，12/12
+- 归档目录: `openspec/changes/archive/2026-11-16-default-observability-publish-policy`
 - openspec validate --changes default-observability-publish-policy: passed — 1/1；`lyx:` 隔离元数据触发 OpenSpec 未知键 Warning，按 lyx 恢复协议保留
 
 ## 裁决
