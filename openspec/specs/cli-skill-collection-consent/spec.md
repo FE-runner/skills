@@ -20,7 +20,7 @@ CLI SHALL 仅在安装响应含对象型 `collect.config` 与非空字符串 `co
 - **WHEN** 未显式传 `--observability`，且响应不含 `collect` 或 `collect` 缺少 config/签名
 - **THEN** CLI 不询问采集，不写 `collectConsent`
 
-### Requirement: 安装时确定并重新确认 consent
+### Requirement: 安装时确定并复用 consent
 
 `add` 安装可观测 Skill 时 SHALL 只请求一次目标版本安装产物。当前 scope lock 缺少 `collectConsent` 时，交互安装 SHALL 在展示“开发者改进计划”声明后要求用户明确选择开启或关闭，选择项 SHALL NOT 预选；非交互安装 SHALL 默认写入 `false` 且不中断。lock 已有 `true` 或 `false` 时 CLI SHALL 直接复用，不得重复询问。显式 `--observability` SHALL 优先写入 `true`。无论选择为何，落盘文件均为同一份服务端响应。
 
@@ -94,7 +94,7 @@ CLI SHALL 仅在安装响应含对象型 `collect.config` 与非空字符串 `co
 - **WHEN** 可观测 Skill 安装且 consent=false
 - **THEN** CLI 不提示 Pilot、不自动安装插件，但仍落盘服务端文件
 
-### Requirement: 团队安装一次询问 consent
+### Requirement: 团队安装一次确定、复用或询问 consent
 
 团队批量安装 SHALL 在安装前收集团队内可观测 Skill，并对 lock 缺少 `collectConsent` 的项发起一次团队级明确选择；lock 已为 `true` 或 `false` 的项直接复用。选择前 SHALL 展示开发者改进计划声明，选择项 SHALL NOT 预选。非交互环境无显式参数时 SHALL 对待定夺项写 `false` 并继续安装。显式 `--observability` 时 SHALL 为安装成功的可观测 Skill 写 `true`。不可观测 Skill SHALL NOT 写 consent；任一 Skill 安装失败时 SHALL NOT 写入或修改该 Skill 的 consent。
 
@@ -108,7 +108,7 @@ CLI SHALL 仅在安装响应含对象型 `collect.config` 与非空字符串 `co
 - **WHEN** 团队含首次未定夺的可观测 Skill 且用户选择关闭
 - **THEN** 这些 Skill 写 `collectConsent=false`
 
-#### Scenario: 团队已拒绝项重新确认
+#### Scenario: 团队已拒绝项保持拒绝
 
 - **WHEN** 团队安装中某可观测 Skill 的 lock 为 `collectConsent=false`
 - **THEN** CLI 不重新询问并保持 `collectConsent=false`
