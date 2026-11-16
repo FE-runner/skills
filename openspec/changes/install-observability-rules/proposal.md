@@ -27,5 +27,5 @@ CLI 当前在交互安装时使用普通确认，没有开发者改进计划声�
 
 ## Impact
 
-- 影响 `src/add.ts`、`src/publish.ts`、CLI 帮助、README、测试与 OpenSpec。
+- 影响 `src/add.ts`、`src/publish.ts`、CLI 帮助、README、测试、OpenSpec，以及外部仓库 `/Users/ly/codes/learn/liyang-skills/src/blueai-skills-cli` 的配套 Skill 文档。
 - 不修改服务端安装产物选择、团队发布模型或 trace 采集实现。

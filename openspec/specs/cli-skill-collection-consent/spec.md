@@ -2,7 +2,7 @@
 
 ## Purpose
 
-为 `skills` CLI 用户提供 Skill 采集知情同意与状态管理：可观测 Skill 在首次安装以及后续交互重装、更新时确认统计同意，`collectConsent=true` 永久复用，`false` 在后续交互安装中重新确认。以当前 scope 对应 lock 的 `skills[<skillName>].collectConsent` 三态判定采集状态。全局安装复用 `.agents/.skill-lock.json`（开发版与正式版一致），项目级安装复用项目根目录的 `skills-lock.json`，均不新建独立状态文件。`track list/on/off` 仍只管理全局技能且只改写 consent；项目级技能可再次执行 `add --observability` 显式同意统计。
+为 `skills` CLI 用户提供 Skill 采集知情同意与状态管理：可观测 Skill 首次交互安装时必须明确选择，`collectConsent=true` 或 `false` 在后续安装中直接复用，非交互首次安装默认关闭；`--observability` 仅对可观测 Skill 强制同意。以当前 scope 对应 lock 的 `skills[<skillName>].collectConsent` 三态判定采集状态。全局安装复用 `.agents/.skill-lock.json`（开发版与正式版一致），项目级安装复用项目根目录的 `skills-lock.json`，均不新建独立状态文件。`track list/on/off` 仍只管理全局技能且只改写 consent；项目级技能可再次执行 `add --observability` 显式同意统计。
 
 ## Requirements
 

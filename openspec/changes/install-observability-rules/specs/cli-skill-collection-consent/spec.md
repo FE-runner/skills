@@ -64,7 +64,7 @@
 
 ### Requirement: 团队安装一次询问 consent
 
-团队批量安装 SHALL 在安装前收集团队内可观测 Skill，并对 lock 缺少 `collectConsent` 的项发起一次团队级明确选择；lock 已为 `true` 或 `false` 的项直接复用。选择前 SHALL 展示开发者改进计划声明，选择项 SHALL NOT 预选。非交互环境无显式参数时 SHALL 对待定夺项写 `false` 并继续安装。显式 `--observability` 时 SHALL 为参与本次安装的可观测 Skill 写 `true`。不可观测 Skill SHALL NOT 写 consent。
+团队批量安装 SHALL 在安装前收集团队内可观测 Skill，并对 lock 缺少 `collectConsent` 的项发起一次团队级明确选择；lock 已为 `true` 或 `false` 的项直接复用。选择前 SHALL 展示开发者改进计划声明，选择项 SHALL NOT 预选。非交互环境无显式参数时 SHALL 对待定夺项写 `false` 并继续安装。显式 `--observability` 时 SHALL 为安装成功的可观测 Skill 写 `true`。不可观测 Skill SHALL NOT 写 consent；任一 Skill 安装失败时 SHALL NOT 写入或修改该 Skill 的 consent。
 
 #### Scenario: 团队同意
 
@@ -94,5 +94,12 @@
 
 #### Scenario: 团队无可观测 Skill
 
-- **WHEN** 团队批次包含不可观测 Skill
-- **THEN** CLI 不写也不修改该 Skill 的 `collectConsent`
+- **WHEN** 团队批次没有任何可观测 Skill
+- **THEN** CLI 不发起团队级观测选择
+- **AND** 不写 `collectConsent`
+
+#### Scenario: 团队单项安装失败
+
+- **WHEN** 团队批量安装中某可观测 Skill 安装失败
+- **THEN** CLI 不为该 Skill 写入或修改 `collectConsent`
+- **AND** 其他成功 Skill 继续按团队选择或 lock 复用规则处理
