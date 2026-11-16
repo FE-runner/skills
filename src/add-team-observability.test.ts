@@ -120,7 +120,7 @@ describe('team install observability confirmation', () => {
     process.exitCode = undefined;
     vi.clearAllMocks();
 
-    vi.mocked(p.select).mockResolvedValue(true);
+    vi.mocked(p.select).mockResolvedValue('on');
     vi.mocked(p.confirm).mockResolvedValueOnce(true).mockResolvedValueOnce(true);
     vi.mocked(getApiKey).mockReturnValue('sk-test');
     vi.mocked(getAllLockedSkills).mockResolvedValue({});
@@ -378,6 +378,28 @@ describe('team install observability confirmation', () => {
     expect(messages).toHaveLength(0);
     expect(p.confirm).not.toHaveBeenCalled();
     expect(createRecordAndInstallPilot).not.toHaveBeenCalled();
+  });
+
+  it('does not prompt on team install when stdin is not a TTY without -y', async () => {
+    Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: false });
+
+    await runAdd(['t_team-id/team-name'], {
+      agent: ['claude-code'],
+      global: false,
+    });
+
+    expect(p.select).not.toHaveBeenCalled();
+    expect(p.confirm).not.toHaveBeenCalled();
+    expect(addSkillToLocalLock).toHaveBeenCalledWith(
+      'skill-a',
+      expect.objectContaining({ teamId: 'team-id', collectConsent: false }),
+      expect.any(String)
+    );
+    expect(addSkillToLocalLock).toHaveBeenCalledWith(
+      'skill-b',
+      expect.objectContaining({ teamId: 'team-id', collectConsent: false }),
+      expect.any(String)
+    );
   });
 
   it('only guides Pilot when non-interactive team consent is explicit true', async () => {

@@ -258,7 +258,7 @@ npx blueai-skills withdraw my-skill
 | `--team <id1,id2>`      | 发布到指定团队，多个团队 ID 用逗号分隔                        |
 | `--api-key <key>`       | 本次请求临时使用指定 API Key                                  |
 
-不传采集参数时默认开启可观测，等价于 `--collect`。可观测状态一旦开启后不可关闭，不区分公开、私有或团队发布范围；使用 `--no-collect` 更新已经开启可观测的 Skill 时，CLI 会提示本次更新后仍保持开启。
+不传采集参数时默认开启可观测，等价于 `--collect`。可观测状态一旦开启后不可关闭，不区分公开、私有或团队发布范围；使用 `--no-collect` 更新已经开启可观测的 Skill 时，CLI 会提示本次更新后仍保持开启。`--public --no-collect` 会在读取文件前由 CLI 本地报错，不会发起 push。
 
 ### Agent 可观测（obs）
 
