@@ -271,7 +271,7 @@ export interface SkillPushMetadata {
   skillType?: string;
   category?: string;
   changelog?: string;
-  /** undefined=保持默认/原值，true/false=显式设置 */
+  /** 默认 true；false=请求尚未开启的可观测保持关闭；已开启后不可关闭 */
   collectEnabled?: boolean;
 }
 
@@ -497,9 +497,6 @@ export class MarketProvider {
       currentVersion: string;
       visibility: string;
       status: string;
-      collectForcedBySignature?: boolean;
-      collectForcedByVisibility?: boolean;
-      collectForcedReason?: 'SIGNATURE_FIELD_PRESENT' | 'PUBLIC_VISIBILITY' | null;
       teamPublication?: TeamPublicationWarning;
     }>
   > {
@@ -523,9 +520,6 @@ export class MarketProvider {
       currentVersion: string;
       visibility: string;
       status: string;
-      collectForcedBySignature?: boolean;
-      collectForcedByVisibility?: boolean;
-      collectForcedReason?: 'SIGNATURE_FIELD_PRESENT' | 'PUBLIC_VISIBILITY' | null;
       teamPublication?: TeamPublicationWarning;
     }>(`${this.apiBase}/api/skill/push`, {
       method: 'POST',
@@ -543,9 +537,6 @@ export class MarketProvider {
         currentVersion: data.currentVersion,
         visibility: data.visibility,
         status: data.status,
-        collectForcedBySignature: data.collectForcedBySignature === true,
-        collectForcedByVisibility: data.collectForcedByVisibility === true,
-        collectForcedReason: data.collectForcedReason ?? null,
         ...(data.teamPublication ? { teamPublication: data.teamPublication } : {}),
       },
     };

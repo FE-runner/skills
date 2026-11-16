@@ -68,6 +68,7 @@ describe('publish', () => {
       expect(opts.path).toBe(process.cwd());
       expect(opts.version).toBeUndefined();
       expect(opts.teamIds).toBeUndefined();
+      expect(opts.collectEnabled).toBe(true);
     });
 
     it('parses --version passthrough', () => {
@@ -96,10 +97,11 @@ describe('publish', () => {
       expect(opts.teamIds).toEqual(['team-a']);
     });
 
-    it('rejects --public together with --no-collect', () => {
+    it('allows --public together with --no-collect', () => {
       const opts = parsePublishOptions(['--public', '--no-collect']);
-      expect(opts.error).toContain('--public');
-      expect(opts.error).toContain('--no-collect');
+      expect(opts.error).toBeUndefined();
+      expect(opts.public).toBe(true);
+      expect(opts.collectEnabled).toBe(false);
     });
 
     it('parses upload metadata options', () => {
@@ -380,6 +382,84 @@ describe('publish', () => {
       });
     });
 
+    it('enables collection by default when no collection flag is passed', async () => {
+      vi.mocked(marketProvider.push).mockResolvedValue({
+        ok: true,
+        data: {
+          skillId: 's1',
+          name: 'my-skill',
+          currentVersion: '1.0.0',
+          visibility: 'PRIVATE',
+          status: 'APPROVED',
+        },
+      });
+
+      await runPublish([dir]);
+
+      const [, , , , , , metadata] = vi.mocked(marketProvider.push).mock.calls[0]!;
+      expect(metadata).toMatchObject({ collectEnabled: true });
+    });
+
+    it('passes team ids with enabled collection by default', async () => {
+      vi.mocked(marketProvider.push).mockResolvedValue({
+        ok: true,
+        data: {
+          skillId: 's1',
+          name: 'my-skill',
+          currentVersion: '1.0.0',
+          visibility: 'PRIVATE',
+          status: 'APPROVED',
+        },
+      });
+
+      await runPublish([dir, '--team', 'team-a']);
+
+      const [, , , , , teamIds, metadata] = vi.mocked(marketProvider.push).mock.calls[0]!;
+      expect(teamIds).toEqual(['team-a']);
+      expect(metadata).toMatchObject({ collectEnabled: true });
+    });
+
+    it('explains that --no-collect cannot disable observability once enabled', async () => {
+      vi.mocked(marketProvider.push).mockResolvedValue({
+        ok: true,
+        data: {
+          skillId: 's1',
+          name: 'my-skill',
+          currentVersion: '1.0.1',
+          visibility: 'PRIVATE',
+          status: 'APPROVED',
+        },
+      });
+
+      await runPublish([dir, '--no-collect']);
+
+      expect(
+        logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('可观测一旦开启后不可关闭'))
+      ).toBe(true);
+      expect(
+        logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('更新后仍保持开启'))
+      ).toBe(true);
+    });
+
+    it('does not show the irreversible observability note when --no-collect is omitted', async () => {
+      vi.mocked(marketProvider.push).mockResolvedValue({
+        ok: true,
+        data: {
+          skillId: 's1',
+          name: 'my-skill',
+          currentVersion: '1.0.1',
+          visibility: 'PRIVATE',
+          status: 'APPROVED',
+        },
+      });
+
+      await runPublish([dir]);
+
+      expect(
+        logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('可观测一旦开启后不可关闭'))
+      ).toBe(false);
+    });
+
     it('does not pass team ids to push when push args omit --team', async () => {
       vi.mocked(marketProvider.push).mockResolvedValue({
         ok: false,
@@ -518,119 +598,55 @@ describe('publish', () => {
       expect(metadata).toMatchObject({ collectEnabled: true });
     });
 
-    it('rejects --public --no-collect before reading files or sending a request', async () => {
+    it('allows --public --no-collect and requests observability remain off', async () => {
+      vi.mocked(marketProvider.push).mockResolvedValue({
+        ok: true,
+        data: {
+          skillId: 's1',
+          name: 'my-skill',
+          currentVersion: '',
+          visibility: 'PUBLIC',
+          status: 'PENDING',
+        },
+      });
+
       await runPublish([dir, '--public', '--no-collect']);
 
-      expect(process.exitCode).toBe(1);
-      expect(marketProvider.push).not.toHaveBeenCalled();
+      expect(process.exitCode).toBeUndefined();
+      const [, , , , visibility, , metadata] = vi.mocked(marketProvider.push).mock.calls[0]!;
+      expect(visibility).toBe('PUBLIC');
+      expect(metadata).toMatchObject({ collectEnabled: false });
       expect(
-        errorSpy.mock.calls.some((args: unknown[]) =>
-          String(args[0]).includes('公开 Skill 必须开启数据采集')
+        logSpy.mock.calls.some((args: unknown[]) =>
+          String(args[0]).includes('可观测一旦开启后不可关闭')
         )
       ).toBe(true);
     });
 
-    it('prints Market force source for a signature-only response', async () => {
+    it('ignores legacy Market force source fields without printing them', async () => {
       vi.mocked(marketProvider.push).mockResolvedValue({
         ok: true,
         data: {
           skillId: 's1',
           name: 'my-skill',
           currentVersion: '1.0.0',
-          visibility: 'PRIVATE',
-          status: 'APPROVED',
-          collectForcedBySignature: true,
-          collectForcedByVisibility: false,
-          collectForcedReason: 'SIGNATURE_FIELD_PRESENT',
-        },
-      });
-
-      await runPublish([dir]);
-
-      expect(
-        logSpy.mock.calls.some((args: unknown[]) =>
-          String(args[0]).includes('Market 已强制开启（上传包签名）')
-        )
-      ).toBe(true);
-      expect(
-        logSpy.mock.calls.some((args: unknown[]) =>
-          String(args[0]).includes('SIGNATURE_FIELD_PRESENT')
-        )
-      ).toBe(true);
-    });
-
-    it('prints Market force source for public visibility', async () => {
-      vi.mocked(marketProvider.push).mockResolvedValue({
-        ok: true,
-        data: {
-          skillId: 's1',
-          name: 'my-skill',
-          currentVersion: '',
-          visibility: 'PUBLIC',
-          status: 'PENDING',
-          collectForcedBySignature: false,
-          collectForcedByVisibility: true,
-          collectForcedReason: 'PUBLIC_VISIBILITY',
-        },
-      });
-
-      await runPublish([dir, '--public']);
-
-      expect(
-        logSpy.mock.calls.some((args: unknown[]) =>
-          String(args[0]).includes('Market 已强制开启（公开 Skill）')
-        )
-      ).toBe(true);
-    });
-
-    it('prints both force sources and signature reason when both match', async () => {
-      vi.mocked(marketProvider.push).mockResolvedValue({
-        ok: true,
-        data: {
-          skillId: 's1',
-          name: 'my-skill',
-          currentVersion: '',
           visibility: 'PUBLIC',
           status: 'PENDING',
           collectForcedBySignature: true,
           collectForcedByVisibility: true,
           collectForcedReason: 'SIGNATURE_FIELD_PRESENT',
-        },
+        } as never,
       });
 
       await runPublish([dir, '--public']);
-
-      expect(
-        logSpy.mock.calls.some((args: unknown[]) =>
-          String(args[0]).includes('上传包签名、公开 Skill')
-        )
-      ).toBe(true);
-      expect(
-        logSpy.mock.calls.some((args: unknown[]) =>
-          String(args[0]).includes('SIGNATURE_FIELD_PRESENT')
-        )
-      ).toBe(true);
-    });
-
-    it('does not print force source when neither source matches', async () => {
-      vi.mocked(marketProvider.push).mockResolvedValue({
-        ok: true,
-        data: {
-          skillId: 's1',
-          name: 'my-skill',
-          currentVersion: '0.0.1',
-          visibility: 'PRIVATE',
-          status: 'APPROVED',
-          collectForcedBySignature: false,
-          collectForcedByVisibility: false,
-          collectForcedReason: null,
-        },
-      });
-
-      await runPublish([dir]);
 
       expect(
         logSpy.mock.calls.some((args: unknown[]) => String(args[0]).includes('Market 已强制开启'))
+      ).toBe(false);
+      expect(
+        logSpy.mock.calls.some((args: unknown[]) =>
+          String(args[0]).includes('SIGNATURE_FIELD_PRESENT')
+        )
       ).toBe(false);
     });
 

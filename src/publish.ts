@@ -114,7 +114,7 @@ export interface PublishOptions {
   skillType?: string;
   category?: string;
   changelog?: string;
-  /** 三态：undefined=不修改/使用服务端默认，true=开启，false=关闭 */
+  /** 默认为 true；--no-collect 时请求保持关闭；已开启后不可关闭，不区分发布范围 */
   collectEnabled?: boolean;
   /** `--api-key` flag：单次调用临时覆盖凭证，不落盘 */
   apiKey?: string;
@@ -133,7 +133,7 @@ export function parsePublishOptions(args: string[]): PublishOptions {
   let skillType: string | undefined;
   let category: string | undefined;
   let changelog: string | undefined;
-  let collectEnabled: boolean | undefined;
+  let collectEnabled = true;
   let apiKey: string | undefined;
   let error: string | undefined;
 
@@ -192,10 +192,6 @@ export function parsePublishOptions(args: string[]): PublishOptions {
     }
   }
 
-  if (!error && isPublic && collectEnabled === false) {
-    error = '公开 Skill 必须开启数据采集，不能同时使用 --public 和 --no-collect';
-  }
-
   return {
     path: resolve(path ?? process.cwd()),
     version,
@@ -215,6 +211,7 @@ export function parsePublishOptions(args: string[]): PublishOptions {
 /**
  * `skills publish [path] [--version x.y.z] [--team a,b] [--public] [--api-key <key>]` 命令：
  * 读取本地 SKILL.md + 附属文本文件，调用 `/api/skill/push` upsert 到私有（默认）或公开（`--public`）Skill；
+ * 未传采集参数时默认开启可观测；`--no-collect` 仅确保尚未开启可观测的 Skill 不开启；
  * 提供 `--team` 时随 push 请求一起发布到多个团队（服务端同请求内完成，与 `--public` 可叠加，互不影响）。
  */
 export async function runPublish(args: string[]): Promise<void> {
@@ -278,7 +275,7 @@ export async function runPublish(args: string[]): Promise<void> {
       skillType,
       category,
       changelog,
-      collectEnabled: isPublic ? true : collectEnabled,
+      collectEnabled,
     }
   );
   if (!pushResult.ok) {
@@ -313,17 +310,10 @@ export async function runPublish(args: string[]): Promise<void> {
     console.log(`  状态: ${data.visibility} / ${data.status}`);
   }
 
-  const forcedBySignature = data.collectForcedBySignature ?? false;
-  const forcedByVisibility = data.collectForcedByVisibility ?? false;
-  if (forcedBySignature || forcedByVisibility) {
-    const sources = [
-      ...(forcedBySignature ? ['上传包签名'] : []),
-      ...(forcedByVisibility ? ['公开 Skill'] : []),
-    ].join('、');
-    console.log(`  采集: Market 已强制开启（${sources}）`);
-    if (data.collectForcedReason) {
-      console.log(`  强制来源: ${data.collectForcedReason}`);
-    }
+  if (collectEnabled === false) {
+    console.log(
+      '说明: 可观测一旦开启后不可关闭；--no-collect 只确保尚未开启可观测的 Skill 不开启，已开启的 Skill 更新后仍保持开启。'
+    );
   }
 
   if (teamPublication) {

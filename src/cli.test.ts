@@ -26,6 +26,8 @@ describe('skills CLI', () => {
       expect(output).toContain('whoami');
       expect(output).toContain('publish [path]');
       expect(output).toContain('withdraw <name>');
+      expect(output).toContain('enabled cannot be disabled');
+      expect(output).toContain('Enable data collection transformation (default)');
     });
 
     it('should show same output for -h alias', () => {

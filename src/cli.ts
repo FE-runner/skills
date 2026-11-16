@@ -175,8 +175,8 @@ ${BOLD}Publishing:${RESET}
                            --changelog <text>  Change notes, max 512 characters
                            --team <id1,id2>    Distribute to team(s) after push
                            --public            Push as a PUBLIC Skill (goes to PENDING review)
-                           --collect           Enable data collection transformation
-                           --no-collect        Explicitly disable data collection transformation
+                           --collect           Enable data collection transformation (default)
+                           --no-collect        Keep unenabled observability off; enabled cannot be disabled
                            --api-key <key>     Use an API key for this request only
   withdraw <name>          Withdraw a public Skill stuck in PENDING review
 

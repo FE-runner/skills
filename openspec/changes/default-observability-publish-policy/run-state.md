@@ -1,17 +1,17 @@
 # 运行状态
 
 - 变更名: default-observability-publish-policy
-- 阶段: propose
+- 阶段: apply
 - 源分支: master
 - 开发分支: null
 - 执行模式: full-auto
-- 流水线阶段: review-plan
-- 最后成功 commit: a8a786d（propose）
-- 下一步安全动作: review-plan 已正常清零，apply 前置校验通过后立即进入 apply
+- 流水线阶段: apply
+- 最后成功 commit: b13ec72（review-plan 快照）
+- 下一步安全动作: 提交 apply 阶段 commit 后立即进入 review-code
 
 ## 任务证据
 
-- 已完成任务: 0/9
+- 已完成任务: 9/9
 
 ## 基线评测
 
@@ -19,11 +19,24 @@
 
 ## 修改后评测（中间）
 
-- 待实施
+- publish/provider 定向测试: passed — `pnpm test src/publish.test.ts tests/market-push.test.ts`，2 文件、50 用例，退出码 0
+- CLI 帮助定向测试: passed — `pnpm test src/cli.test.ts`，1 文件、10 用例，退出码 0
+- README 文档验收: passed — 默认开启、公开＋`--no-collect`、不可逆提示和文档链接均存在，旧冲突表述无命中
+- check/update 文档验收: passed — `docs/check-update.md` 存在，范围/鉴权/更新判断/输出/常见问题章节与命令均存在
+- companion skill: passed — `/Users/ly/codes/learn/liyang-skills` 中 `npm run check -- blueai-skills-cli` 退出码 0，`npm run pack -- blueai-skills-cli` 退出码 0；外部 commit `ff368f6`
+- 任务 1.1-1.3: passed — 默认开启、公开发布显式关闭、不可逆提示、旧响应字段忽略均有测试覆盖，待 apply 阶段提交归属
+- 任务 2.1: passed — 帮助文案已更新并测试通过，待 apply 阶段提交归属
+- 任务 2.2-2.3: passed — 用户文档已补齐并完成检索验收，待 apply 阶段提交归属
+- 任务 2.4: passed — companion skill 升级至 2.0.0，旧语义无命中，外部仓库已单独提交
+- 任务 3.1-3.2: passed — 全量测试、typecheck、format、build、OpenSpec validate 均完成
 
 ## 修改后评测（最终）
 
-- 待归档前验证
+- 全量测试: passed — `pnpm test -- --run`，46 文件、679 用例，退出码 0
+- typecheck: passed — `pnpm type-check`，退出码 0
+- format: passed — `pnpm format:check`，退出码 0
+- build: passed — `pnpm build`，退出码 0
+- openspec validate: passed — 1/1，保留 `lyx` 元数据未知键 Warning
 
 ## 审查状态
 
@@ -39,4 +52,4 @@
 
 ## 裁决
 
-- 待记录
+- 裁决：companion skill 从 `1.4.1` 升级到 `2.0.0` 并在外部仓库单独提交；理由：该仓库 AGENTS 规定破坏性行为使用 major，且外部仓库不能混入当前仓库 apply commit；如果判断错误：只需在外部仓库修订版本，不影响当前 CLI 行为。

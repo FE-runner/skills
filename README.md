@@ -202,7 +202,7 @@ npx blueai-skills find typescript --uid on_xxx
 
 ### `blueai-skills login` / `blueai-skills whoami` / `blueai-skills publish` / `blueai-skills withdraw`
 
-将本地写好的 Skill 发布到 Skills Market（私有 upsert），可选分发到团队；也可撤回卡在审核中的公开 Skill。
+将本地写好的 Skill 发布到 Skills Market（默认私有并开启可观测），可选分发到团队；也可撤回卡在审核中的公开 Skill。
 
 ```bash
 # 保存市场 API Key（也可设置环境变量 SKILLS_API_KEY，优先级更高）
@@ -211,7 +211,7 @@ npx blueai-skills login sk-xxxx
 # 查看当前 Key 对应的登录用户（不确定是否登录/Key 是否还有效时用）
 npx blueai-skills whoami
 
-# 推送当前目录下的 Skill（同名则更新，不同名则创建，均为私有）
+# 推送当前目录下的 Skill（同名则更新，不同名则创建；默认私有并开启可观测）
 npx blueai-skills publish
 
 # 指定目录、覆盖版本号
@@ -231,12 +231,11 @@ npx blueai-skills publish --team team-a,team-b
 # 推送为公开 Skill（新建/更新均走审核，非立即生效；--public 与 --team 可叠加）
 npx blueai-skills publish --public
 
-# 开启或关闭数据采集改造
+# 显式开启可观测（默认行为）；开启后不可关闭
 npx blueai-skills publish --collect
-npx blueai-skills publish --no-collect
 
-# 公开 Skill 必须开启采集；以下冲突组合会在本地直接报错
-npx blueai-skills publish --public --no-collect
+# 确保尚未开启可观测的 Skill 不开启；不能关闭已经开启的可观测
+npx blueai-skills publish --no-collect
 
 # 撤回处于 PENDING 状态的公开 Skill
 npx blueai-skills withdraw my-skill
@@ -253,10 +252,13 @@ npx blueai-skills withdraw my-skill
 | `--category <name>`          | 技能分类；不传时更新继承原值、新建默认为 `OTHER`          |
 | `--version <x.y.z>`          | 覆盖版本号；不传时由服务端自动递增                        |
 | `--changelog <text>`         | 变更日志，最多 512 个字符；不传时由服务端 AI 生成         |
-| `--public`                   | 发布为公开 Skill，进入审核，并强制开启数据采集；默认私有  |
-| `--collect` / `--no-collect` | 开启或关闭私有 Skill 采集；`--public --no-collect` 会报错 |
+| `--public`                   | 发布为公开 Skill，进入审核；默认私有                      |
+| `--collect`                  | 显式开启可观测；默认即开启，开启后不可关闭                |
+| `--no-collect`               | 仅确保尚未开启可观测的 Skill 不开启，不能关闭已经开启的可观测 |
 | `--team <id1,id2>`           | 发布到指定团队，多个团队 ID 用逗号分隔                    |
 | `--api-key <key>`            | 本次请求临时使用指定 API Key                              |
+
+不传采集参数时默认开启可观测，等价于 `--collect`。可观测状态一旦开启后不可关闭，不区分公开、私有或团队发布范围；使用 `--no-collect` 更新已经开启可观测的 Skill 时，CLI 会提示本次更新后仍保持开启。
 
 ### Agent 可观测（obs）
 
@@ -334,6 +336,8 @@ npx blueai-skills update -g
 ```
 
 Market 技能通过批量构建检测比较 `version + releaseSeq`；同版本产生新观测构建时也会标记更新。安装时在修改目标目录前校验 `buildHash`，再按原逻辑清理并直接写入；多个 Agent 任一目标失败时整次安装返回失败且不推进 lock。GitHub 技能通过文件夹 hash 比对检测更新。CLI 不增加 daemon 或系统定时任务，自动巡检由 BlueFlare 调用 `check/update`。
+
+完整命令范围、输出示例和排查方式见 [`docs/check-update.md`](docs/check-update.md)。
 
 ### `blueai-skills init`
 

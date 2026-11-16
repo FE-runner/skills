@@ -28,3 +28,11 @@
 - 旧 Market 若继续返回强制来源字段，CLI 应自然忽略，不因额外字段报错。
 - `tests/market-push.test.ts` 中已有强制来源断言，实施时需改为验证结果不包含这些字段。
 - `docs/check-update.md` 描述现有行为，不应借本次 change 改写 check/update 逻辑。
+
+## 实施决策
+
+- `parsePublishOptions` 默认返回 `collectEnabled=true`，并允许 `--public --no-collect` 透传 `false`。
+- `runPublish` 不再按可见性改写采集值；仅在本次请求为 `false` 且推送成功后输出不可逆说明。
+- Provider 删除强制来源字段映射；旧 Market 返回这些字段时自然忽略。测试用兼容响应断言结果对象不含旧字段，命令层不输出旧提示。
+- `docs/check-update.md` 沿用 stash 中与当前实现一致的版本，README 增加链接；`.gitignore` 已覆盖本地技能目录，未重复修改。
+- companion skill 按外部仓库 breaking 规则从 `1.4.1` 升到 `2.0.0`，在 `/Users/ly/codes/learn/liyang-skills` 单独提交 `ff368f6`；`check` 与 `pack` 均通过，`output/` 未提交。
