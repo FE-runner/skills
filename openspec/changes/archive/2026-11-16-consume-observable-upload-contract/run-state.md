@@ -1,13 +1,13 @@
 # 运行状态
 
 - 变更名: consume-observable-upload-contract
-- 阶段: review-code-fix
+- 阶段: archive-commit
 - 源分支: master
 - 开发分支: feature/unify-observable-upload-signature
 - 执行模式: full-auto
 - 流水线阶段: none
 - 最后成功 commit: 1a8271b6791a71881868dca2331e27d4a0245639（apply）
-- 下一步安全动作: 提交 review-code 状态与审查快照后结束，等待用户决定归档
+- 下一步安全动作: 提交归档改动，随后执行分支收尾确认
 
 ## 任务证据
 
@@ -36,6 +36,10 @@
 
 ## 验证
 
+- final testMode: normal — 来源：`/Users/ly/.codex/lyx/config.toml` `[host].testMode`
+- 归档前测试: passed — `pnpm test -- --run`，46 文件、679 用例
+- 归档前 typecheck: passed — `pnpm type-check`
+- 主 specs 同步: passed — `openspec validate --specs`，12/12
 - openspec validate: passed — `openspec validate --changes consume-observable-upload-contract`
 - 任务 1.1-3.2、4.3: passed — publish/provider 50 个测试，安装/更新回归 42 个测试
 - 任务 4.1、4.2: passed — 全量 679/679，typecheck/format/build 均退出 0
