@@ -12,6 +12,7 @@
 - `--no-collect` 发布成功后提示可观测不可逆：已开启的 Skill 不会被本次更新关闭。
 - 同步 `publish` 参数解析、Provider 类型、CLI 帮助、README 与 `cli-publish` 行为规范。
 - 补齐 `docs/check-update.md` 与 README 链接。
+- 同步外部 `blueai-skills-cli` companion skill 中的 publish 使用说明和排查文档。
 
 ## 能力
 
@@ -28,5 +29,6 @@
 - CLI 参数解析与请求组装：`src/publish.ts`。
 - Market Provider 响应类型：`src/providers/market.ts`。
 - 命令帮助与用户文档：`src/cli.ts`、`README.md`、`docs/check-update.md`。
-- 测试：`src/publish.test.ts`、`src/cli.test.ts`。
+- 外部 companion skill：`/Users/ly/codes/learn/liyang-skills/src/blueai-skills-cli/SKILL.md`、`references/publish.md` 和必要的 `references/troubleshooting.md`。
+- 测试：`src/publish.test.ts`、`src/cli.test.ts`、`tests/market-push.test.ts`。
 - 不修改 Market API、请求路径、鉴权、团队分发或安装更新流程；现有 `check/update` 行为保持不变，仅补充使用文档。

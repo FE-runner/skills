@@ -6,12 +6,12 @@
 - 开发分支: null
 - 执行模式: full-auto
 - 流水线阶段: review-plan
-- 最后成功 commit: 71d8c89（propose 基线）
-- 下一步安全动作: 提交 propose 阶段 commit 后立即进入 review-plan
+- 最后成功 commit: a8a786d（propose）
+- 下一步安全动作: review-plan 已正常清零，apply 前置校验通过后立即进入 apply
 
 ## 任务证据
 
-- 已完成任务: 0/8
+- 已完成任务: 0/9
 
 ## 基线评测
 
@@ -28,7 +28,10 @@
 ## 审查状态
 
 - 方案自审: passed — 五项检查逐项完成，修复 spec 结构和无任务映射项
-- review-plan: pending
+- review-plan 第 1 轮: 1 个 Critical，4 个 Warning；Critical 与影响落地=是 Warning 1 已修复，其余 Warning 待快照
+- review-plan 第 2 轮: 0 个 Critical，4 个 Warning；影响落地=是 Warning 4 由主会话按外部 AGENTS 规则覆盖为可自动修复并已修复，其余 Warning 待快照
+- review-plan 第 3 轮: 0 个 Critical，3 个 Warning；无影响落地项，剩余 Warning 落快照
+- review-plan 终止类型: normal
 
 ## 验证
 

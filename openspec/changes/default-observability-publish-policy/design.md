@@ -45,6 +45,10 @@
 
 `docs/check-update.md` 描述当前已实现的 `check/update` 行为，README 只增加链接。这些改动不与 publish 行为逻辑混在同一实现函数中，但随本次 change 的任务拆分和验证一起管理。当前 `.gitignore` 已覆盖 `.agents/` 与 `.claude/`，无需重复修改。
 
+### D6：companion skill 必须随 publish 契约同步
+
+项目 `AGENTS.md` 要求命令、参数、输出或工作流变化时同步 `blueai-skills-cli` companion skill。`SKILL.md` 负责入口和快速影响提示，`references/publish.md` 负责完整参数与示例；若其中已有采集失败排查说明，`references/troubleshooting.md` 也同步更新。外部仓库 `liyang-skills/AGENTS.md` 规定 skill 内容变更必须升级 `metadata.version`，破坏性行为使用 major；本次应先用 `npm run check:market -- blueai-skills-cli` 确认 Market 基准，再按仓库规则升级 major，并运行 `npm run check -- blueai-skills-cli` 与 `npm run pack -- blueai-skills-cli`。外部仓库改动单独提交，不混入当前仓库的 apply commit。
+
 ## 风险与权衡
 
 - [`--no-collect` 无法撤销服务端已开启状态] → 成功输出明确说明不可逆语义，避免用户把该参数理解为撤销开关。
