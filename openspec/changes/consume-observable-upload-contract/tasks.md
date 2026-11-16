@@ -14,14 +14,14 @@
 
 ## 3. 安装与更新 fail-closed 回归
 
-- [ ] 3.1 复核 `src/providers/market.ts`、`src/collect.ts`、`src/build-hash.ts` 和 `src/add.ts` 继续在 `OBS_VERSION_UNAVAILABLE`、`BUILD_CHANGED`、缺少 releaseSeq/buildHash、hash 不一致时失败且不落盘；验证：相关 `add-market-paths.test.ts`、`market-build-check.test.ts` 定向测试通过。
+- [ ] 3.1 以既有不变量回归复核 `src/providers/market.ts`、`src/collect.ts`、`src/build-hash.ts` 和 `src/add.ts` 继续在 `OBS_VERSION_UNAVAILABLE`、`BUILD_CHANGED`、缺少 releaseSeq/buildHash、hash 不一致时失败且不落盘；验证：相关 `add-market-paths.test.ts`、`market-build-check.test.ts` 定向测试通过。
 - [ ] 3.2 复核 `check/update` 对观测版本使用 version + releaseSeq 检测且不回退原版；验证：`src/update-source.test.ts` 与 `src/providers/market-build-check.test.ts` 定向测试通过。
 
 ## 4. 验证与文档
 
 - [ ] 4.1 运行 `pnpm test -- --run`；验证：全部测试通过并记录文件数和用例数。
 - [ ] 4.2 运行 `pnpm type-check`、`pnpm format:check` 与 `pnpm build`；验证：三条命令退出码均为 0。
-- [ ] 4.3 更新 README 或 CLI 内现有发布说明中关于 `--public --no-collect` 和强制采集输出的描述；验证：文档与 `cli-publish` delta spec 一致。
+- [ ] 4.3 只更新本仓 `README.md` 中关于 `--public --no-collect` 和强制采集输出的描述；外部 companion skill 文档保持独立 follow-up。验证：README 与 `cli-publish` delta spec 一致。
 
 ## Workflow follow-up
 

@@ -10,7 +10,7 @@
 
 - 让公开发布命令在 CLI 层就表达“必须采集”，并用 Market 返回值解释服务端强制来源。
 - 保持私有发布的 collectEnabled 三态语义和现有参数兼容。
-- 确保 add/update 继续只消费 Market 安装响应，遇到不可用或构建变化时 fail-closed。
+- 以定向回归确认 add/update 继续只消费 Market 安装响应，遇到不可用或构建变化时 fail-closed。
 
 **非目标：**
 
@@ -40,9 +40,9 @@
 
 字段缺失时按 false/null 兼容旧 Market。`runPublish` 只在任一布尔为 true 时追加提示，不改变原有成功/审核输出结构。
 
-### D4：安装/更新只补验证，不改现有 fail-closed 实现
+### D4：安装/更新 fail-closed 是既有不变量，不属于本 change 行为变更
 
-现有 `marketProvider.installById`、`collect.ts`、`build-hash.ts` 和 `add.ts` 已实现 install 响应字段校验、buildHash 校验、releaseSeq 冲突和 OBS_VERSION_UNAVAILABLE fail-closed。本 change 仅通过定向测试确认这些行为，不新增第二条安装链路。
+现有 `marketProvider.installById`、`collect.ts`、`build-hash.ts` 和 `add.ts` 已实现 install 响应字段校验、buildHash 校验、releaseSeq 冲突和 OBS_VERSION_UNAVAILABLE fail-closed。本 change 不为这些行为新增 delta spec，只通过定向测试确认它们未被 publish/provider 改动破坏，也不新增第二条安装链路。
 
 ## 风险与权衡
 

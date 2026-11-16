@@ -10,7 +10,8 @@ Market 已统一返回公开可见性与上传签名的采集强制来源，但 
 - `skills publish --public` 未显式指定采集时，请求体发送 `collectEnabled=true`；`--public --collect` 保持 `true`。
 - Market push 响应的 `collectForcedBySignature`、`collectForcedByVisibility`、`collectForcedReason` 由 `marketProvider.push` 保留并在命令输出中解释。
 - CLI 不自行扫描 `SKILL.md` 判断可观测版本，完全以 Market 返回结果为准。
-- 复核 `add/update` 已对 `OBS_VERSION_UNAVAILABLE`、`BUILD_CHANGED`、`buildHash` 和不一致响应保持 fail-closed，不新增回退路径。
+
+`add/update` 对 `OBS_VERSION_UNAVAILABLE`、`BUILD_CHANGED`、`buildHash` 和不一致响应的 fail-closed 行为是既有不变量与回归基线，不属于本 change 新增或修改的行为规范。
 
 ## 能力
 
@@ -27,5 +28,5 @@ Market 已统一返回公开可见性与上传签名的采集强制来源，但 
 - CLI 参数解析：`src/publish.ts`。
 - Market Provider 响应映射：`src/providers/market.ts`。
 - 测试：`src/publish.test.ts`、`src/providers/market.test.ts`，以及现有 `add/update` fail-closed 回归。
-- 文档：`blueai-skills-cli` 使用说明中的 publish 选项。
+- 文档：本仓 `README.md` 的 publish 选项由本 change 更新；外部 `liyang-skills` companion skill 文档作为独立 follow-up 同步。
 - Market API 不新增调用；仅消费已有字段。无依赖升级或本地状态格式变更。

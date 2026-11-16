@@ -50,7 +50,7 @@
 
 ### Requirement: 消费 Market 采集强制来源
 
-`marketProvider.push` SHALL 保留 Market 响应中的 `collectForcedBySignature`、`collectForcedByVisibility` 和 `collectForcedReason`。成功发布后，任一强制标记为 `true` 时命令 SHALL 输出明确说明：Market 已强制开启采集；签名来源与公开来源同时命中时 SHALL 说明签名原因优先。
+`marketProvider.push` SHALL 保留 Market 响应中的 `collectForcedBySignature`、`collectForcedByVisibility` 和 `collectForcedReason`。旧 Market 响应缺少这些字段时，CLI SHALL 归一为 `false`、`false` 和 `null`，且不得因此阻断发布。成功发布后，任一强制标记为 `true` 时命令 SHALL 输出明确说明：Market 已强制开启采集；签名来源与公开来源同时命中时 SHALL 说明签名原因优先。
 
 CLI SHALL NOT 扫描本地 `SKILL.md` 自行判断可观测版本，SHALL NOT 用客户端判断覆盖 Market 返回的强制结果。
 
@@ -73,3 +73,9 @@ CLI SHALL NOT 扫描本地 `SKILL.md` 自行判断可观测版本，SHALL NOT �
 
 - **WHEN** push 响应两个强制标记均为 `false` 且原因码为 `null`
 - **THEN** CLI 不输出 Market 强制采集提示
+
+#### Scenario: 旧 Market 缺少强制来源字段
+
+- **WHEN** push 成功响应不含三个强制来源字段
+- **THEN** CLI 使用 `false`、`false`、`null` 处理
+- **AND** 正常显示既有发布成功或审核输出
