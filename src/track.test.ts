@@ -8,6 +8,8 @@ import * as p from '@clack/prompts';
 
 const LOCK_DIR = join(tmpdir(), `skills-track-test-${Date.now()}`);
 const LOCK_FILE = join(LOCK_DIR, 'skills', '.skill-lock.json');
+const PROJECT_DIR = join(LOCK_DIR, 'project');
+const PROJECT_LOCK_FILE = join(PROJECT_DIR, 'skills-lock.json');
 
 function writeLock(skills: Record<string, unknown>): void {
   const dir = join(LOCK_DIR, 'skills');
@@ -17,6 +19,15 @@ function writeLock(skills: Record<string, unknown>): void {
 
 function readLock(): { skills: Record<string, Record<string, unknown>> } {
   return JSON.parse(readFileSync(LOCK_FILE, 'utf-8'));
+}
+
+function writeProjectLock(skills: Record<string, unknown>): void {
+  mkdirSync(PROJECT_DIR, { recursive: true });
+  writeFileSync(PROJECT_LOCK_FILE, JSON.stringify({ version: 1, skills }, null, 2), 'utf-8');
+}
+
+function readProjectLock(): { skills: Record<string, Record<string, unknown>> } {
+  return JSON.parse(readFileSync(PROJECT_LOCK_FILE, 'utf-8'));
 }
 
 function marketSkillEntry(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -29,6 +40,17 @@ function marketSkillEntry(overrides: Record<string, unknown> = {}): Record<strin
     version: '1.0.0',
     installedAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
+    ...overrides,
+  };
+}
+
+function projectMarketSkillEntry(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    source: 'market/demo',
+    sourceType: 'market',
+    computedHash: 'sha256:1',
+    skillId: 'skill-123',
+    version: '1.0.0',
     ...overrides,
   };
 }
@@ -56,7 +78,7 @@ describe('track command', () => {
       c: marketSkillEntry(),
     });
 
-    const out = runCli(['track', 'list'], process.cwd());
+    const out = runCli(['track', 'list', '-g'], process.cwd());
 
     expect(out.stdout).toContain('同意统计');
     expect(out.stdout).toContain('拒绝统计');
@@ -80,7 +102,7 @@ describe('track command', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     const successSpy = vi.spyOn(p.log, 'success');
 
-    await runTrack(['on', 'demo']);
+    await runTrack(['on', 'demo', '-g']);
 
     const after = readLock().skills.demo!;
     expect(after).toEqual({ ...before, collectConsent: true });
@@ -92,7 +114,7 @@ describe('track command', () => {
     writeLock({ demo: marketSkillEntry({ collectConsent: true }) });
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
-    await runTrack(['off', 'demo']);
+    await runTrack(['off', 'demo', '-g']);
 
     expect(readLock().skills.demo?.collectConsent).toBe(false);
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -106,12 +128,12 @@ describe('track command', () => {
       }),
     });
 
-    const output = runCli(['track', 'list'], process.cwd());
+    const output = runCli(['track', 'list', '-g'], process.cwd());
     expect(output.stdout).toContain('t_team-a/demo');
 
-    await runTrack(['on', 't_team-a/demo']);
-    await runTrack(['off', 't_team-a/demo']);
-    await runTrack(['on', 't_team-a/demo']);
+    await runTrack(['on', 't_team-a/demo', '-g']);
+    await runTrack(['off', 't_team-a/demo', '-g']);
+    await runTrack(['on', 't_team-a/demo', '-g']);
 
     const entry = readLock().skills.demo;
     expect(entry).toMatchObject({
@@ -134,10 +156,10 @@ describe('track command', () => {
       }),
     });
 
-    const output = runCli(['track', 'list'], process.cwd());
+    const output = runCli(['track', 'list', '-g'], process.cwd());
     expect(output.stdout).toContain('ts_skill-team-a/release-name');
 
-    await runTrack(['on', 'ts_skill-team-a/release-name']);
+    await runTrack(['on', 'ts_skill-team-a/release-name', '-g']);
 
     expect(readLock().skills.demo).toMatchObject({
       teamId: 'team-a',
@@ -153,10 +175,75 @@ describe('track command', () => {
     writeLock({});
     const errorSpy = vi.spyOn(p.log, 'error');
 
-    await runTrack(['on', 'missing']);
+    await runTrack(['on', 'missing', '-g']);
 
     const errors = errorSpy.mock.calls.map(([message]) => String(message));
     expect(errors.some((message) => message.includes('未在全局 lock 中找到'))).toBe(true);
     expect(readLock().skills).toEqual({});
+  });
+
+  it('defaults track list to the project lock', () => {
+    writeLock({ 'global-only': marketSkillEntry({ collectConsent: true }) });
+    writeProjectLock({
+      'project-only': projectMarketSkillEntry({ collectConsent: false }),
+    });
+
+    const output = runCli(['track', 'list'], PROJECT_DIR);
+
+    expect(output.stdout).toContain('project-only');
+    expect(output.stdout).toContain('拒绝统计');
+    expect(output.stdout).not.toContain('global-only');
+  });
+
+  it('defaults track off to the project lock and leaves global consent unchanged', async () => {
+    writeLock({ demo: marketSkillEntry({ collectConsent: true }) });
+    writeProjectLock({ demo: projectMarketSkillEntry({ collectConsent: true }) });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+    await runTrack(['off', 'demo'], PROJECT_DIR);
+
+    expect(readProjectLock().skills.demo?.collectConsent).toBe(false);
+    expect(readLock().skills.demo?.collectConsent).toBe(true);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('uses the global lock only with --global', async () => {
+    writeLock({ demo: marketSkillEntry({ collectConsent: false }) });
+    writeProjectLock({ demo: projectMarketSkillEntry({ collectConsent: false }) });
+
+    await runTrack(['on', 'demo', '--global'], PROJECT_DIR);
+
+    expect(readLock().skills.demo?.collectConsent).toBe(true);
+    expect(readProjectLock().skills.demo?.collectConsent).toBe(false);
+  });
+
+  it('preserves project team context when toggling by release alias', async () => {
+    const before = projectMarketSkillEntry({
+      source: 'ts_skill-team-a/release-name',
+      teamId: 'team-a',
+      skillTeamId: 'skill-team-a',
+      releaseId: 'release-a',
+      teamSkillName: 'release-name',
+    });
+    writeProjectLock({ demo: before });
+
+    await runTrack(['off', 'ts_skill-team-a/release-name'], PROJECT_DIR);
+
+    expect(readProjectLock().skills.demo).toEqual({
+      ...before,
+      collectConsent: false,
+    });
+  });
+
+  it('reports an error when the project lock entry does not exist', async () => {
+    writeProjectLock({});
+    const errorSpy = vi.spyOn(p.log, 'error');
+
+    await runTrack(['off', 'missing'], PROJECT_DIR);
+
+    expect(
+      errorSpy.mock.calls.some(([message]) => String(message).includes('未在项目 lock 中找到'))
+    ).toBe(true);
+    expect(readProjectLock().skills).toEqual({});
   });
 });

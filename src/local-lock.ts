@@ -170,6 +170,22 @@ export async function addSkillToLocalLock(
 }
 
 /**
+ * 只更新项目级采集同意状态，保留其它 lock 字段。
+ */
+export async function setLocalSkillCollectConsent(
+  skillName: string,
+  collectConsent: boolean,
+  cwd?: string
+): Promise<boolean> {
+  const lock = await readLocalLock(cwd);
+  const entry = lock.skills[skillName];
+  if (!entry) return false;
+  entry.collectConsent = collectConsent;
+  await writeLocalLock(lock, cwd);
+  return true;
+}
+
+/**
  * Remove a skill from the local lock file.
  */
 export async function removeSkillFromLocalLock(skillName: string, cwd?: string): Promise<boolean> {

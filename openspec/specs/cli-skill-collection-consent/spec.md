@@ -2,7 +2,7 @@
 
 ## Purpose
 
-为 `skills` CLI 用户提供 Skill 采集知情同意与状态管理：可观测 Skill 首次交互安装时必须明确选择，`collectConsent=true` 或 `false` 在后续安装中直接复用，非交互首次安装默认关闭；`--observability` 仅对可观测 Skill 强制同意。以当前 scope 对应 lock 的 `skills[<skillName>].collectConsent` 三态判定采集状态。全局安装复用 `.agents/.skill-lock.json`（开发版与正式版一致），项目级安装复用项目根目录的 `skills-lock.json`，均不新建独立状态文件。`track list/on/off` 仍只管理全局技能且只改写 consent；项目级技能可再次执行 `add --observability` 显式同意统计。
+为 `skills` CLI 用户提供 Skill 采集知情同意与状态管理：可观测 Skill 首次交互安装时必须明确选择，`collectConsent=true` 或 `false` 在后续安装中直接复用，非交互首次安装默认关闭；`--observability` 仅对可观测 Skill 强制同意。以当前 scope 对应 lock 的 `skills[<skillName>].collectConsent` 三态判定采集状态。全局安装复用 `.agents/.skill-lock.json`（开发版与正式版一致），项目级安装复用项目根目录的 `skills-lock.json`，均不新建独立状态文件。`track list/on/off` 默认管理项目级技能，传 `-g`/`--global` 时管理全局技能，且只改写 consent。
 
 ## Requirements
 
@@ -164,19 +164,27 @@ CLI SHALL 仅在安装响应含对象型 `collect.config` 与非空字符串 `co
 - **WHEN** 用户同意/拒绝采集或执行 track on/off
 - **THEN** collectConsent 写入当前 scope 锁文件对应 skill 节点，文件整体结构不变
 
-### Requirement: track 只修改 lock
+### Requirement: track 按 scope 只修改 lock
 
-`track on <skillName>` SHALL 只把全局 lock 对应条目 `collectConsent` 写为 `true`；`track off` SHALL 只写 `false`。命令 SHALL NOT 请求 Market、下载文件、重装 Skill 或改写其它 lock 字段。缺失目标 lock entry 时 SHALL 报错且不创建条目。
+`track list` SHALL 默认读取项目根目录 `skills-lock.json`；传 `-g`/`--global` 时 SHALL 读取全局 lock。`track on <skillName>` SHALL 只把当前 scope 对应条目 `collectConsent` 写为 `true`；`track off` SHALL 只写 `false`。命令 SHALL NOT 请求 Market、下载文件、重装 Skill 或改写其它 lock 字段。缺失目标 lock entry 时 SHALL 报错且不创建条目。
 
-#### Scenario: track on
+#### Scenario: track on 默认项目级
 
-- **WHEN** 全局 lock 存在该 Skill
-- **THEN** 只更新 `collectConsent=true`
+- **WHEN** 项目 lock 存在该 Skill 且用户执行 `track on <skillName>`
+- **THEN** 只更新项目 lock 的 `collectConsent=true`
+- **AND** 全局 lock 不变
 
-#### Scenario: track off
+#### Scenario: track off 默认项目级
 
-- **WHEN** 全局 lock 存在该 Skill
-- **THEN** 只更新 `collectConsent=false`
+- **WHEN** 项目 lock 存在该 Skill 且用户执行 `track off <skillName>`
+- **THEN** 只更新项目 lock 的 `collectConsent=false`
+- **AND** 全局 lock 不变
+
+#### Scenario: track 显式操作全局
+
+- **WHEN** 全局 lock 存在该 Skill 且用户执行 `track on/off <skillName> -g`
+- **THEN** 只更新全局 lock 的 `collectConsent`
+- **AND** 项目 lock 不变
 
 #### Scenario: track 不访问 Market
 

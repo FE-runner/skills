@@ -164,11 +164,34 @@ npx blueai-skills add ts_<skillTeamId>/<skillName> -a claude-code -g -y
 | `npx blueai-skills remove [skills]` | 从 Agent 中移除已安装的技能                                                 |
 | `npx blueai-skills check`           | 检查可用的技能更新（默认项目级，`-g` 全局）                                 |
 | `npx blueai-skills update`          | 更新已安装技能到最新版本（默认项目级，`-g` 全局）                           |
+| `npx blueai-skills track list`      | 查看 Skill 采集同意状态（默认项目级，`-g` 全局）                            |
+| `npx blueai-skills track on/off`    | 开启或关闭 Skill 采集同意（默认项目级，`-g` 全局）                          |
 | `npx blueai-skills init [name]`     | 创建新的 SKILL.md 模板                                                      |
 | `npx blueai-skills login <api-key>` | 保存 Skills Market API Key，供 publish/withdraw/whoami 鉴权                 |
 | `npx blueai-skills whoami`          | 查看当前保存的 API Key 对应的登录用户                                       |
 | `npx blueai-skills publish [path]`  | 将本地 Skill 推送/更新到市场（私有 upsert，或 `--public` 推送为公开 Skill） |
 | `npx blueai-skills withdraw <name>` | 撤回处于审核中（PENDING）的公开 Skill                                       |
+
+### `blueai-skills track`
+
+`track` 只修改当前 scope 的 lock 中对应 Skill 的 `collectConsent`，不会重装 Skill、改变版本或删除历史采集数据。
+
+```bash
+# 查看项目级采集状态
+npx blueai-skills track list
+
+# 关闭项目级 Skill 的采集同意
+npx blueai-skills track off my-skill
+
+# 查看全局采集状态
+npx blueai-skills track list -g
+
+# 关闭全局 Skill 的采集同意
+npx blueai-skills track off my-skill --global
+
+# 重新开启采集同意
+npx blueai-skills track on my-skill
+```
 
 ### `blueai-skills list`
 

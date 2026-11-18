@@ -162,9 +162,9 @@ ${BOLD}Observability:${RESET}
   obs uninstall [--purge]  Uninstall LoongSuite Pilot on this machine
                            (--purge also deletes local data in ~/.loongsuite-pilot)
 ${BOLD}Collection Consent:${RESET}
-  track list               List global skills and their collection-consent status
-  track on <skill>         Record consent=true for a global skill (no reinstall)
-  track off <skill>        Record consent=false for a global skill (no reinstall)
+  track list               List skills and collection-consent status (default: project)
+  track on <skill>         Record consent=true (default: project; no reinstall)
+  track off <skill>        Record consent=false (default: project; no reinstall)
 ${BOLD}Publishing:${RESET}
   login <api-key>          Save your Skills Market API Key for publish/withdraw
   whoami                   Show the user your API Key is currently logged in as
@@ -214,9 +214,10 @@ ${BOLD}Options:${RESET}
   --version, -v     Show version number
 
 ${BOLD}Track Options:${RESET}
-  track list               List global skills and their collection consent status
+  track list               List current-scope skills and their collection consent status
   track on <skill>         Record consent=true without reinstalling
   track off <skill>        Record consent=false without reinstalling
+  -g, --global             Operate on global skills instead of project skills
 
 ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ${BIN_NAME} add ${EXAMPLE_REPO}
@@ -260,9 +261,10 @@ ${BOLD}Examples:${RESET}
   ${DIM}$${RESET} ${BIN_NAME} obs install <agentId>         ${DIM}# re-issue the token and install on this machine${RESET}
   ${DIM}$${RESET} ${BIN_NAME} obs uninstall               ${DIM}# uninstall LoongSuite Pilot (--purge removes local data)${RESET}
 
-  ${DIM}$${RESET} ${BIN_NAME} track list                       ${DIM}# list collection consent for global skills${RESET}
-  ${DIM}$${RESET} ${BIN_NAME} track on my-skill                ${DIM}# record collection consent=true${RESET}
-  ${DIM}$${RESET} ${BIN_NAME} track off my-skill               ${DIM}# record collection consent=false${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} track list                       ${DIM}# list project collection consent${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} track off my-skill               ${DIM}# disable project collection consent${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} track list -g                    ${DIM}# list global collection consent${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} track off my-skill -g            ${DIM}# disable global collection consent${RESET}
 
 Discover more skills at ${TEXT}${SKILLS_SITE}/${RESET}
 `);

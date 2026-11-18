@@ -2,6 +2,12 @@
 
 > 本 CHANGELOG 仅记录 BMC 内部 Fork（`-bmc` 标签）自身的改动，不包含上游 `blueai-skills` 原始项目的版本历史。
 
+## [Unreleased]
+
+### 新功能
+
+- **项目级采集同意管理**：`track list/on/off` 默认操作当前项目的 `skills-lock.json`，传 `-g`/`--global` 时继续操作全局 lock；切换 scope 只修改对应 `collectConsent`，不重装 Skill 或改变版本。
+
 ## [1.4.7-bmc2.1.0] - 2026-11-16
 
 ### 新功能
