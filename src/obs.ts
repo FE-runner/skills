@@ -258,12 +258,12 @@ function printObservabilityList(
   localStatus?: LocalPilotStatus
 ): void {
   if (records.length === 0) {
-    console.log('暂无接入记录。运行 `' + BIN_NAME + ' obs <agentName>` 创建。');
+    console.log('暂无设备安装记录。运行 `' + BIN_NAME + ' obs <agentName>` 登记本机。');
     return;
   }
   const markable = localStatus?.serviceName != null && localStatus.hasBinary;
-  const runningSuffix = localStatus?.isRunning === false ? '(服务未运行)' : '';
-  console.log(`共 ${records.length} 条接入记录:`);
+  const runningSuffix = localStatus?.isRunning === false ? '(采集工具未运行)' : '';
+  console.log(`共 ${records.length} 台设备:`);
   for (const record of records) {
     const noteSuffix = record.note ? ` (备注: ${record.note})` : '';
     const localMark =
@@ -275,17 +275,13 @@ function printObservabilityList(
     );
   }
   if (markable && !records.some((r) => r.serviceName === localStatus?.serviceName)) {
-    console.log(
-      `注意: 本机已安装 LoongSuite Pilot (${localStatus?.serviceName})，但未匹配到清单中的任何接入记录`
-    );
+    console.log(`注意: 本机已安装采集工具 (${localStatus?.serviceName})，但没有对应的设备安装记录`);
   } else if (localStatus?.serviceName != null && !localStatus.hasBinary) {
-    console.log(
-      `注意: 本机检测到配置残留 (serviceNamePrefix: ${localStatus.serviceName})，未发现程序文件，可能已卸载不完整`
-    );
+    console.log(`注意: 采集工具安装不完整，建议重新安装`);
   } else if (localStatus?.serviceName == null && !localStatus?.hasBinary) {
-    console.log('本机未检测到 LoongSuite Pilot 安装（缺少 ~/.loongsuite-pilot/config.json）');
+    console.log('本机未安装采集工具');
   }
-  console.log(`换发安装凭证: ${BIN_NAME} obs refresh <agentId>`);
+  console.log(`重新生成安装链接: ${BIN_NAME} obs refresh <agentId>`);
 }
 
 /** 检测宿主平台：Windows 走 PowerShell，其余统一 unix bash */
@@ -346,18 +342,16 @@ export async function createRecordAndInstallPilot(apiKey: string): Promise<boole
     return false;
   }
   const command = pickPlatformCommand(result.data.installCommand);
-  console.log(`  接入名: ${result.data.agentName}`);
-  console.log(`  serviceName: ${result.data.serviceName}`);
-  console.log('开始安装 LoongSuite Pilot…（脚本输出见下方）');
+  console.log('正在安装采集工具…（安装输出见下方）');
   try {
     await runInstallCommand(command);
-    console.log(
-      `✓ LoongSuite Pilot 安装完成（凭证为一次性，失败可 ${BIN_NAME} obs refresh ${result.data.id} 换发重试）`
-    );
+    console.log(`✓ 采集工具安装完成。`);
     return true;
   } catch (err) {
-    console.error(`安装失败: ${err instanceof Error ? err.message : String(err)}`);
-    console.error(`凭证已作废，可运行 \`${BIN_NAME} obs refresh ${result.data.id}\` 换发后重试`);
+    console.error(`采集工具安装失败: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(
+      `安装链接已失效，可运行 \`${BIN_NAME} obs refresh ${result.data.id}\` 重新生成后重试`
+    );
     process.exitCode = 1;
     return false;
   }
@@ -403,17 +397,15 @@ export async function runObs(args: string[]): Promise<void> {
     if (!result.ok) {
       reportApiFailure(result);
       if (result.status === 404) {
-        console.error('提示: 接入记录不存在，或该记录相关凭证已失效');
+        console.error('提示: 没有找到这台设备的安装记录，或安装链接已失效');
       }
       return;
     }
-    console.log('✓ 已换发安装凭证');
+    console.log('✓ 已生成新的安装链接');
     console.log(`  serviceName: ${result.data.serviceName}`);
     console.log(`  macOS/Linux: ${result.data.installCommand.unix}`);
     console.log(`  Windows:     ${result.data.installCommand.windows}`);
-    console.log(
-      '  注意: 旧凭证已立即失效；新凭证 5 分钟内有效且仅能使用一次（请复制对应你系统的命令执行）'
-    );
+    console.log('  注意: 安装链接只能使用一次，5 分钟内有效（请复制对应你系统的命令执行）');
     return;
   }
 
@@ -423,7 +415,7 @@ export async function runObs(args: string[]): Promise<void> {
     if (!result.ok) {
       reportApiFailure(result);
       if (result.status === 404) {
-        console.error('提示: 接入记录不存在，或该记录相关凭证已失效');
+        console.error('提示: 没有找到这台设备的安装记录，或安装链接已失效');
       }
       return;
     }
@@ -433,36 +425,32 @@ export async function runObs(args: string[]): Promise<void> {
     // 本机检查：先告知现状再决定是否二次确认（防止无意覆盖本地配置）
     const localStatus = readLocalPilotStatus();
     if (localStatus.serviceName != null && localStatus.hasBinary) {
-      console.log(
-        `  本机检测: 已安装 LoongSuite Pilot (serviceNamePrefix: ${localStatus.serviceName}${localStatus.isRunning === false ? '，服务未运行' : ''})`
-      );
+      console.log(`  本机已安装采集工具${localStatus.isRunning === false ? '，当前未运行' : ''}。`);
       if (localStatus.serviceName === result.data.serviceName) {
-        console.log('  目标接入已安装在本机，再次执行将重装并覆盖本地配置');
+        console.log('  这台设备已经使用这条安装记录，再次安装会覆盖当前配置。');
       } else {
-        console.log('  本机当前指向另一条接入，再次执行将切换 serviceNamePrefix');
+        console.log('  再次安装会把这台设备改为向新的目标上报数据。');
       }
     } else if (localStatus.serviceName != null) {
-      console.log(
-        `  本机检测: 检测到配置残留 (serviceNamePrefix: ${localStatus.serviceName})，未发现程序文件；重新安装通常会修复`
-      );
+      console.log('  采集工具安装不完整，建议重新安装。');
     }
     // 仅在「配置 + 程序文件」都在时才二次确认；残留配置场景重装即修复，走普通确认
     const needDoubleConfirm = localStatus.serviceName != null && localStatus.hasBinary;
     const confirmed = await p.confirm({
       message: needDoubleConfirm
-        ? '本机已存在 LoongSuite Pilot 安装，确认要再次执行安装？'
-        : '立即在本机执行上面的安装命令？（凭证一次性、5 分钟有效）',
+        ? '这台设备已安装采集工具，确定要重新安装吗？'
+        : '现在在这台设备上安装采集工具吗？安装链接只能使用一次，5 分钟内有效。',
     });
     if (p.isCancel(confirmed) || !confirmed) {
-      console.log('已取消；命令 5 分钟内仍可手动执行');
+      console.log('已取消；安装链接 5 分钟内仍可手动使用');
       return;
     }
-    console.log('开始执行安装…（脚本输出见下方）');
+    console.log('开始安装采集工具…（脚本输出见下方）');
     try {
       await runInstallCommand(command);
-      console.log('✓ 安装命令执行完成');
+      console.log('✓ 采集工具安装完成。');
     } catch (err) {
-      console.error(`安装失败: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(`采集工具安装失败: ${err instanceof Error ? err.message : String(err)}`);
       process.exitCode = 1;
     }
     return;
@@ -472,35 +460,31 @@ export async function runObs(args: string[]): Promise<void> {
     // 先做本机检查：配置与程序文件都缺失才视为未安装，不发请求也不执行脚本
     const localStatus = readLocalPilotStatus();
     if (localStatus.serviceName == null && !localStatus.hasBinary) {
-      console.log('本机未检测到 LoongSuite Pilot 安装，无需卸载');
+      console.log('本机未安装采集工具，无需卸载');
       return;
     }
     if (localStatus.hasBinary) {
-      console.log(
-        `  本机检测: 已安装 LoongSuite Pilot${localStatus.serviceName != null ? ` (serviceNamePrefix: ${localStatus.serviceName})` : ''}${localStatus.isRunning === false ? '，服务未运行' : ''}`
-      );
+      console.log(`  本机已安装采集工具${localStatus.isRunning === false ? '，当前未运行' : ''}。`);
     } else {
-      console.log(
-        `  本机检测: 检测到配置残留 (serviceNamePrefix: ${localStatus.serviceName})，未发现程序文件`
-      );
+      console.log('  采集工具安装不完整，可在这里清理。');
     }
     const command = pickPlatformCommand(buildUninstallCommand(opts.purge ?? false));
     console.log(`  卸载命令: ${command}`);
     const confirmed = await p.confirm({
       message: opts.purge
-        ? '将卸载 LoongSuite Pilot 并删除本地数据（配置与采集记录），确认继续？'
-        : '将卸载 LoongSuite Pilot（保留 ~/.loongsuite-pilot 本地数据），确认继续？',
+        ? '将移除本机采集工具，并删除本地数据。继续吗？'
+        : '将移除本机采集工具，本地数据会保留。继续吗？',
     });
     if (p.isCancel(confirmed) || !confirmed) {
       console.log('已取消');
       return;
     }
-    console.log('开始执行卸载…（脚本输出见下方）');
+    console.log('开始移除采集工具…（脚本输出见下方）');
     try {
       await runInstallCommand(command);
-      console.log('✓ 卸载命令执行完成');
+      console.log('✓ 采集工具已移除。');
     } catch (err) {
-      console.error(`卸载失败: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(`移除采集工具失败: ${err instanceof Error ? err.message : String(err)}`);
       process.exitCode = 1;
     }
     return;
@@ -516,30 +500,24 @@ export async function runObs(args: string[]): Promise<void> {
     return;
   }
   const { data } = result;
-  console.log(`✓ 已创建接入记录`);
+  console.log(`✓ 已登记本机`);
   console.log(`  agentId: ${data.id}`);
   console.log(`  接入名: ${data.agentName}`);
   console.log(`  serviceName: ${data.serviceName}`);
-  console.log(`  macOS/Linux: ${data.installCommand.unix}`);
-  console.log(`  Windows:     ${data.installCommand.windows}`);
+  console.log(`  安装链接（macOS/Linux）: ${data.installCommand.unix}`);
+  console.log(`  安装链接（Windows）:     ${data.installCommand.windows}`);
   console.log(
-    `  凭证: 5 分钟内有效且仅能使用一次；过期或已使用后请 ${BIN_NAME} obs refresh ${data.id}`
+    `  注意: 安装链接只能使用一次，5 分钟内有效；过期或使用后请 ${BIN_NAME} obs refresh ${data.id}`
   );
   // 本机检查：按分层状态提示下一步动作
   const localStatus = readLocalPilotStatus();
   if (localStatus.serviceName != null && localStatus.hasBinary) {
-    console.log(
-      `  本机检测: 已安装 LoongSuite Pilot (serviceNamePrefix: ${localStatus.serviceName})`
-    );
-    console.log(`  如需将本机切换到新接入，运行 \`${BIN_NAME} obs install ${data.id}\``);
+    console.log(`  本机已安装采集工具。`);
+    console.log(`  如需将本机改为向新的目标上报数据，运行 \`${BIN_NAME} obs install ${data.id}\``);
   } else if (localStatus.serviceName != null) {
-    console.log(
-      `  本机检测: 检测到配置残留 (serviceNamePrefix: ${localStatus.serviceName})，未发现程序文件`
-    );
-    console.log(`  运行 \`${BIN_NAME} obs install ${data.id}\` 可重新安装并修复`);
+    console.log(`  采集工具安装不完整，建议重新安装。`);
+    console.log(`  运行 \`${BIN_NAME} obs install ${data.id}\` 可重新安装`);
   } else {
-    console.log(
-      `  本机检测: 未检测到 LoongSuite Pilot；运行 \`${BIN_NAME} obs install ${data.id}\` 可在本机安装`
-    );
+    console.log(`  本机未安装采集工具。运行 \`${BIN_NAME} obs install ${data.id}\` 可安装`);
   }
 }

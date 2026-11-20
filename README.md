@@ -316,6 +316,8 @@ npx blueai-skills obs --help
 
 项目级和全局安装都支持 `--observability`。该参数显式开启观测；不传时，交互安装会展示开发者改进计划并要求选择，`-y`/CI 环境默认关闭。lock 已有选择时直接复用。它不切换安装文件，CLI 始终安装 Market 返回的 active artifact。采集状态按范围隔离：全局记录在 `~/.agents/.skill-lock.json`，项目级记录在当前项目的 `skills-lock.json`。仅有可观测 Skill 且 `collectConsent=true` 时才引导 LoongSuite Pilot。
 
+交互提示会从用户视角称为“本机运行数据采集”。确认开启后，CLI 先在 Skill 市场登记本机，再安装 LoongSuite Pilot；成功提示“采集工具安装完成”只表示本机安装完成，不代表已经校验平台能够收到数据。
+
 本 CLI 版本要求 Market 支持“安装请求无 `report`、active artifact + `OBS_VERSION_UNAVAILABLE`”契约，需与 `skills-market` 配套发布；旧 Market 不兼容。
 
 本地联调：默认连生产平台，可用 `SKILLS_SITE` 指向本地服务（如本地平台跑在 3001）：

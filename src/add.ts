@@ -1891,19 +1891,19 @@ async function promptForPilotInstallation(allowPrompt: boolean): Promise<void> {
   const pilot = readLocalPilotStatus();
   const missingReason =
     pilot.serviceName != null
-      ? '检测到监测插件配置残留（未发现程序文件）'
-      : '未检测到 LoongSuite Pilot 监测插件';
+      ? '采集工具安装不完整，建议重新安装。'
+      : '当前未开启本机运行数据采集（成功率、耗时、报错）。';
 
   if (pilot.serviceName != null && pilot.hasBinary) {
-    const running = pilot.isRunning === false ? '，服务未运行' : '';
-    p.log.message(pc.dim(`本机监测插件: 已安装 LoongSuite Pilot (${pilot.serviceName}${running})`));
+    const running = pilot.isRunning === false ? '，当前未运行' : '';
+    p.log.message(pc.dim(`本机已安装采集工具${running}。`));
     return;
   }
 
   if (!allowPrompt || !process.stdin.isTTY) {
     p.log.message(
       pc.yellow(
-        `本机监测插件: ${missingReason}，采集数据不会实际上报；可稍后运行 ${pc.cyan(`${BIN_NAME} obs <接入名>`)} 创建接入并安装监测插件`
+        `当前环境无法确认是否安装采集工具。之后可运行 ${pc.cyan(`${BIN_NAME} obs <agentName>`)} 安装。`
       )
     );
     return;
@@ -1912,23 +1912,21 @@ async function promptForPilotInstallation(allowPrompt: boolean): Promise<void> {
   if (!getApiKey()) {
     p.log.message(
       pc.yellow(
-        `本机监测插件: ${missingReason}，采集数据不会实际上报；先运行 ${pc.cyan(`${BIN_NAME} login <api-key>`)} 登录，下次安装带监测的 skill 时可自动安装`
+        `当前未登录，无法自动安装采集工具。请先运行 ${pc.cyan(`${BIN_NAME} login <api-key>`)}。`
       )
     );
     return;
   }
 
-  p.log.message(pc.yellow(`本机监测插件: ${missingReason}，采集数据不会实际上报`));
+  p.log.message(pc.yellow(missingReason));
   const installPilot = await p.confirm({
-    message: '是否现在创建接入记录并自动安装 LoongSuite Pilot 监测插件？',
+    message: '现在开启吗？会先在 Skill 市场登记本机，再安装采集工具。',
     initialValue: true,
   });
   if (!p.isCancel(installPilot) && installPilot) {
     await createRecordAndInstallPilot(getApiKey()!);
   } else {
-    p.log.message(
-      pc.dim(`已跳过；可稍后运行 ${pc.cyan(`${BIN_NAME} obs <接入名>`)} 创建接入并安装监测插件`)
-    );
+    p.log.message(pc.dim(`已跳过。之后可运行 ${pc.cyan(`${BIN_NAME} obs <agentName>`)} 开启。`));
   }
 }
 

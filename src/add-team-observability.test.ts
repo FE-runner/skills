@@ -214,9 +214,7 @@ describe('team install observability confirmation', () => {
     expect(messages.some((message) => message.includes('观测方式'))).toBe(true);
     expect(p.note).toHaveBeenCalledWith(expect.stringContaining('开启观测后'), '开发者改进计划');
     expect(
-      vi
-        .mocked(p.confirm)
-        .mock.calls.some(([options]) => options.message.includes('LoongSuite Pilot'))
+      vi.mocked(p.confirm).mock.calls.some(([options]) => options.message.includes('采集工具'))
     ).toBe(true);
     expect(createRecordAndInstallPilot).toHaveBeenCalledTimes(1);
     expect(marketProvider.resolve).not.toHaveBeenCalled();
@@ -225,6 +223,27 @@ describe('team install observability confirmation', () => {
       expect(call[3]).toBe('team-id');
       expect(call[4]).toMatch(/^release-/);
     }
+  });
+
+  it('shows login guidance instead of prompting when no API key is configured', async () => {
+    vi.mocked(getApiKey).mockReturnValue(null);
+
+    await runAdd(['t_team-id/team-name'], {
+      agent: ['claude-code'],
+      global: true,
+      copy: true,
+    });
+
+    const messages = vi
+      .mocked(p.log.message)
+      .mock.calls.map(([message]) => String(message))
+      .join('\n');
+    expect(messages).toContain('当前未登录，无法自动安装采集工具');
+    expect(messages).toContain('skills login <api-key>');
+    expect(
+      vi.mocked(p.confirm).mock.calls.some(([options]) => options.message.includes('现在开启吗'))
+    ).toBe(false);
+    expect(createRecordAndInstallPilot).not.toHaveBeenCalled();
   });
 
   it('writes collect consent only to collect-capable team skills', async () => {
@@ -373,7 +392,7 @@ describe('team install observability confirmation', () => {
     const messages = vi
       .mocked(p.log.message)
       .mock.calls.map(([message]) => String(message))
-      .filter((message) => message.includes('本机监测插件'));
+      .filter((message) => message.includes('采集工具'));
 
     expect(messages).toHaveLength(0);
     expect(p.confirm).not.toHaveBeenCalled();
@@ -416,9 +435,11 @@ describe('team install observability confirmation', () => {
     const messages = vi
       .mocked(p.log.message)
       .mock.calls.map(([message]) => String(message))
-      .filter((message) => message.includes('本机监测插件'));
+      .filter((message) => message.includes('采集工具'));
 
     expect(messages).toHaveLength(1);
+    expect(messages[0]).toContain('当前环境无法确认是否安装采集工具');
+    expect(messages[0]).toContain('obs <agentName>');
     expect(p.confirm).not.toHaveBeenCalled();
     expect(createRecordAndInstallPilot).not.toHaveBeenCalled();
   });
