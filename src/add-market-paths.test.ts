@@ -107,6 +107,7 @@ describe('market install paths', () => {
   const originalIsTTY = process.stdin.isTTY;
 
   beforeEach(() => {
+    vi.stubEnv('CI', '');
     Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: true });
     vi.clearAllMocks();
     vi.mocked(marketProvider.installById).mockResolvedValue({
@@ -117,6 +118,7 @@ describe('market install paths', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     Object.defineProperty(process.stdin, 'isTTY', {
       configurable: true,
       value: originalIsTTY,
