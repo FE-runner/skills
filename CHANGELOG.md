@@ -2,6 +2,19 @@
 
 > 本 CHANGELOG 仅记录 BMC 内部 Fork（`-bmc` 标签）自身的改动，不包含上游 `blueai-skills` 原始项目的版本历史。
 
+## [1.4.7-bmc2.3.0] - 2026-11-25
+
+### 新功能
+
+- **BlueFlare 观测组件文案统一**：安装选择、已安装、安装不完整、暂不安装、未登录、非交互、安装链接失效和卸载场景统一使用“BlueFlare 观测组件”；主选择改为定稿版 `Yes（推荐）/ No（暂不安装，稍后可补）`。
+- **默认接入名**：`obs` 与 `obs add` 省略 `agentName` 时默认使用本机 hostname，显式传入时仍可覆盖。
+
+### 修复
+
+- **BlueFlare Agent HOME 检测**：`obs` 会检查显式 Pilot 目录、Agent HOME 环境变量和 `/opt/<agent>/.loongsuite-pilot`，完整安装优先于残留配置；Hermes 等 CLI HOME 与组件安装 HOME 不同的环境不再误报未安装。
+- **安装与卸载 HOME**：检测到实际 Pilot 目录后，安装、卸载和补装子进程使用该目录的父目录作为 HOME/USERPROFILE，避免操作错误目录。
+- **本机标识与设备记录解耦**：`serviceNamePrefix` 不要求与 Market 返回的 `serviceName` 相同；不同时独立展示本机已安装状态，不再提示缺少对应设备记录。
+
 ## [1.4.7-bmc2.2.1] - 2026-11-20
 
 ### 变更

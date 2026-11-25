@@ -28,6 +28,9 @@ describe('skills CLI', () => {
       expect(output).toContain('withdraw <name>');
       expect(output).toContain('enabled cannot be disabled');
       expect(output).toContain('Enable data collection transformation (default)');
+      expect(output).toContain('BlueFlare 观测组件');
+      expect(output).toContain('agentName defaults to the machine hostname');
+      expect(output).not.toContain('LoongSuite Pilot');
     });
 
     it('should show same output for -h alias', () => {

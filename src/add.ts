@@ -69,7 +69,13 @@ import {
 import { addSkillToLocalLock, computeSkillFolderHash, readLocalLock } from './local-lock.ts';
 import { computeBuildHash } from './build-hash.ts';
 import type { Skill, AgentType, ParsedSource } from './types.ts';
-import { NPX_CMD, EXAMPLE_REPO, SKILLS_SITE, BIN_NAME } from './branding.ts';
+import {
+  NPX_CMD,
+  EXAMPLE_REPO,
+  SKILLS_SITE,
+  BIN_NAME,
+  OBSERVABILITY_COMPONENT_NAME,
+} from './branding.ts';
 import packageJson from '../package.json' with { type: 'json' };
 export function initTelemetry(version: string): void {
   setVersion(version);
@@ -1889,21 +1895,17 @@ async function preflightTeamInstall(
  */
 async function promptForPilotInstallation(allowPrompt: boolean): Promise<void> {
   const pilot = readLocalPilotStatus();
-  const missingReason =
-    pilot.serviceName != null
-      ? '采集工具安装不完整，建议重新安装。'
-      : '当前未开启本机运行数据采集（成功率、耗时、报错）。';
 
   if (pilot.serviceName != null && pilot.hasBinary) {
     const running = pilot.isRunning === false ? '，当前未运行' : '';
-    p.log.message(pc.dim(`本机已安装采集工具${running}。`));
+    p.log.message(pc.dim(`本机已安装 ${OBSERVABILITY_COMPONENT_NAME}${running}。`));
     return;
   }
 
   if (!allowPrompt || !process.stdin.isTTY) {
     p.log.message(
       pc.yellow(
-        `当前环境无法确认是否安装采集工具。之后可运行 ${pc.cyan(`${BIN_NAME} obs <agentName>`)} 安装。`
+        `当前环境无法弹出安装选择。之后可运行 ${pc.cyan(`${BIN_NAME} obs`)} 安装 ${OBSERVABILITY_COMPONENT_NAME}。`
       )
     );
     return;
@@ -1912,21 +1914,32 @@ async function promptForPilotInstallation(allowPrompt: boolean): Promise<void> {
   if (!getApiKey()) {
     p.log.message(
       pc.yellow(
-        `当前未登录，无法自动安装采集工具。请先运行 ${pc.cyan(`${BIN_NAME} login <api-key>`)}。`
+        `当前未登录，无法自动安装 ${OBSERVABILITY_COMPONENT_NAME}。请先运行 ${pc.cyan(`${BIN_NAME} login <api-key>`)}。`
       )
     );
     return;
   }
 
-  p.log.message(pc.yellow(missingReason));
-  const installPilot = await p.confirm({
-    message: '现在开启吗？会先在 Skill 市场登记本机，再安装采集工具。',
+  if (pilot.serviceName != null || pilot.hasBinary) {
+    p.log.message(pc.yellow(`${OBSERVABILITY_COMPONENT_NAME}安装不完整，建议重新安装。`));
+  }
+
+  const installPilot = await p.select<boolean>({
+    message: `是否安装 ${OBSERVABILITY_COMPONENT_NAME}？安装后将上报运行数据，帮助持续优化技能的稳定性与效果。`,
     initialValue: true,
+    options: [
+      { value: true, label: 'Yes（推荐）' },
+      { value: false, label: 'No（暂不安装，稍后可补）' },
+    ],
   });
   if (!p.isCancel(installPilot) && installPilot) {
     await createRecordAndInstallPilot(getApiKey()!);
   } else {
-    p.log.message(pc.dim(`已跳过。之后可运行 ${pc.cyan(`${BIN_NAME} obs <agentName>`)} 开启。`));
+    p.log.message(
+      pc.dim(
+        `已跳过安装。之后可运行 ${pc.cyan(`${BIN_NAME} obs`)} 安装 ${OBSERVABILITY_COMPONENT_NAME}。`
+      )
+    );
   }
 }
 
