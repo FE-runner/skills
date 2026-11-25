@@ -94,6 +94,29 @@ CLI SHALL 仅在安装响应含对象型 `collect.config` 与非空字符串 `co
 - **WHEN** 可观测 Skill 安装且 consent=false
 - **THEN** CLI 不提示 Pilot、不自动安装插件，但仍落盘服务端文件
 
+### Requirement: 安装结果分别报告 consent 与组件状态
+
+Market Skill 安装完成后，CLI SHALL 分别报告当前 scope 的采集同意是否已写入，以及 BlueFlare 观测组件的安装结果。仅报告“本机已安装组件”或“跳过组件安装”不构成完整结果。consent 只有在对应 lock 写入成功后才可表示为“已记录”；Skill 安装失败或 lock 写入失败时 SHALL 明确表示 consent 未写入。
+
+#### Scenario: 已同意且组件已安装
+
+- **WHEN** `add <skill> --observability` 安装成功、lock 写入 `collectConsent=true`，且本机已有完整 BlueFlare 观测组件
+- **THEN** 结果同时显示采集状态为已记录
+- **AND** 显示观测组件已安装且无需重复安装
+- **AND** 不得声称已经验证平台能够收到数据
+
+#### Scenario: lock 写入失败
+
+- **WHEN** Skill 文件安装成功但当前 scope 的 lock 写入失败
+- **THEN** 结果明确显示采集同意未写入
+- **AND** 不得显示 `collectConsent=true` 已记录
+
+#### Scenario: 团队安装结果
+
+- **WHEN** 团队安装包含多个可观测 Skill
+- **THEN** CLI 汇总显示已同意和未同意的 Skill 数量
+- **AND** 观测组件状态只汇总报告一次
+
 ### Requirement: 团队安装一次确定、复用或询问 consent
 
 团队批量安装 SHALL 在安装前收集团队内可观测 Skill，并对 lock 缺少 `collectConsent` 的项发起一次团队级明确选择；lock 已为 `true` 或 `false` 的项直接复用。选择前 SHALL 展示开发者改进计划声明，选择项 SHALL NOT 预选。非交互环境无显式参数时 SHALL 对待定夺项写 `false` 并继续安装。显式 `--observability` 时 SHALL 为安装成功的可观测 Skill 写 `true`。不可观测 Skill SHALL NOT 写 consent；任一 Skill 安装失败时 SHALL NOT 写入或修改该 Skill 的 consent。

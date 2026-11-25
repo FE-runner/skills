@@ -223,6 +223,12 @@ describe('team install observability confirmation', () => {
       ],
     });
     expect(p.note).toHaveBeenCalledWith(expect.stringContaining('开启观测后'), '开发者改进计划');
+    expect(p.note).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /采集状态：已记录（已同意 2 个，未同意 0 个；范围：全局）[\s\S]*观测组件：本次已安装完成[\s\S]*数据上报：尚未验证平台是否收到数据/
+      ),
+      'Observability'
+    );
     expect(createRecordAndInstallPilot).toHaveBeenCalledTimes(1);
     expect(marketProvider.resolve).not.toHaveBeenCalled();
     for (const call of vi.mocked(marketProvider.installById).mock.calls) {
@@ -247,6 +253,12 @@ describe('team install observability confirmation', () => {
       .join('\n');
     expect(messages).toContain('已跳过安装');
     expect(messages).toContain('blueai-skills obs');
+    expect(p.note).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /采集状态：已记录（已同意 2 个，未同意 0 个；范围：全局）[\s\S]*观测组件：本次未安装（用户跳过）/
+      ),
+      'Observability'
+    );
     expect(createRecordAndInstallPilot).not.toHaveBeenCalled();
   });
 
@@ -284,11 +296,12 @@ describe('team install observability confirmation', () => {
       copy: true,
     });
 
-    const messages = vi
-      .mocked(p.log.message)
-      .mock.calls.map(([message]) => String(message))
-      .join('\n');
-    expect(messages).toContain('本机已安装 BlueFlare 观测组件。');
+    expect(p.note).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /采集状态：已记录（已同意 2 个，未同意 0 个；范围：全局）[\s\S]*观测组件：本机已安装且正在运行，无需重复安装[\s\S]*数据上报：尚未验证平台是否收到数据/
+      ),
+      'Observability'
+    );
     expect(
       vi
         .mocked(p.select)
@@ -312,6 +325,12 @@ describe('team install observability confirmation', () => {
       .join('\n');
     expect(messages).toContain('当前未登录，无法自动安装 BlueFlare 观测组件');
     expect(messages).toContain('skills login <api-key>');
+    expect(p.note).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /采集状态：已记录（已同意 2 个，未同意 0 个；范围：全局）[\s\S]*观测组件：本次未安装，需要按上方提示手动处理/
+      ),
+      'Observability'
+    );
     expect(
       vi
         .mocked(p.select)

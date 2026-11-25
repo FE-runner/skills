@@ -5,6 +5,7 @@ import { marketProvider } from './providers/market.ts';
 import { installWellKnownSkillForAgent } from './installer.ts';
 import { addSkillToLock } from './skill-lock.ts';
 import { addSkillToLocalLock, readLocalLock } from './local-lock.ts';
+import { readLocalPilotStatus } from './obs.ts';
 
 vi.mock('@clack/prompts', () => ({
   intro: vi.fn(),
@@ -149,6 +150,11 @@ describe('market install paths', () => {
   });
 
   it('installs one active artifact when observability is explicit', async () => {
+    vi.mocked(readLocalPilotStatus).mockReturnValue({
+      serviceName: 'local-pilot',
+      hasBinary: true,
+      isRunning: true,
+    });
     vi.mocked(marketProvider.installById).mockResolvedValue({
       ok: true,
       data: marketSkill('demo', {
@@ -170,7 +176,6 @@ describe('market install paths', () => {
         copy: true,
         global: false,
         observability: true,
-        skipPilotStatus: true,
       },
       p.spinner()
     );
@@ -187,6 +192,12 @@ describe('market install paths', () => {
       'demo',
       expect.objectContaining({ collectConsent: true }),
       expect.any(String)
+    );
+    expect(p.note).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /采集状态：已记录（collectConsent=true，范围：项目）[\s\S]*观测组件：本机已安装且正在运行，无需重复安装[\s\S]*数据上报：尚未验证平台是否收到数据/
+      ),
+      'Observability'
     );
     const installCall = vi.mocked(installWellKnownSkillForAgent).mock.calls[0]!;
     expect(installCall[0].files.get('.blueai-skills-market/bsm-obs-run.cjs')).toBe(
@@ -484,7 +495,6 @@ describe('market install paths', () => {
         copy: true,
         global: false,
         observability: true,
-        skipPilotStatus: true,
       },
       p.spinner()
     );
@@ -495,6 +505,10 @@ describe('market install paths', () => {
       expect.any(String)
     );
     expect(p.log.warn).toHaveBeenCalledWith(expect.stringContaining('--observability 已忽略'));
+    expect(p.note).toHaveBeenCalledWith(
+      expect.stringContaining('该 Skill 不支持可观测，--observability 已忽略'),
+      'Observability'
+    );
   });
 
   it('stops before writing when an explicit observability build hash does not match', async () => {
@@ -552,10 +566,48 @@ describe('market install paths', () => {
       p.spinner()
     );
 
-    expect(result).toEqual({ fallbackToGitHub: false, installed: true });
+    expect(result).toEqual({
+      fallbackToGitHub: false,
+      installed: true,
+      lockPersisted: false,
+    });
     expect(p.log.warn).toHaveBeenCalledWith(
       expect.stringContaining('Skill 文件已安装，但安装锁更新失败')
     );
+  });
+
+  it('does not claim collection consent was recorded when the lock write fails', async () => {
+    vi.mocked(readLocalPilotStatus).mockReturnValue({
+      serviceName: 'local-pilot',
+      hasBinary: true,
+      isRunning: true,
+    });
+    vi.mocked(addSkillToLocalLock).mockRejectedValueOnce(new Error('lock write failed'));
+    vi.mocked(marketProvider.installById).mockResolvedValue({
+      ok: true,
+      data: marketSkill('demo', {
+        collect: { config: { collectEnabled: true }, meta: { blueai_signature: 'sig' } },
+      }),
+    } as never);
+
+    await handleMarketSkill(
+      'demo',
+      { type: 'market', url: 'demo', marketName: 'demo' },
+      {
+        agent: ['claude-code'],
+        yes: true,
+        copy: true,
+        global: false,
+        observability: true,
+      },
+      p.spinner()
+    );
+
+    const collectionSummary = vi
+      .mocked(p.note)
+      .mock.calls.find(([, title]) => title === 'Observability')?.[0];
+    expect(String(collectionSummary)).toContain('采集状态：未写入（安装锁更新失败）');
+    expect(String(collectionSummary)).not.toContain('collectConsent=true');
   });
 
   it('returns failure without advancing the lock when one Agent target fails', async () => {
@@ -579,7 +631,11 @@ describe('market install paths', () => {
       p.spinner()
     );
 
-    expect(result).toEqual({ fallbackToGitHub: false, installed: false });
+    expect(result).toEqual({
+      fallbackToGitHub: false,
+      installed: false,
+      lockPersisted: false,
+    });
     expect(installWellKnownSkillForAgent).toHaveBeenCalledTimes(2);
     expect(addSkillToLocalLock).not.toHaveBeenCalled();
   });
@@ -967,6 +1023,10 @@ describe('market install paths', () => {
       p.spinner()
     );
 
-    expect(result).toEqual({ fallbackToGitHub: true, installed: false });
+    expect(result).toEqual({
+      fallbackToGitHub: true,
+      installed: false,
+      lockPersisted: false,
+    });
   });
 });

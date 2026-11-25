@@ -317,6 +317,14 @@ npx blueai-skills obs --help
 
 项目级和全局安装都支持 `--observability`。该参数显式开启观测；不传时，交互安装会展示开发者改进计划并要求选择，`-y`/CI 环境默认关闭。lock 已有选择时直接复用。它不切换安装文件，CLI 始终安装 Market 返回的 active artifact。采集状态按范围隔离：全局记录在 `~/.agents/.skill-lock.json`，项目级记录在当前项目的 `skills-lock.json`。仅有可观测 Skill 且 `collectConsent=true` 时才引导安装 BlueFlare 观测组件。
 
+安装完成后，CLI 会分别报告采集同意是否已写入，以及观测组件是否已安装。即使本机已经装有组件、无需重复安装，也会明确显示 `collectConsent=true/false`；安装锁写入失败时不会宣称采集同意已经记录。
+
+```text
+采集状态：已记录（collectConsent=true，范围：全局）
+观测组件：本机已安装且正在运行，无需重复安装
+数据上报：尚未验证平台是否收到数据
+```
+
 交互提示会明确询问是否安装 BlueFlare 观测组件。确认开启后，CLI 先在 Skill 市场登记本机，再安装组件；成功提示“BlueFlare 观测组件安装完成”只表示本机安装完成，不代表已经校验平台能够收到数据。
 
 本 CLI 版本要求 Market 支持“安装请求无 `report`、active artifact + `OBS_VERSION_UNAVAILABLE`”契约，需与 `skills-market` 配套发布；旧 Market 不兼容。

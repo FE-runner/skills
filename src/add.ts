@@ -1660,15 +1660,13 @@ async function handleTeamInstall(
     cwd,
     canPrompt
   );
-  if (teamInstallDecision.showPilotStatus) {
-    await promptForPilotInstallation(teamInstallDecision.allowPilotPrompt);
-  }
-
   p.log.info(`Installing ${teamData.skills.length} skills from team "${resolvedTeamName}"...`);
 
   // 依次安装每个 skill，复用 handleMarketSkill 的单 skill 安装逻辑
   let installedCount = 0;
   let failedCount = teamInstallDecision.failures.size;
+  let allLocksPersisted = true;
+  const installedKeys = new Set<string>();
   for (const skill of teamData.skills) {
     const installVersion = resolveTeamInstallVersion(skill);
     if (!installVersion) continue;
@@ -1708,9 +1706,56 @@ async function handleTeamInstall(
     );
     if (installResult.installed) {
       installedCount++;
+      if (installResult.lockPersisted) {
+        installedKeys.add(key);
+      } else {
+        allLocksPersisted = false;
+      }
     } else {
       failedCount++;
+      allLocksPersisted = false;
     }
+  }
+
+  let pilotOutcome: PilotOutcome | undefined;
+  if (
+    failedCount === 0 &&
+    allLocksPersisted &&
+    teamInstallDecision.showPilotStatus &&
+    installedCount > 0
+  ) {
+    pilotOutcome = await promptForPilotInstallation(teamInstallDecision.allowPilotPrompt);
+  }
+
+  const installedObservableKeys = [...teamInstallDecision.installResults.entries()]
+    .filter(([key, skill]) => installedKeys.has(key) && hasValidCollect(skill))
+    .map(([key]) => key);
+  if (installedObservableKeys.length > 0) {
+    const agreedCount = installedObservableKeys.filter(
+      (key) => teamInstallDecision.consentByKey.get(key) === true
+    ).length;
+    const declinedCount = installedObservableKeys.filter(
+      (key) => teamInstallDecision.consentByKey.get(key) === false
+    ).length;
+    const collectionLines = [
+      `采集状态：已记录（已同意 ${agreedCount} 个，未同意 ${declinedCount} 个；范围：${installGlobally ? '全局' : '项目'}）`,
+    ];
+    if (pilotOutcome !== undefined) {
+      collectionLines.push(`观测组件：${describePilotOutcome(pilotOutcome)}`);
+      if (
+        pilotOutcome === 'already-installed-running' ||
+        pilotOutcome === 'already-installed-stopped' ||
+        pilotOutcome === 'installed-this-run'
+      ) {
+        collectionLines.push('数据上报：尚未验证平台是否收到数据');
+      }
+    }
+    p.note(collectionLines.join('\n'), 'Observability');
+  } else if (options.observability === true && installedCount > 0) {
+    p.note(
+      '采集状态：未变更（本次安装的 Skill 均不支持可观测，--observability 已忽略）',
+      'Observability'
+    );
   }
 
   if (failedCount > 0) {
@@ -1893,13 +1938,36 @@ async function preflightTeamInstall(
  * 统一处理 LoongSuite Pilot 本机状态：完整安装仅提示；缺失/残留时按交互能力
  * 决定是否询问并自动安装，否则保留一次手动安装指引。
  */
-async function promptForPilotInstallation(allowPrompt: boolean): Promise<void> {
+type PilotOutcome =
+  | 'already-installed-running'
+  | 'already-installed-stopped'
+  | 'installed-this-run'
+  | 'skipped-by-user'
+  | 'manual-install-required'
+  | 'install-failed';
+
+function describePilotOutcome(outcome: PilotOutcome): string {
+  switch (outcome) {
+    case 'already-installed-running':
+      return '本机已安装且正在运行，无需重复安装';
+    case 'already-installed-stopped':
+      return '本机已安装，但当前未运行，无需重复安装';
+    case 'installed-this-run':
+      return '本次已安装完成';
+    case 'skipped-by-user':
+      return '本次未安装（用户跳过）';
+    case 'manual-install-required':
+      return '本次未安装，需要按上方提示手动处理';
+    case 'install-failed':
+      return '安装失败，需要按上方提示重试';
+  }
+}
+
+async function promptForPilotInstallation(allowPrompt: boolean): Promise<PilotOutcome> {
   const pilot = readLocalPilotStatus();
 
   if (pilot.serviceName != null && pilot.hasBinary) {
-    const running = pilot.isRunning === false ? '，当前未运行' : '';
-    p.log.message(pc.dim(`本机已安装 ${OBSERVABILITY_COMPONENT_NAME}${running}。`));
-    return;
+    return pilot.isRunning === false ? 'already-installed-stopped' : 'already-installed-running';
   }
 
   if (!allowPrompt || !process.stdin.isTTY) {
@@ -1908,7 +1976,7 @@ async function promptForPilotInstallation(allowPrompt: boolean): Promise<void> {
         `当前环境无法弹出安装选择。之后可运行 ${pc.cyan(`${BIN_NAME} obs`)} 安装 ${OBSERVABILITY_COMPONENT_NAME}。`
       )
     );
-    return;
+    return 'manual-install-required';
   }
 
   if (!getApiKey()) {
@@ -1917,7 +1985,7 @@ async function promptForPilotInstallation(allowPrompt: boolean): Promise<void> {
         `当前未登录，无法自动安装 ${OBSERVABILITY_COMPONENT_NAME}。请先运行 ${pc.cyan(`${BIN_NAME} login <api-key>`)}。`
       )
     );
-    return;
+    return 'manual-install-required';
   }
 
   if (pilot.serviceName != null || pilot.hasBinary) {
@@ -1933,13 +2001,15 @@ async function promptForPilotInstallation(allowPrompt: boolean): Promise<void> {
     ],
   });
   if (!p.isCancel(installPilot) && installPilot) {
-    await createRecordAndInstallPilot(getApiKey()!);
+    const installed = await createRecordAndInstallPilot(getApiKey()!);
+    return installed ? 'installed-this-run' : 'install-failed';
   } else {
     p.log.message(
       pc.dim(
         `已跳过安装。之后可运行 ${pc.cyan(`${BIN_NAME} obs`)} 安装 ${OBSERVABILITY_COMPONENT_NAME}。`
       )
     );
+    return 'skipped-by-user';
   }
 }
 
@@ -1948,7 +2018,7 @@ export async function handleMarketSkill(
   parsed: ParsedSource,
   options: AddOptions,
   spinner: ReturnType<typeof p.spinner>
-): Promise<{ fallbackToGitHub: boolean; installed: boolean }> {
+): Promise<{ fallbackToGitHub: boolean; installed: boolean; lockPersisted: boolean }> {
   const canPrompt = process.stdin.isTTY && !options.yes && !process.env.CI;
   // Name-based install: [author/]name[@version]
   let skillName = parsed.marketName || source;
@@ -2029,7 +2099,7 @@ export async function handleMarketSkill(
     // Market 找不到，如果输入是 author/name 格式，回退到 GitHub shorthand
     if (parsed.marketAuthor && !parsed.marketVersion) {
       spinner.stop(pc.dim('Not found on Skills Market, trying GitHub...'));
-      return { fallbackToGitHub: true, installed: false };
+      return { fallbackToGitHub: true, installed: false, lockPersisted: false };
     }
     spinner.stop(pc.red('Not found'));
     p.outro(pc.red(`Skill "${displayName}" not found on Skills Market`));
@@ -2284,8 +2354,9 @@ export async function handleMarketSkill(
   }
 
   // 只有可观测 Skill 且最终同意统计时才引导采集插件。
+  let pilotOutcome: PilotOutcome | undefined;
   if (collectCapable && writeCollectConsent === true && !options.skipPilotStatus) {
-    await promptForPilotInstallation(canPrompt);
+    pilotOutcome = await promptForPilotInstallation(canPrompt);
   }
 
   // Build installation summary
@@ -2333,9 +2404,9 @@ export async function handleMarketSkill(
 
   const persistMarketLock = async (
     installedResults: Array<{ success: boolean; path: string; canonicalPath?: string }>
-  ) => {
+  ): Promise<boolean> => {
     if (installedResults.length === 0 || installedResults.some((result) => !result.success)) {
-      return;
+      return false;
     }
     if (installGlobally) {
       await addSkillToLock(skill.installName, {
@@ -2355,11 +2426,11 @@ export async function handleMarketSkill(
         ...(teamSkillId ? { teamSkillName: skillName } : {}),
         ...(writeCollectConsent !== undefined ? { collectConsent: writeCollectConsent } : {}),
       });
-      return;
+      return true;
     }
 
     const installDir = installedResults[0]?.canonicalPath || installedResults[0]?.path;
-    if (!installDir) return;
+    if (!installDir) return false;
     const computedHash = await computeSkillFolderHash(installDir);
     await addSkillToLocalLock(
       skill.installName,
@@ -2381,6 +2452,7 @@ export async function handleMarketSkill(
       },
       cwd
     );
+    return true;
   };
 
   for (const agent of targetAgents) {
@@ -2394,10 +2466,13 @@ export async function handleMarketSkill(
       ...result,
     });
   }
-  if (results.every((result) => result.success)) {
+  let lockPersisted = false;
+  let lockPersistFailed = false;
+  if (results.length > 0 && results.every((result) => result.success)) {
     try {
-      await persistMarketLock(results);
+      lockPersisted = await persistMarketLock(results);
     } catch (error) {
+      lockPersistFailed = true;
       p.log.warn(
         `Skill 文件已安装，但安装锁更新失败：${
           error instanceof Error ? error.message : String(error)
@@ -2465,12 +2540,55 @@ export async function handleMarketSkill(
     }
   }
 
+  const showCollectionSummary =
+    !options.skipPilotStatus && (collectCapable || options.observability === true);
+  if (showCollectionSummary) {
+    const collectionLines: string[] = [];
+    if (!collectCapable) {
+      collectionLines.push('采集状态：未变更（该 Skill 不支持可观测，--observability 已忽略）');
+    } else if (!lockPersisted) {
+      const reason =
+        failed.length > 0
+          ? 'Skill 安装未全部成功'
+          : lockPersistFailed
+            ? '安装锁更新失败'
+            : '安装尚未完成';
+      collectionLines.push(`采集状态：未写入（${reason}）`);
+    } else if (writeCollectConsent === true) {
+      collectionLines.push(
+        `采集状态：已记录（collectConsent=true，范围：${installGlobally ? '全局' : '项目'}）`
+      );
+    } else if (writeCollectConsent === false) {
+      collectionLines.push(
+        `采集状态：已记录（collectConsent=false，范围：${installGlobally ? '全局' : '项目'}）`
+      );
+    } else {
+      collectionLines.push('采集状态：未选择');
+    }
+
+    if (pilotOutcome !== undefined) {
+      collectionLines.push(`观测组件：${describePilotOutcome(pilotOutcome)}`);
+      if (
+        pilotOutcome === 'already-installed-running' ||
+        pilotOutcome === 'already-installed-stopped' ||
+        pilotOutcome === 'installed-this-run'
+      ) {
+        collectionLines.push('数据上报：尚未验证平台是否收到数据');
+      }
+    }
+    p.note(collectionLines.join('\n'), 'Observability');
+  }
+
   console.log();
   p.outro(
     pc.green('Done!') + pc.dim('  Review skills before use; they run with full agent permissions.')
   );
 
-  return { fallbackToGitHub: false, installed: results.length > 0 && failed.length === 0 };
+  return {
+    fallbackToGitHub: false,
+    installed: results.length > 0 && failed.length === 0,
+    lockPersisted,
+  };
 }
 
 export async function runAdd(args: string[], options: AddOptions = {}): Promise<void> {
