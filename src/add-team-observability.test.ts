@@ -116,6 +116,7 @@ describe('team install observability confirmation', () => {
   const originalExitCode = process.exitCode;
 
   beforeEach(() => {
+    vi.stubEnv('CI', '');
     Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: true });
     process.exitCode = undefined;
     vi.clearAllMocks();
@@ -195,6 +196,7 @@ describe('team install observability confirmation', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     vi.unstubAllGlobals();
     Object.defineProperty(process.stdin, 'isTTY', {
       configurable: true,
