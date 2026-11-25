@@ -203,19 +203,26 @@ describe('team install observability confirmation', () => {
     process.exitCode = originalExitCode;
   });
 
-  it('asks once after team collection consent and installs Pilot once', async () => {
+  it('asks once after team collection consent and installs the component once', async () => {
     await runAdd(['t_team-id/team-name'], {
       agent: ['claude-code'],
       global: true,
       copy: true,
     });
 
-    const messages = vi.mocked(p.select).mock.calls.map(([options]) => options.message);
+    const selectCalls = vi.mocked(p.select).mock.calls.map(([options]) => options);
+    const messages = selectCalls.map((options) => options.message);
     expect(messages.some((message) => message.includes('观测方式'))).toBe(true);
+    expect(selectCalls).toContainEqual({
+      message:
+        '是否安装 BlueFlare 观测组件？安装后将上报运行数据，帮助持续优化技能的稳定性与效果。',
+      initialValue: true,
+      options: [
+        { value: true, label: 'Yes（推荐）' },
+        { value: false, label: 'No（暂不安装，稍后可补）' },
+      ],
+    });
     expect(p.note).toHaveBeenCalledWith(expect.stringContaining('开启观测后'), '开发者改进计划');
-    expect(
-      vi.mocked(p.confirm).mock.calls.some(([options]) => options.message.includes('采集工具'))
-    ).toBe(true);
     expect(createRecordAndInstallPilot).toHaveBeenCalledTimes(1);
     expect(marketProvider.resolve).not.toHaveBeenCalled();
     for (const call of vi.mocked(marketProvider.installById).mock.calls) {
@@ -223,6 +230,71 @@ describe('team install observability confirmation', () => {
       expect(call[3]).toBe('team-id');
       expect(call[4]).toMatch(/^release-/);
     }
+  });
+
+  it('skips component installation when the user selects No', async () => {
+    vi.mocked(p.select).mockResolvedValueOnce('on').mockResolvedValueOnce(false);
+
+    await runAdd(['t_team-id/team-name'], {
+      agent: ['claude-code'],
+      global: true,
+      copy: true,
+    });
+
+    const messages = vi
+      .mocked(p.log.message)
+      .mock.calls.map(([message]) => String(message))
+      .join('\n');
+    expect(messages).toContain('已跳过安装');
+    expect(messages).toContain('blueai-skills obs');
+    expect(createRecordAndInstallPilot).not.toHaveBeenCalled();
+  });
+
+  it('prompts to repair an incomplete component install', async () => {
+    vi.mocked(readLocalPilotStatus).mockReturnValue({
+      serviceName: 'dea161ca-3b3e-42ff-a98f-2219dfcc1a90',
+      hasBinary: false,
+      isRunning: null,
+    });
+
+    await runAdd(['t_team-id/team-name'], {
+      agent: ['claude-code'],
+      global: true,
+      copy: true,
+    });
+
+    const messages = vi
+      .mocked(p.log.message)
+      .mock.calls.map(([message]) => String(message))
+      .join('\n');
+    expect(messages).toContain('BlueFlare 观测组件安装不完整，建议重新安装。');
+    expect(createRecordAndInstallPilot).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports an existing component without prompting to install again', async () => {
+    vi.mocked(readLocalPilotStatus).mockReturnValue({
+      serviceName: 'dea161ca-3b3e-42ff-a98f-2219dfcc1a90',
+      hasBinary: true,
+      isRunning: true,
+    });
+
+    await runAdd(['t_team-id/team-name'], {
+      agent: ['claude-code'],
+      global: true,
+      copy: true,
+    });
+
+    const messages = vi
+      .mocked(p.log.message)
+      .mock.calls.map(([message]) => String(message))
+      .join('\n');
+    expect(messages).toContain('本机已安装 BlueFlare 观测组件。');
+    expect(
+      vi
+        .mocked(p.select)
+        .mock.calls.some(([options]) => options.message.startsWith('是否安装 BlueFlare 观测组件'))
+    ).toBe(false);
+    expect(createRecordAndInstallPilot).not.toHaveBeenCalled();
   });
 
   it('shows login guidance instead of prompting when no API key is configured', async () => {
@@ -238,10 +310,12 @@ describe('team install observability confirmation', () => {
       .mocked(p.log.message)
       .mock.calls.map(([message]) => String(message))
       .join('\n');
-    expect(messages).toContain('当前未登录，无法自动安装采集工具');
+    expect(messages).toContain('当前未登录，无法自动安装 BlueFlare 观测组件');
     expect(messages).toContain('skills login <api-key>');
     expect(
-      vi.mocked(p.confirm).mock.calls.some(([options]) => options.message.includes('现在开启吗'))
+      vi
+        .mocked(p.select)
+        .mock.calls.some(([options]) => options.message.includes('是否安装 BlueFlare 观测组件'))
     ).toBe(false);
     expect(createRecordAndInstallPilot).not.toHaveBeenCalled();
   });
@@ -368,7 +442,11 @@ describe('team install observability confirmation', () => {
       copy: true,
     });
 
-    expect(p.select).not.toHaveBeenCalled();
+    const selectMessages = vi.mocked(p.select).mock.calls.map(([options]) => options.message);
+    expect(selectMessages.some((message) => message.includes('观测方式'))).toBe(false);
+    expect(selectMessages).toContain(
+      '是否安装 BlueFlare 观测组件？安装后将上报运行数据，帮助持续优化技能的稳定性与效果。'
+    );
     expect(addSkillToLock).toHaveBeenCalledWith(
       'skill-a',
       expect.objectContaining({ teamId: 'team-id', collectConsent: false })
@@ -392,7 +470,7 @@ describe('team install observability confirmation', () => {
     const messages = vi
       .mocked(p.log.message)
       .mock.calls.map(([message]) => String(message))
-      .filter((message) => message.includes('采集工具'));
+      .filter((message) => message.includes('BlueFlare 观测组件'));
 
     expect(messages).toHaveLength(0);
     expect(p.confirm).not.toHaveBeenCalled();
@@ -435,11 +513,11 @@ describe('team install observability confirmation', () => {
     const messages = vi
       .mocked(p.log.message)
       .mock.calls.map(([message]) => String(message))
-      .filter((message) => message.includes('采集工具'));
+      .filter((message) => message.includes('BlueFlare 观测组件'));
 
     expect(messages).toHaveLength(1);
-    expect(messages[0]).toContain('当前环境无法确认是否安装采集工具');
-    expect(messages[0]).toContain('obs <agentName>');
+    expect(messages[0]).toContain('当前环境无法弹出安装选择');
+    expect(messages[0]).toContain('blueai-skills obs');
     expect(p.confirm).not.toHaveBeenCalled();
     expect(createRecordAndInstallPilot).not.toHaveBeenCalled();
   });

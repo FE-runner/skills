@@ -285,18 +285,19 @@ npx blueai-skills withdraw my-skill
 
 ### Agent 可观测（obs）
 
-管理 Agent 可观测接入（与市场平台网页共用同一份接入记录）：创建接入、查看清单、换发安装凭证、本机安装/卸载 LoongSuite Pilot。接入为单一 loongsuite 方案（LoongSuite Pilot 自动发现本机全部 Agent），**创建不再需要 `--agent`**。
+管理 Agent 可观测接入（与市场平台网页共用同一份接入记录）：创建接入、查看清单、换发安装凭证、本机安装/卸载 BlueFlare 观测组件。接入为单一 loongsuite 方案（BlueFlare 观测组件自动发现本机全部 Agent），**创建不再需要 `--agent`**。
 
 命令组内置**本机安装状态分层检测**（纯文件信号，不执行任何插件命令）：`config.json` 的 serviceNamePrefix（配置）+ `current`/`bin`/`versions` 程序文件痕迹（二进制）+ pid 文件进程探测（运行中）。检测会依次查看 `BLUEAI_OBS_PILOT_DIR`、`LOONGSUITE_PILOT_DATA_DIR`、当前 HOME、`BLUEAI_AGENT_HOME`/`HERMES_HOME`/`OPENCLAW_HOME` 以及 `/opt/<agent>/.loongsuite-pilot`，因此 CLI HOME 与 Agent HOME 不同时仍能识别实际安装。`obs list` 独立展示本机安装状态，只有 serviceName 恰好一致时才给对应记录打 `✓`；`obs install` 在本机已有完整安装时二次确认；`obs add`/`obs` 创建结果附带下一步安装指引。
 
 前置：先 `npx blueai-skills login <api-key>` 登录（API Key 在市场平台「头像 → API Keys」页生成）。
 
 ```bash
-# 创建接入记录并打印 macOS/Linux + Windows 双平台安装命令（--note 可选）
-npx blueai-skills obs 公司机
+# 使用本机 hostname 作为 agentName，创建接入并打印双平台安装命令
+npx blueai-skills obs
 
-# "add" 是 create 的别名，等价写法
-npx blueai-skills obs add 公司机 --note "办公机"
+# 显式指定 agentName（"add" 是 create 的别名）
+npx blueai-skills obs <agentName>
+npx blueai-skills obs add <agentName> --note "办公机"
 
 # 列出接入清单（每行含 agentId〔UUID〕，供 obs refresh 使用；本机已装的接入带 ✓ 标记）
 npx blueai-skills obs list
@@ -307,16 +308,16 @@ npx blueai-skills obs refresh 7a5123d3-caae-4801-8078-c806baf43b69
 # 换发凭证并立即在本机执行安装（已有完整安装时二次确认；探针默认装本机，按宿主平台选命令）
 npx blueai-skills obs install 7a5123d3-caae-4801-8078-c806baf43b69
 
-# 本机卸载 LoongSuite Pilot（--purge 连同 ~/.loongsuite-pilot 本地数据一起删除）
+# 本机卸载 BlueFlare 观测组件（--purge 连同本地数据一起删除）
 npx blueai-skills obs uninstall [--purge]
 
 # 查看 obs 帮助
 npx blueai-skills obs --help
 ```
 
-项目级和全局安装都支持 `--observability`。该参数显式开启观测；不传时，交互安装会展示开发者改进计划并要求选择，`-y`/CI 环境默认关闭。lock 已有选择时直接复用。它不切换安装文件，CLI 始终安装 Market 返回的 active artifact。采集状态按范围隔离：全局记录在 `~/.agents/.skill-lock.json`，项目级记录在当前项目的 `skills-lock.json`。仅有可观测 Skill 且 `collectConsent=true` 时才引导 LoongSuite Pilot。
+项目级和全局安装都支持 `--observability`。该参数显式开启观测；不传时，交互安装会展示开发者改进计划并要求选择，`-y`/CI 环境默认关闭。lock 已有选择时直接复用。它不切换安装文件，CLI 始终安装 Market 返回的 active artifact。采集状态按范围隔离：全局记录在 `~/.agents/.skill-lock.json`，项目级记录在当前项目的 `skills-lock.json`。仅有可观测 Skill 且 `collectConsent=true` 时才引导安装 BlueFlare 观测组件。
 
-交互提示会从用户视角称为“本机运行数据采集”。确认开启后，CLI 先在 Skill 市场登记本机，再安装 LoongSuite Pilot；成功提示“采集工具安装完成”只表示本机安装完成，不代表已经校验平台能够收到数据。
+交互提示会明确询问是否安装 BlueFlare 观测组件。确认开启后，CLI 先在 Skill 市场登记本机，再安装组件；成功提示“BlueFlare 观测组件安装完成”只表示本机安装完成，不代表已经校验平台能够收到数据。
 
 本 CLI 版本要求 Market 支持“安装请求无 `report`、active artifact + `OBS_VERSION_UNAVAILABLE`”契约，需与 `skills-market` 配套发布；旧 Market 不兼容。
 
@@ -613,7 +614,7 @@ npx --yes blueai-skills@dev <命令>
 - 默认市场为内网测试环境 `https://blueai-skills-market.domob-inc.cn`，仍可用 `SKILLS_SITE` 覆盖。
 - 除市场地址与提示 tag 外，开发版与正式版行为完全一致：凭证 `~/.blueai/secrets.json`、全局锁 `~/.agents/.skill-lock.json`（或 `$XDG_STATE_HOME/skills/.skill-lock.json`）、canonical 目录 `~/.agents/skills/`，并按既有规则写入真实 agent 目录，因此开发版安装的技能 Claude / Codex 可以直接使用。
 - 因为共用本地状态：两个市场的 `skillId` 不互通（正式版 `check` 对开发版装的技能匹配不上）、同名技能互相覆盖、登录态共享（切换市场需重新 `login`，或临时用 `SKILLS_API_KEY`）。
-- LoongSuite Pilot 默认使用 `$HOME/.loongsuite-pilot/`。CLI 会额外发现 `/opt/<agent>/.loongsuite-pilot` 等 Agent HOME；`obs install` / `obs uninstall` 会作用于真实机器，请在专用机器或虚拟机上验证。
+- BlueFlare 观测组件默认使用 `$HOME/.loongsuite-pilot/`。CLI 会额外发现 `/opt/<agent>/.loongsuite-pilot` 等 Agent HOME；`obs install` / `obs uninstall` 会作用于真实机器，请在专用机器或虚拟机上验证。
 - 网页端同样可用：测试市场工作台 `https://blueai-skills-market.domob-inc.cn`，可观测页面 `https://blueai-skills-market.domob-inc.cn/dashboard/observability`（与 CLI 的 `obs` 命令共用同一批接入记录）。
 - 回到正式版：`npx --yes blueai-skills@latest <命令>`。
 

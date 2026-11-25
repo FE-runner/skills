@@ -28,13 +28,14 @@ import { EventEmitter } from 'events';
 import * as p from '@clack/prompts';
 import { spawn } from 'child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { marketProvider } from './providers/market.ts';
 import { getApiKey } from './auth.ts';
 import {
   runObs,
   parseObsOptions,
+  showObsHelp,
   detectHostPlatform,
   pickPlatformCommand,
   readLocalPilotServiceName,
@@ -106,6 +107,21 @@ describe('obs', () => {
   }
 
   describe('parseObsOptions', () => {
+    it('defaults agentName to the machine hostname when omitted', () => {
+      expect(parseObsOptions([])).toEqual({
+        help: false,
+        subcommand: 'create',
+        agentName: hostname(),
+        note: undefined,
+      });
+      expect(parseObsOptions(['add'])).toEqual({
+        help: false,
+        subcommand: 'create',
+        agentName: hostname(),
+        note: undefined,
+      });
+    });
+
     it('parses a create command with optional note (no --agent)', () => {
       expect(parseObsOptions(['公司机', '--note', '主力开发机'])).toEqual({
         help: false,
@@ -178,6 +194,15 @@ describe('obs', () => {
     });
   });
 
+  it('shows BlueFlare component help without the internal Pilot name', () => {
+    showObsHelp();
+
+    const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
+    expect(output).toContain('BlueFlare 观测组件');
+    expect(output).toContain('obs [agentName]');
+    expect(output).not.toContain('LoongSuite Pilot');
+  });
+
   describe('runObs', () => {
     it('creates a record and prints serviceName + dual install commands', async () => {
       const home = useEmptyHome();
@@ -208,7 +233,7 @@ describe('obs', () => {
       );
       // 本机未安装时提示可直接在本机安装
       const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
-      expect(output).toContain('本机未安装采集工具');
+      expect(output).toContain('本机未安装 BlueFlare 观测组件');
       expect(output).toContain('obs install 11111111-2222-4333-8444-555555555555');
       rmSync(home, { recursive: true, force: true });
     });
@@ -230,7 +255,7 @@ describe('obs', () => {
       await runObs(['add', '公司机']);
 
       const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
-      expect(output).toContain('本机已安装采集工具');
+      expect(output).toContain('本机已安装 BlueFlare 观测组件');
       expect(output).toContain('obs install 11111111-2222-4333-8444-555555555555');
       rmSync(home, { recursive: true, force: true });
     });
@@ -290,6 +315,11 @@ describe('obs', () => {
       expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('os=windows'))).toBe(
         true
       );
+      expect(
+        logSpy.mock.calls.some((c: unknown[]) =>
+          String(c[0]).includes('已生成新的 BlueFlare 观测组件安装链接')
+        )
+      ).toBe(true);
     });
 
     it('rejects a reserved-keyword agentName locally without any network call', async () => {
@@ -316,6 +346,11 @@ describe('obs', () => {
       expect(process.exitCode).toBe(1);
       expect(marketProvider.createObservability).not.toHaveBeenCalled();
       expect(errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('login'))).toBe(true);
+      expect(
+        errorSpy.mock.calls.some((c: unknown[]) =>
+          String(c[0]).includes('再安装 BlueFlare 观测组件')
+        )
+      ).toBe(true);
     });
 
     it('adds a login hint on a 401 failure', async () => {
@@ -345,6 +380,11 @@ describe('obs', () => {
       expect(errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('记录不存在'))).toBe(
         true
       );
+      expect(
+        errorSpy.mock.calls.some((c: unknown[]) =>
+          String(c[0]).includes('BlueFlare 观测组件安装记录')
+        )
+      ).toBe(true);
     });
 
     it('runs the platform install command after confirm (unix host → /bin/sh)', async () => {
@@ -368,7 +408,9 @@ describe('obs', () => {
       expect(spawn).toHaveBeenCalledWith('/bin/sh', ['-c', CMD.unix], { stdio: 'inherit' });
       expect(process.exitCode).toBeUndefined();
       expect(
-        logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('采集工具安装完成'))
+        logSpy.mock.calls.some((c: unknown[]) =>
+          String(c[0]).includes('BlueFlare 观测组件安装完成')
+        )
       ).toBe(true);
       // 本机未安装时不出现二次确认文案
       expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('本机已安装'))).toBe(
@@ -423,7 +465,7 @@ describe('obs', () => {
       await runObs(['install', '11111111-2222-4333-8444-555555555555']);
 
       const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
-      expect(output).toContain('本机已安装采集工具');
+      expect(output).toContain('本机已安装 BlueFlare 观测组件');
       expect(output).toContain('覆盖当前配置');
       // 二次确认文案出现，且用户拒绝后不执行
       const confirmArg = vi.mocked(p.confirm).mock.calls[0]?.[0] as { message?: string };
@@ -612,7 +654,7 @@ describe('obs', () => {
       const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
       expect(output).toContain('本机已安装');
       expect(output).toContain('#33333333-4444-4555-4666-477777777777');
-      expect(output).not.toContain('本机未安装采集工具');
+      expect(output).not.toContain('本机未安装 BlueFlare 观测组件');
       rmSync(cliHome, { recursive: true, force: true });
       rmSync(agentHome, { recursive: true, force: true });
     });
@@ -637,7 +679,7 @@ describe('obs', () => {
       await runObs(['list']);
 
       const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
-      expect(output).toContain(`本机已安装采集工具 (${localServiceName})`);
+      expect(output).toContain(`本机已安装 BlueFlare 观测组件 (${localServiceName})`);
       expect(output).not.toContain('没有对应的设备安装记录');
       expect(output).not.toContain('✓ 本机已安装');
       rmSync(home, { recursive: true, force: true });
@@ -707,7 +749,7 @@ describe('obs', () => {
 
       const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
       expect(output).not.toContain('本机已安装');
-      expect(output).toContain('采集工具安装不完整');
+      expect(output).toContain('BlueFlare 观测组件安装不完整');
       rmSync(home, { recursive: true, force: true });
     });
   });
@@ -733,7 +775,7 @@ describe('obs', () => {
       await runObs(['uninstall']);
 
       const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
-      expect(output).toContain('本机未安装采集工具');
+      expect(output).toContain('本机未安装 BlueFlare 观测组件');
       expect(output).toContain('无需卸载');
       expect(p.confirm).not.toHaveBeenCalled();
       expect(spawn).not.toHaveBeenCalled();
@@ -747,7 +789,7 @@ describe('obs', () => {
       await runObs(['uninstall']);
 
       const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
-      expect(output).toContain('本机已安装采集工具');
+      expect(output).toContain('本机已安装 BlueFlare 观测组件');
       expect(String(vi.mocked(p.confirm).mock.calls[0]?.[0]?.message)).toContain('本地数据会保留');
       expect(spawn).not.toHaveBeenCalled();
       expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('已取消'))).toBe(true);
@@ -770,7 +812,7 @@ describe('obs', () => {
       });
       expect(process.exitCode).toBeUndefined();
       expect(
-        logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('采集工具已移除'))
+        logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('BlueFlare 观测组件已卸载'))
       ).toBe(true);
       rmSync(home, { recursive: true, force: true });
     });
@@ -821,8 +863,8 @@ describe('obs', () => {
       await runObs(['uninstall']);
 
       const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
-      expect(output).toContain('采集工具安装不完整');
-      expect(output).not.toContain('本机已安装采集工具');
+      expect(output).toContain('BlueFlare 观测组件安装不完整');
+      expect(output).not.toContain('本机已安装 BlueFlare 观测组件');
       // 残留场景仍进入确认与可执行流程
       expect(p.confirm).toHaveBeenCalled();
       expect(spawn).not.toHaveBeenCalled();
@@ -856,7 +898,9 @@ describe('obs', () => {
       expect(ok).toBe(true);
       expect(process.exitCode).toBeUndefined();
       expect(
-        logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('采集工具安装完成'))
+        logSpy.mock.calls.some((c: unknown[]) =>
+          String(c[0]).includes('BlueFlare 观测组件安装完成')
+        )
       ).toBe(true);
       expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('serviceName'))).toBe(
         false
@@ -916,9 +960,10 @@ describe('obs', () => {
 
       expect(ok).toBe(false);
       expect(process.exitCode).toBe(1);
-      expect(errorSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('obs refresh'))).toBe(
-        true
-      );
+      const output = errorSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
+      expect(output).toContain('BlueFlare 观测组件安装失败');
+      expect(output).toContain('如已失效');
+      expect(output).toContain('obs refresh');
     });
 
     it('returns false when the create API fails', async () => {

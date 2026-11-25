@@ -7,7 +7,7 @@ import { marketProvider } from './providers/market.ts';
 import type { ObservabilityInstallCommand } from './providers/market.ts';
 import { getApiKey } from './auth.ts';
 import { reportApiFailure } from './api-error.ts';
-import { BIN_NAME } from './branding.ts';
+import { BIN_NAME, OBSERVABILITY_COMPONENT_NAME } from './branding.ts';
 
 /**
  * 子命令/别名关键字。`obs list` / `obs refresh` / `obs install` 已有子命令语义，
@@ -43,7 +43,7 @@ const PILOT_INSTALLER_PS1_URL =
 /**
  * 解析 `skills obs …` 子命令参数。
  *
- * - `obs <agentName> [--note …]`（`add` 作为 create 别名可跳过）→ create（无 `--agent`）
+ * - `obs [agentName] [--note …]`（省略名称时取 hostname；`add` 是 create 别名）→ create
  * - `obs list`　→ list（仅接受该关键字，带 `--agent`/`--note` 时视为把 list 当接入名，报保留字冲突）
  * - `obs refresh <agentId>` → refresh（agentId 必填，UUID（与 serviceName 同源），`--agent`/`--note` 不适用）
  * - 位置参数缺失、位置参数命中保留字、未知选项时返回 `error`（本地拒绝）
@@ -73,7 +73,7 @@ export function parseObsOptions(args: string[]): ObsOptions {
 
   const first = positionals[0];
   if (!first) {
-    return { help, error: '缺少子命令或接入名。用法: obs <agentName> [--note …]' };
+    return { help, subcommand: 'create', agentName: hostname(), note };
   }
 
   if (first === 'list') {
@@ -111,14 +111,13 @@ export function parseObsOptions(args: string[]): ObsOptions {
     return { help, subcommand, agentId };
   }
 
-  if (first === 'add' && positionals.length >= 2) {
-    // add 别名：跳过 add 取下一个位置参数为 agentName（length >= 2 保证存在）
-    const agentName = positionals[1]!;
+  if (first === 'add') {
+    const agentName = positionals[1] ?? hostname();
     if (RESERVED_OBS_KEYWORDS.has(agentName)) {
       return { help, error: `"${agentName}" 是子命令关键字，不能作为接入名（agentName）。` };
     }
     if (positionals.length > 2) {
-      return { help, error: '多余的位置参数。用法: obs add <agentName> [--note ……]' };
+      return { help, error: '多余的位置参数。用法: obs add [agentName] [--note ……]' };
     }
     return { help, subcommand: 'create', agentName, note };
   }
@@ -129,7 +128,7 @@ export function parseObsOptions(args: string[]): ObsOptions {
     return { help, error: `"${agentName}" 是子命令关键字，不能作为接入名（agentName）。` };
   }
   if (positionals.length > 1) {
-    return { help, error: '多余的位置参数。用法: obs <agentName> [--note ……]' };
+    return { help, error: '多余的位置参数。用法: obs [agentName] [--note ……]' };
   }
 
   return { help, subcommand: 'create', agentName, note };
@@ -142,19 +141,20 @@ export function showObsHelp(): void {
   console.log(`
 Usage: ${BIN_NAME} obs <command> [options]
 
-Manage AI Coding Agent observability records (shared with the Market web dashboard, LoongSuite Pilot).
+Manage AI Coding Agent observability records (shared with the Market web dashboard and ${OBSERVABILITY_COMPONENT_NAME}).
 
 Commands:
-  obs <agentName> [--note <note>]
+  obs [agentName] [--note <note>]
                            Create an observability record and print its install commands
-                           (plus a local LoongSuite Pilot check)
-  obs add <agentName> [--note <note>]
+                           (agentName defaults to the machine hostname)
+                           (plus a local ${OBSERVABILITY_COMPONENT_NAME} check)
+  obs add [agentName] [--note <note>]
                            Same as above (add is an alias)
   obs list                 List your observability records (marks ones installed on this machine)
   obs refresh <agentId>    Generate a new install token (old ones are invalidated immediately)
   obs install <agentId>    Generate a new install token AND run it on this machine
                            (double-confirms when a local install already exists)
-  obs uninstall [--purge]  Uninstall LoongSuite Pilot on this machine
+  obs uninstall [--purge]  Uninstall ${OBSERVABILITY_COMPONENT_NAME} on this machine
                            (--purge also deletes local data in ~/.loongsuite-pilot)
 
 Options:
@@ -339,11 +339,12 @@ function printObservabilityList(
   localStatus?: LocalPilotStatus
 ): void {
   if (records.length === 0) {
-    console.log('暂无设备安装记录。运行 `' + BIN_NAME + ' obs <agentName>` 登记本机。');
+    console.log('暂无设备安装记录。运行 `' + BIN_NAME + ' obs` 登记本机。');
     return;
   }
   const markable = localStatus?.serviceName != null && localStatus.hasBinary;
-  const runningSuffix = localStatus?.isRunning === false ? '(采集工具未运行)' : '';
+  const runningSuffix =
+    localStatus?.isRunning === false ? `(${OBSERVABILITY_COMPONENT_NAME}未运行)` : '';
   console.log(`共 ${records.length} 台设备:`);
   for (const record of records) {
     const noteSuffix = record.note ? ` (备注: ${record.note})` : '';
@@ -356,11 +357,11 @@ function printObservabilityList(
     );
   }
   if (markable && !records.some((r) => r.serviceName === localStatus?.serviceName)) {
-    console.log(`本机已安装采集工具 (${localStatus?.serviceName})`);
+    console.log(`本机已安装 ${OBSERVABILITY_COMPONENT_NAME} (${localStatus?.serviceName})`);
   } else if (localStatus?.serviceName != null && !localStatus.hasBinary) {
-    console.log(`注意: 采集工具安装不完整，建议重新安装`);
+    console.log(`注意: ${OBSERVABILITY_COMPONENT_NAME}安装不完整，建议重新安装`);
   } else if (localStatus?.serviceName == null && !localStatus?.hasBinary) {
-    console.log('本机未安装采集工具');
+    console.log(`本机未安装 ${OBSERVABILITY_COMPONENT_NAME}`);
   }
   console.log(`重新生成安装链接: ${BIN_NAME} obs refresh <agentId>`);
 }
@@ -431,15 +432,17 @@ export async function createRecordAndInstallPilot(apiKey: string): Promise<boole
   const local = resolveLocalPilotStatus();
   const resolvedHome = dirname(local.pilotDir);
   const homeOverride = resolvedHome === homedir() ? undefined : resolvedHome;
-  console.log('正在安装采集工具…（安装输出见下方）');
+  console.log(`正在安装 ${OBSERVABILITY_COMPONENT_NAME}…（安装输出见下方）`);
   try {
     await runInstallCommand(command, homeOverride);
-    console.log(`✓ 采集工具安装完成。`);
+    console.log(`✓ ${OBSERVABILITY_COMPONENT_NAME}安装完成。`);
     return true;
   } catch (err) {
-    console.error(`采集工具安装失败: ${err instanceof Error ? err.message : String(err)}`);
     console.error(
-      `安装链接已失效，可运行 \`${BIN_NAME} obs refresh ${result.data.id}\` 重新生成后重试`
+      `${OBSERVABILITY_COMPONENT_NAME}安装失败: ${err instanceof Error ? err.message : String(err)}`
+    );
+    console.error(
+      `安装链接只能使用一次且 5 分钟内有效；如已失效，可运行 \`${BIN_NAME} obs refresh ${result.data.id}\` 重新生成后重试`
     );
     process.exitCode = 1;
     return false;
@@ -466,7 +469,9 @@ export async function runObs(args: string[]): Promise<void> {
 
   const apiKey = getApiKey();
   if (!apiKey) {
-    console.error(`请先运行 \`${BIN_NAME} login <api-key>\` 或设置 SKILLS_API_KEY 环境变量`);
+    console.error(
+      `请先运行 \`${BIN_NAME} login <api-key>\` 或设置 SKILLS_API_KEY 环境变量，再安装 ${OBSERVABILITY_COMPONENT_NAME}。`
+    );
     process.exitCode = 1;
     return;
   }
@@ -486,11 +491,13 @@ export async function runObs(args: string[]): Promise<void> {
     if (!result.ok) {
       reportApiFailure(result);
       if (result.status === 404) {
-        console.error('提示: 没有找到这台设备的安装记录，或安装链接已失效');
+        console.error(
+          `提示: 没有找到这台设备的 ${OBSERVABILITY_COMPONENT_NAME}安装记录，或安装链接已失效`
+        );
       }
       return;
     }
-    console.log('✓ 已生成新的安装链接');
+    console.log(`✓ 已生成新的 ${OBSERVABILITY_COMPONENT_NAME}安装链接`);
     console.log(`  serviceName: ${result.data.serviceName}`);
     console.log(`  macOS/Linux: ${result.data.installCommand.unix}`);
     console.log(`  Windows:     ${result.data.installCommand.windows}`);
@@ -504,7 +511,9 @@ export async function runObs(args: string[]): Promise<void> {
     if (!result.ok) {
       reportApiFailure(result);
       if (result.status === 404) {
-        console.error('提示: 没有找到这台设备的安装记录，或安装链接已失效');
+        console.error(
+          `提示: 没有找到这台设备的 ${OBSERVABILITY_COMPONENT_NAME}安装记录，或安装链接已失效`
+        );
       }
       return;
     }
@@ -517,32 +526,36 @@ export async function runObs(args: string[]): Promise<void> {
     const resolvedHome = dirname(local.pilotDir);
     const homeOverride = resolvedHome === homedir() ? undefined : resolvedHome;
     if (localStatus.serviceName != null && localStatus.hasBinary) {
-      console.log(`  本机已安装采集工具${localStatus.isRunning === false ? '，当前未运行' : ''}。`);
+      console.log(
+        `  本机已安装 ${OBSERVABILITY_COMPONENT_NAME}${localStatus.isRunning === false ? '，当前未运行' : ''}。`
+      );
       if (localStatus.serviceName === result.data.serviceName) {
         console.log('  这台设备已经使用这条安装记录，再次安装会覆盖当前配置。');
       } else {
         console.log('  再次安装会把这台设备改为向新的目标上报数据。');
       }
     } else if (localStatus.serviceName != null) {
-      console.log('  采集工具安装不完整，建议重新安装。');
+      console.log(`  ${OBSERVABILITY_COMPONENT_NAME}安装不完整，建议重新安装。`);
     }
     // 仅在「配置 + 程序文件」都在时才二次确认；残留配置场景重装即修复，走普通确认
     const needDoubleConfirm = localStatus.serviceName != null && localStatus.hasBinary;
     const confirmed = await p.confirm({
       message: needDoubleConfirm
-        ? '这台设备已安装采集工具，确定要重新安装吗？'
-        : '现在在这台设备上安装采集工具吗？安装链接只能使用一次，5 分钟内有效。',
+        ? `这台设备已安装 ${OBSERVABILITY_COMPONENT_NAME}，确定要重新安装吗？`
+        : `现在在这台设备上安装 ${OBSERVABILITY_COMPONENT_NAME}吗？安装链接只能使用一次，5 分钟内有效。`,
     });
     if (p.isCancel(confirmed) || !confirmed) {
       console.log('已取消；安装链接 5 分钟内仍可手动使用');
       return;
     }
-    console.log('开始安装采集工具…（脚本输出见下方）');
+    console.log(`开始安装 ${OBSERVABILITY_COMPONENT_NAME}…（脚本输出见下方）`);
     try {
       await runInstallCommand(command, homeOverride);
-      console.log('✓ 采集工具安装完成。');
+      console.log(`✓ ${OBSERVABILITY_COMPONENT_NAME}安装完成。`);
     } catch (err) {
-      console.error(`采集工具安装失败: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(
+        `${OBSERVABILITY_COMPONENT_NAME}安装失败: ${err instanceof Error ? err.message : String(err)}`
+      );
       process.exitCode = 1;
     }
     return;
@@ -555,31 +568,35 @@ export async function runObs(args: string[]): Promise<void> {
     const resolvedHome = dirname(local.pilotDir);
     const homeOverride = resolvedHome === homedir() ? undefined : resolvedHome;
     if (localStatus.serviceName == null && !localStatus.hasBinary) {
-      console.log('本机未安装采集工具，无需卸载');
+      console.log(`本机未安装 ${OBSERVABILITY_COMPONENT_NAME}，无需卸载`);
       return;
     }
     if (localStatus.hasBinary) {
-      console.log(`  本机已安装采集工具${localStatus.isRunning === false ? '，当前未运行' : ''}。`);
+      console.log(
+        `  本机已安装 ${OBSERVABILITY_COMPONENT_NAME}${localStatus.isRunning === false ? '，当前未运行' : ''}。`
+      );
     } else {
-      console.log('  采集工具安装不完整，可在这里清理。');
+      console.log(`  ${OBSERVABILITY_COMPONENT_NAME}安装不完整，可在这里清理。`);
     }
     const command = pickPlatformCommand(buildUninstallCommand(opts.purge ?? false));
     console.log(`  卸载命令: ${command}`);
     const confirmed = await p.confirm({
       message: opts.purge
-        ? '将移除本机采集工具，并删除本地数据。继续吗？'
-        : '将移除本机采集工具，本地数据会保留。继续吗？',
+        ? `将卸载本机 ${OBSERVABILITY_COMPONENT_NAME}，并删除本地数据。继续吗？`
+        : `将卸载本机 ${OBSERVABILITY_COMPONENT_NAME}，本地数据会保留。继续吗？`,
     });
     if (p.isCancel(confirmed) || !confirmed) {
       console.log('已取消');
       return;
     }
-    console.log('开始移除采集工具…（脚本输出见下方）');
+    console.log(`开始卸载 ${OBSERVABILITY_COMPONENT_NAME}…（脚本输出见下方）`);
     try {
       await runInstallCommand(command, homeOverride);
-      console.log('✓ 采集工具已移除。');
+      console.log(`✓ ${OBSERVABILITY_COMPONENT_NAME}已卸载。`);
     } catch (err) {
-      console.error(`移除采集工具失败: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(
+        `卸载 ${OBSERVABILITY_COMPONENT_NAME}失败: ${err instanceof Error ? err.message : String(err)}`
+      );
       process.exitCode = 1;
     }
     return;
@@ -607,12 +624,14 @@ export async function runObs(args: string[]): Promise<void> {
   // 本机检查：按分层状态提示下一步动作
   const localStatus = readLocalPilotStatus();
   if (localStatus.serviceName != null && localStatus.hasBinary) {
-    console.log(`  本机已安装采集工具。`);
+    console.log(`  本机已安装 ${OBSERVABILITY_COMPONENT_NAME}。`);
     console.log(`  如需将本机改为向新的目标上报数据，运行 \`${BIN_NAME} obs install ${data.id}\``);
   } else if (localStatus.serviceName != null) {
-    console.log(`  采集工具安装不完整，建议重新安装。`);
+    console.log(`  ${OBSERVABILITY_COMPONENT_NAME}安装不完整，建议重新安装。`);
     console.log(`  运行 \`${BIN_NAME} obs install ${data.id}\` 可重新安装`);
   } else {
-    console.log(`  本机未安装采集工具。运行 \`${BIN_NAME} obs install ${data.id}\` 可安装`);
+    console.log(
+      `  本机未安装 ${OBSERVABILITY_COMPONENT_NAME}。运行 \`${BIN_NAME} obs install ${data.id}\` 可安装`
+    );
   }
 }

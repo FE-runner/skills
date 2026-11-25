@@ -36,6 +36,7 @@ import {
   PACKAGE_NAME,
   EXAMPLE_REPO,
   SKILLS_SITE,
+  OBSERVABILITY_COMPONENT_NAME,
 } from './branding.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -151,15 +152,16 @@ ${BOLD}Project:${RESET}
   experimental_sync    Sync skills from node_modules into agent directories
 
 ${BOLD}Observability:${RESET}
-  obs <agentName>          Create an obs record and print its install commands
-                           (plus a local LoongSuite Pilot check)
+  obs [agentName]          Create an obs record and print its install commands
+                           (agentName defaults to the machine hostname)
+                           (plus a local ${OBSERVABILITY_COMPONENT_NAME} check)
       --note <note>        Optional note for the record
-  obs add <agentName>      Same as above (add is an alias)
+  obs add [agentName]      Same as above (add is an alias)
   obs list                 List your obs records (marks ones installed on this machine)
   obs refresh <agentId>    Re-issue the install token (old one invalidated; agentId is a UUID)
   obs install <agentId>    Re-issue the token and run the install on this machine
                            (double-confirms when a local install already exists)
-  obs uninstall [--purge]  Uninstall LoongSuite Pilot on this machine
+  obs uninstall [--purge]  Uninstall ${OBSERVABILITY_COMPONENT_NAME} on this machine
                            (--purge also deletes local data in ~/.loongsuite-pilot)
 ${BOLD}Collection Consent:${RESET}
   track list               List skills and collection-consent status (default: project)
@@ -255,11 +257,11 @@ ${BOLD}Examples:${RESET}
 
   ${DIM}$${RESET} ${BIN_NAME} withdraw my-skill              ${DIM}# withdraw pending review${RESET}
 
-  ${DIM}$${RESET} ${BIN_NAME} obs 公司机                 ${DIM}# create an obs record and print its install commands${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} obs                      ${DIM}# use hostname as agentName and print install commands${RESET}
   ${DIM}$${RESET} ${BIN_NAME} obs list                          ${DIM}# list your records (marks ones installed on this machine)${RESET}
   ${DIM}$${RESET} ${BIN_NAME} obs refresh <agentId>          ${DIM}# re-issue the token; old one invalidated${RESET}
   ${DIM}$${RESET} ${BIN_NAME} obs install <agentId>         ${DIM}# re-issue the token and install on this machine${RESET}
-  ${DIM}$${RESET} ${BIN_NAME} obs uninstall               ${DIM}# uninstall LoongSuite Pilot (--purge removes local data)${RESET}
+  ${DIM}$${RESET} ${BIN_NAME} obs uninstall               ${DIM}# uninstall ${OBSERVABILITY_COMPONENT_NAME} (--purge removes local data)${RESET}
 
   ${DIM}$${RESET} ${BIN_NAME} track list                       ${DIM}# list project collection consent${RESET}
   ${DIM}$${RESET} ${BIN_NAME} track off my-skill               ${DIM}# disable project collection consent${RESET}
