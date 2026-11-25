@@ -24,6 +24,9 @@ export const USAGE_CMD = `${BIN_NAME} <command> [options]`;
 /** Default example shown in help/banner (market skill name) */
 export const EXAMPLE_REPO = 'a2ui-components';
 
+/** User-facing name of the observability component installed by the CLI */
+export const OBSERVABILITY_COMPONENT_NAME = 'BlueFlare 观测组件';
+
 /**
  * Skills Market website and API base URL.
  * dev 构建由 build.config.mjs 注入内网测试市场；正式构建注入生产市场。

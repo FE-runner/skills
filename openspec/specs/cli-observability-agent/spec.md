@@ -35,13 +35,31 @@
 
 ### Requirement: 本机安装状态分层检测
 
-CLI SHALL 通过**纯本地文件信号**检测本机 LoongSuite Pilot 安装状态，**不执行任何插件命令**（不调用 `loongsuite-pilot status` 等外部进程）：
+CLI SHALL 通过**纯本地文件信号**检测本机 LoongSuite Pilot 安装状态，**不执行任何插件命令**（不调用 `loongsuite-pilot status` 等外部进程）。CLI 进程 HOME 不一定等于 Agent 运行 HOME，检测 SHALL 检查以下候选目录并去重：
 
-1. **配置**：`~/.loongsuite-pilot/config.json` 的 `serviceNamePrefix`（BSM-<agentId>），可与 Market 记录的 serviceName 直接比对
+1. `BLUEAI_OBS_PILOT_DIR` 显式指定的完整 Pilot 目录
+2. `LOONGSUITE_PILOT_DATA_DIR` 指定的官方 Pilot 数据目录
+3. 当前 CLI HOME 下的 `.loongsuite-pilot`
+4. `BLUEAI_AGENT_HOME`、`HERMES_HOME`、`OPENCLAW_HOME` 对应 HOME 下的 `.loongsuite-pilot`
+5. `/opt/<agent>/.loongsuite-pilot`，例如 Hermes 容器内的 `/opt/hermes/.loongsuite-pilot`
+
+候选目录存在多个安装痕迹时，完整安装优先于残留配置，残留配置优先于未安装。具体信号：
+
+1. **配置**：`config.json` 的 `serviceNamePrefix`。它是本机安装标识，**不要求**与 Market 记录的 serviceName 相同
 2. **程序文件**：`current` / `bin/` / `versions/` / `runtime` 任一存在即视为二进制仍在
 3. **服务进程**：`loongsuite-pilot.pid` + `process.kill(pid, 0)` 探测（EPERM 视为运行中）；无 pid 文件时为「无法判断」
 
 目录缺失/文件损坏时 SHALL 静默降级（不报错），视为未安装。
+
+#### Scenario: CLI HOME 与 Agent HOME 不同
+
+- **WHEN** CLI 当前 HOME 为 `/opt/data/home`，实际 Pilot 安装在 `/opt/hermes/.loongsuite-pilot`
+- **THEN** `obs list` 自动发现 `/opt/hermes/.loongsuite-pilot` 并按完整安装处理，不要求用户修改 HOME 后重跑 `npx`
+
+#### Scenario: OpenClaw 使用进程 HOME
+
+- **WHEN** OpenClaw 当前 HOME 为 `/home/node`，Pilot 安装在 `/home/node/.loongsuite-pilot`
+- **THEN** CLI 使用当前 HOME 候选目录正常识别已安装
 
 #### Scenario: 完整安装判定
 
@@ -80,7 +98,7 @@ CLI SHALL 通过**纯本地文件信号**检测本机 LoongSuite Pilot 安装状
 #### Scenario: 本机安装与清单不匹配
 
 - **WHEN** 本机完整安装但 serviceNamePrefix 未匹配清单中任何记录
-- **THEN** 清单尾部提示本机已安装但未匹配任何接入记录
+- **THEN** 清单尾部独立输出「本机已安装采集工具 (<serviceNamePrefix>)」，**不得**将该正常情况描述为缺少对应记录或报错
 
 #### Scenario: list 响应不含 agentType
 
@@ -108,7 +126,7 @@ CLI SHALL 通过**纯本地文件信号**检测本机 LoongSuite Pilot 安装状
 
 ### Requirement: 在本机一键安装（install）
 
-`skills obs install <agentId>` 命令 SHALL 换发该记录的 installToken（与 refresh 相同契约），执行前 SHALL 做本机安装状态检查（分层检测），随后确认后在本机执行对应宿主平台的那条安装命令：macOS/Linux 执行 `curl …&os=unix | bash`，Windows 执行 `Invoke-WebRequest …&os=windows | powershell -ExecutionPolicy Bypass -File`。探针装到运行命令的机器。用户取消确认时 SHALL 不执行并提示命令仍可手动执行；执行非零退出码 SHALL 置为非零退出且不抛出副作用。
+`skills obs install <agentId>` 命令 SHALL 换发该记录的 installToken（与 refresh 相同契约），执行前 SHALL 做本机安装状态检查（分层检测），随后确认后在本机执行对应宿主平台的那条安装命令：macOS/Linux 执行 `curl …&os=unix | bash`，Windows 执行 `Invoke-WebRequest …&os=windows | powershell -ExecutionPolicy Bypass -File`。探针装到运行命令的机器。已检测到本机 Pilot 目录时，执行子进程 SHALL 使用该 Pilot 目录的父目录作为 HOME/USERPROFILE，避免 CLI HOME 与 Agent HOME 不同时覆盖错误目录。用户取消确认时 SHALL 不执行并提示命令仍可手动执行；执行非零退出码 SHALL 置为非零退出且不抛出副作用。
 
 #### Scenario: 本机已有完整安装时二次确认
 
@@ -137,7 +155,7 @@ CLI SHALL 通过**纯本地文件信号**检测本机 LoongSuite Pilot 安装状
 
 ### Requirement: 本机卸载（uninstall）
 
-`skills obs uninstall [--purge]` 命令 SHALL 在本机卸载 LoongSuite Pilot：执行前 SHALL 做本机安装状态检查，配置与程序文件均缺失时 SHALL 直接提示无需卸载（不发起请求、不执行脚本）；否则展示检测现状（完整安装含 serviceNamePrefix 与服务运行状态；配置残留单独提示），确认后执行**官方安装脚本的 uninstall 子命令**（双平台命令直接使用与 Market 端 `OBSERVABILITY_INSTALL_TEMPLATE` 同源的 OSS 官方安装脚本直链，不依赖 Market 凭证）。`--purge` SHALL 连同 `~/.loongsuite-pilot` 本地数据（配置与采集记录）一起删除，且确认文案 SHALL 明确说明删除范围。用户拒绝时 SHALL 不执行；执行非零退出码 SHALL 置为非零退出。
+`skills obs uninstall [--purge]` 命令 SHALL 在本机卸载 LoongSuite Pilot：执行前 SHALL 做本机安装状态检查，配置与程序文件均缺失时 SHALL 直接提示无需卸载（不发起请求、不执行脚本）；否则展示检测现状（完整安装含 serviceNamePrefix 与服务运行状态；配置残留单独提示），确认后执行**官方安装脚本的 uninstall 子命令**（双平台命令直接使用与 Market 端 `OBSERVABILITY_INSTALL_TEMPLATE` 同源的 OSS 官方安装脚本直链，不依赖 Market 凭证）。执行子进程 SHALL 使用实际检出 Pilot 目录的父目录作为 HOME/USERPROFILE。`--purge` SHALL 连同该 Pilot 目录本地数据（配置与采集记录）一起删除，且确认文案 SHALL 明确说明删除范围。用户拒绝时 SHALL 不执行；执行非零退出码 SHALL 置为非零退出。
 
 #### Scenario: 未安装时直接跳过
 
@@ -171,7 +189,7 @@ CLI SHALL 通过**纯本地文件信号**检测本机 LoongSuite Pilot 安装状
 
 ### Requirement: 接入记录自动创建与插件安装（供采集安装流程复用）
 
-CLI SHALL 提供接入记录自动创建与插件安装的复用链路（供带采集 Skill 的安装流程调用，调用方已完成用户确认，该链路 SHALL NOT 重复询问）：以**本机主机名**（`os.hostname()`）作为接入名（agentName 不要求唯一，多机各自创建）创建接入记录，备注 SHALL 标注自动创建来源；创建成功后 SHALL 在本机执行对应宿主平台的安装命令。安装命令失败 SHALL 置非零退出并提示 `obs refresh <agentId>` 换发一次性凭证重试；接入创建 API 失败 SHALL 走统一失败处理且 SHALL NOT 执行安装脚本。
+CLI SHALL 提供接入记录自动创建与插件安装的复用链路（供带采集 Skill 的安装流程调用，调用方已完成用户确认，该链路 SHALL NOT 重复询问）：以**本机主机名**（`os.hostname()`）作为接入名（agentName 不要求唯一，多机各自创建）创建接入记录，备注 SHALL 标注自动创建来源；创建成功后 SHALL 在本机执行对应宿主平台的安装命令。若检测到实际 Pilot 目录，执行子进程 SHALL 使用该目录的父目录作为 HOME/USERPROFILE，以修复 Agent HOME 下的不完整安装。安装命令失败 SHALL 置非零退出并提示 `obs refresh <agentId>` 换发一次性凭证重试；接入创建 API 失败 SHALL 走统一失败处理且 SHALL NOT 执行安装脚本。
 
 #### Scenario: 自动创建并安装成功
 
