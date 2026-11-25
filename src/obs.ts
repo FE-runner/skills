@@ -1,6 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { homedir, hostname } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { spawn } from 'child_process';
 import * as p from '@clack/prompts';
 import { marketProvider } from './providers/market.ts';
@@ -177,6 +177,64 @@ export interface LocalPilotStatus {
   isRunning: boolean | null;
 }
 
+export interface LocalPilotResolution {
+  pilotDir: string;
+  status: LocalPilotStatus;
+}
+
+const PILOT_DIR_NAME = '.loongsuite-pilot';
+
+function listDirectoryNames(dir: string): string[] {
+  try {
+    return readdirSync(dir);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 解析本机可能使用的 Pilot 目录。CLI 进程的 HOME 不一定是 Agent 运行环境的 HOME
+ * （例如 BlueFlare 容器内 Hermes 使用 `/opt/hermes`），因此除当前 HOME 外还检查：
+ *
+ * - `BLUEAI_OBS_PILOT_DIR`：显式指定完整 Pilot 目录；
+ * - `LOONGSUITE_PILOT_DATA_DIR`：官方 Pilot 运行环境提供的实际数据目录；
+ * - `BLUEAI_AGENT_HOME`、`HERMES_HOME`、`OPENCLAW_HOME`：Agent 进程的 HOME；
+ * - `/opt/<agent>/.loongsuite-pilot`：BlueFlare Agent 容器的常见布局。
+ */
+export function getLocalPilotDirCandidates(options?: {
+  homeDir?: string;
+  env?: NodeJS.ProcessEnv;
+  listDirectory?: (dir: string) => string[];
+  pathExists?: (path: string) => boolean;
+}): string[] {
+  const homeDir = options?.homeDir ?? homedir();
+  const env = options?.env ?? process.env;
+  const listDir = options?.listDirectory ?? listDirectoryNames;
+  const pathExists = options?.pathExists ?? existsSync;
+  const candidates: string[] = [];
+
+  const add = (path: string | undefined): void => {
+    const trimmed = path?.trim();
+    if (trimmed) candidates.push(resolve(trimmed));
+  };
+
+  add(env.BLUEAI_OBS_PILOT_DIR);
+  add(env.LOONGSUITE_PILOT_DATA_DIR);
+  add(join(homeDir, PILOT_DIR_NAME));
+
+  for (const agentHome of [env.BLUEAI_AGENT_HOME, env.HERMES_HOME, env.OPENCLAW_HOME]) {
+    const trimmed = agentHome?.trim();
+    if (trimmed) add(join(trimmed, PILOT_DIR_NAME));
+  }
+
+  for (const agentDir of listDir('/opt').sort()) {
+    const pilotDir = join('/opt', agentDir, PILOT_DIR_NAME);
+    if (pathExists(pilotDir)) add(pilotDir);
+  }
+
+  return [...new Set(candidates)];
+}
+
 /** 二进制痕迹判定：任一程序文件/目录存在即认为二进制还在 */
 function hasPilotBinary(pilotDir: string): boolean {
   return (
@@ -204,12 +262,8 @@ function probePilotRunning(pilotDir: string): boolean | null {
   }
 }
 
-/**
- * 读取本机 LoongSuite Pilot 安装状态。目录缺失时返回全空状态（静默降级，不报错）。
- */
-export function readLocalPilotStatus(
-  pilotDir: string = join(homedir(), '.loongsuite-pilot')
-): LocalPilotStatus {
+/** 读取指定 Pilot 目录的状态。目录缺失时返回全空状态（静默降级，不报错）。 */
+function readPilotStatusAt(pilotDir: string): LocalPilotStatus {
   const configPath = join(pilotDir, 'config.json');
   let serviceName: string | null = null;
   if (existsSync(configPath)) {
@@ -231,20 +285,47 @@ export function readLocalPilotStatus(
 }
 
 /**
- * 读取本机 LoongSuite Pilot 配置（`~/.loongsuite-pilot/config.json`）中的 `serviceNamePrefix`。
- * 该字段由安装脚本写入，值为 `BSM-<agentId>`，可与 Market 接入记录的 serviceName 直接比对，
- * 从而判断某条接入是否安装在本机。未安装、文件损坏或字段缺失时返回 null（静默降级，不报错）。
+ * 在多个候选目录中选择最可信的本机安装状态：
+ * 完整安装优先于残留配置，残留配置优先于未安装。
  */
-export function readLocalPilotServiceName(
-  pilotDir: string = join(homedir(), '.loongsuite-pilot')
-): string | null {
+export function resolveLocalPilotStatus(
+  candidates: string[] = getLocalPilotDirCandidates()
+): LocalPilotResolution {
+  const inspected = candidates.map((pilotDir) => ({
+    pilotDir,
+    status: readPilotStatusAt(pilotDir),
+  }));
+  const complete = inspected.find(({ status }) => status.serviceName != null && status.hasBinary);
+  const hasTrace = inspected.find(({ status }) => status.serviceName != null || status.hasBinary);
+  const fallback = inspected[0] ?? {
+    pilotDir: join(homedir(), PILOT_DIR_NAME),
+    status: { serviceName: null, hasBinary: false, isRunning: null },
+  };
+
+  return complete ?? hasTrace ?? fallback;
+}
+
+/**
+ * 读取本机 LoongSuite Pilot 安装状态。未指定目录时自动检查当前 HOME 与 Agent HOME。
+ */
+export function readLocalPilotStatus(pilotDir?: string): LocalPilotStatus {
+  if (pilotDir !== undefined) return readPilotStatusAt(pilotDir);
+  return resolveLocalPilotStatus().status;
+}
+
+/**
+ * 读取本机 LoongSuite Pilot 配置（`<pilotDir>/config.json`）中的 `serviceNamePrefix`。
+ * 该字段是本机安装标识，不要求与 Market 接入记录的 serviceName 相同；仅当恰好相同时用于标记对应记录。
+ * 未安装、文件损坏或字段缺失时返回 null（静默降级，不报错）。
+ */
+export function readLocalPilotServiceName(pilotDir?: string): string | null {
   return readLocalPilotStatus(pilotDir).serviceName;
 }
 
 /**
  * 打印接入清单。每条记录必须打印 `agentId`（`obs refresh <agentId>` 所需 id 由此获取）。
  * 接入为单一 loongsuite 方案：不印 Agent 类型列。
- * `localStatus` 非空时与记录 serviceName 比对，给安装在本机的接入打「本机已安装」标记；
+ * `localStatus` 非空时独立表示本机安装状态；仅当 serviceName 恰好一致时给记录打「本机已安装」标记；
  * 仅配置残留（程序文件缺失）时改为在尾部提示残留，不误标已安装。
  */
 function printObservabilityList(
@@ -275,7 +356,7 @@ function printObservabilityList(
     );
   }
   if (markable && !records.some((r) => r.serviceName === localStatus?.serviceName)) {
-    console.log(`注意: 本机已安装采集工具 (${localStatus?.serviceName})，但没有对应的设备安装记录`);
+    console.log(`本机已安装采集工具 (${localStatus?.serviceName})`);
   } else if (localStatus?.serviceName != null && !localStatus.hasBinary) {
     console.log(`注意: 采集工具安装不完整，建议重新安装`);
   } else if (localStatus?.serviceName == null && !localStatus?.hasBinary) {
@@ -299,14 +380,19 @@ export function pickPlatformCommand(cmd: ObservabilityInstallCommand): string {
  * windows 走 `powershell.exe -ExecutionPolicy Bypass -Command`（Invoke-WebRequest …）。
  * 安装凭证为一次性、5 分钟有效：命令执行一次后即作废，不可重复使用。
  */
-export function runInstallCommand(command: string): Promise<void> {
+export function runInstallCommand(command: string, homeDir?: string): Promise<void> {
   const isWindows = detectHostPlatform() === 'windows';
+  const options =
+    homeDir === undefined
+      ? { stdio: 'inherit' as const }
+      : {
+          stdio: 'inherit' as const,
+          env: { ...process.env, HOME: homeDir, USERPROFILE: homeDir },
+        };
   return new Promise((resolve, reject) => {
     const child = isWindows
-      ? spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-Command', command], {
-          stdio: 'inherit',
-        })
-      : spawn('/bin/sh', ['-c', command], { stdio: 'inherit' });
+      ? spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-Command', command], options)
+      : spawn('/bin/sh', ['-c', command], options);
     child.once('error', (err) => reject(err));
     child.once('exit', (code, signal) => {
       if (code === 0) resolve();
@@ -342,9 +428,12 @@ export async function createRecordAndInstallPilot(apiKey: string): Promise<boole
     return false;
   }
   const command = pickPlatformCommand(result.data.installCommand);
+  const local = resolveLocalPilotStatus();
+  const resolvedHome = dirname(local.pilotDir);
+  const homeOverride = resolvedHome === homedir() ? undefined : resolvedHome;
   console.log('正在安装采集工具…（安装输出见下方）');
   try {
-    await runInstallCommand(command);
+    await runInstallCommand(command, homeOverride);
     console.log(`✓ 采集工具安装完成。`);
     return true;
   } catch (err) {
@@ -423,7 +512,10 @@ export async function runObs(args: string[]): Promise<void> {
     console.log(`  serviceName: ${result.data.serviceName}`);
     console.log(`  安装命令: ${command}`);
     // 本机检查：先告知现状再决定是否二次确认（防止无意覆盖本地配置）
-    const localStatus = readLocalPilotStatus();
+    const local = resolveLocalPilotStatus();
+    const localStatus = local.status;
+    const resolvedHome = dirname(local.pilotDir);
+    const homeOverride = resolvedHome === homedir() ? undefined : resolvedHome;
     if (localStatus.serviceName != null && localStatus.hasBinary) {
       console.log(`  本机已安装采集工具${localStatus.isRunning === false ? '，当前未运行' : ''}。`);
       if (localStatus.serviceName === result.data.serviceName) {
@@ -447,7 +539,7 @@ export async function runObs(args: string[]): Promise<void> {
     }
     console.log('开始安装采集工具…（脚本输出见下方）');
     try {
-      await runInstallCommand(command);
+      await runInstallCommand(command, homeOverride);
       console.log('✓ 采集工具安装完成。');
     } catch (err) {
       console.error(`采集工具安装失败: ${err instanceof Error ? err.message : String(err)}`);
@@ -458,7 +550,10 @@ export async function runObs(args: string[]): Promise<void> {
 
   if (opts.subcommand === 'uninstall') {
     // 先做本机检查：配置与程序文件都缺失才视为未安装，不发请求也不执行脚本
-    const localStatus = readLocalPilotStatus();
+    const local = resolveLocalPilotStatus();
+    const localStatus = local.status;
+    const resolvedHome = dirname(local.pilotDir);
+    const homeOverride = resolvedHome === homedir() ? undefined : resolvedHome;
     if (localStatus.serviceName == null && !localStatus.hasBinary) {
       console.log('本机未安装采集工具，无需卸载');
       return;
@@ -481,7 +576,7 @@ export async function runObs(args: string[]): Promise<void> {
     }
     console.log('开始移除采集工具…（脚本输出见下方）');
     try {
-      await runInstallCommand(command);
+      await runInstallCommand(command, homeOverride);
       console.log('✓ 采集工具已移除。');
     } catch (err) {
       console.error(`移除采集工具失败: ${err instanceof Error ? err.message : String(err)}`);

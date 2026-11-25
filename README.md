@@ -287,7 +287,7 @@ npx blueai-skills withdraw my-skill
 
 管理 Agent 可观测接入（与市场平台网页共用同一份接入记录）：创建接入、查看清单、换发安装凭证、本机安装/卸载 LoongSuite Pilot。接入为单一 loongsuite 方案（LoongSuite Pilot 自动发现本机全部 Agent），**创建不再需要 `--agent`**。
 
-命令组内置**本机安装状态分层检测**（纯文件信号，不执行任何插件命令）：`config.json` 的 serviceNamePrefix（配置）+ `current`/`bin`/`versions` 程序文件痕迹（二进制）+ pid 文件进程探测（运行中）。`obs list` 据此给本机已装的接入打 `✓ 本机已安装` 标记（卸载残留的配置不会误标）；`obs install` 在本机已有完整安装时二次确认；`obs add`/`obs` 创建结果附带下一步安装指引。
+命令组内置**本机安装状态分层检测**（纯文件信号，不执行任何插件命令）：`config.json` 的 serviceNamePrefix（配置）+ `current`/`bin`/`versions` 程序文件痕迹（二进制）+ pid 文件进程探测（运行中）。检测会依次查看 `BLUEAI_OBS_PILOT_DIR`、`LOONGSUITE_PILOT_DATA_DIR`、当前 HOME、`BLUEAI_AGENT_HOME`/`HERMES_HOME`/`OPENCLAW_HOME` 以及 `/opt/<agent>/.loongsuite-pilot`，因此 CLI HOME 与 Agent HOME 不同时仍能识别实际安装。`obs list` 独立展示本机安装状态，只有 serviceName 恰好一致时才给对应记录打 `✓`；`obs install` 在本机已有完整安装时二次确认；`obs add`/`obs` 创建结果附带下一步安装指引。
 
 前置：先 `npx blueai-skills login <api-key>` 登录（API Key 在市场平台「头像 → API Keys」页生成）。
 
@@ -613,7 +613,7 @@ npx --yes blueai-skills@dev <命令>
 - 默认市场为内网测试环境 `https://blueai-skills-market.domob-inc.cn`，仍可用 `SKILLS_SITE` 覆盖。
 - 除市场地址与提示 tag 外，开发版与正式版行为完全一致：凭证 `~/.blueai/secrets.json`、全局锁 `~/.agents/.skill-lock.json`（或 `$XDG_STATE_HOME/skills/.skill-lock.json`）、canonical 目录 `~/.agents/skills/`，并按既有规则写入真实 agent 目录，因此开发版安装的技能 Claude / Codex 可以直接使用。
 - 因为共用本地状态：两个市场的 `skillId` 不互通（正式版 `check` 对开发版装的技能匹配不上）、同名技能互相覆盖、登录态共享（切换市场需重新 `login`，或临时用 `SKILLS_API_KEY`）。
-- LoongSuite Pilot 使用 `~/.loongsuite-pilot/`，`obs install` / `obs uninstall` 会作用于真实机器，请在专用机器或虚拟机上验证。
+- LoongSuite Pilot 默认使用 `$HOME/.loongsuite-pilot/`。CLI 会额外发现 `/opt/<agent>/.loongsuite-pilot` 等 Agent HOME；`obs install` / `obs uninstall` 会作用于真实机器，请在专用机器或虚拟机上验证。
 - 网页端同样可用：测试市场工作台 `https://blueai-skills-market.domob-inc.cn`，可观测页面 `https://blueai-skills-market.domob-inc.cn/dashboard/observability`（与 CLI 的 `obs` 命令共用同一批接入记录）。
 - 回到正式版：`npx --yes blueai-skills@latest <命令>`。
 

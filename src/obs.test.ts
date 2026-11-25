@@ -39,6 +39,8 @@ import {
   pickPlatformCommand,
   readLocalPilotServiceName,
   readLocalPilotStatus,
+  getLocalPilotDirCandidates,
+  resolveLocalPilotStatus,
   buildUninstallCommand,
   createRecordAndInstallPilot,
 } from './obs.ts';
@@ -49,6 +51,17 @@ const CMD = {
     'Invoke-WebRequest -Uri "…/install?token=t1&os=windows" -OutFile "$env:TEMP\\skills-obs.ps1" -UseBasicParsing; powershell -ExecutionPolicy Bypass -File "$env:TEMP\\skills-obs.ps1"',
 };
 
+const PILOT_ENV_KEYS = [
+  'BLUEAI_OBS_PILOT_DIR',
+  'LOONGSUITE_PILOT_DATA_DIR',
+  'BLUEAI_AGENT_HOME',
+  'HERMES_HOME',
+  'OPENCLAW_HOME',
+] as const;
+const originalPilotEnv = Object.fromEntries(
+  PILOT_ENV_KEYS.map((key) => [key, process.env[key]])
+) as Record<(typeof PILOT_ENV_KEYS)[number], string | undefined>;
+
 describe('obs', () => {
   let errorSpy: ReturnType<typeof vi.spyOn>;
   let logSpy: ReturnType<typeof vi.spyOn>;
@@ -56,6 +69,7 @@ describe('obs', () => {
   beforeEach(() => {
     process.exitCode = undefined;
     mockHome.current = '';
+    for (const key of PILOT_ENV_KEYS) delete process.env[key];
     vi.mocked(getApiKey).mockReturnValue('sk-test');
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -64,6 +78,11 @@ describe('obs', () => {
   afterEach(() => {
     process.exitCode = undefined;
     mockHome.current = '';
+    for (const key of PILOT_ENV_KEYS) {
+      const value = originalPilotEnv[key];
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
     vi.clearAllMocks();
     errorSpy.mockRestore();
     logSpy.mockRestore();
@@ -516,9 +535,114 @@ describe('obs', () => {
       const status = readLocalPilotStatus(join(dir, 'nope'));
       expect(status).toEqual({ serviceName: null, hasBinary: false, isRunning: null });
     });
+
+    it('builds candidates from CLI HOME, Agent HOME env vars, and /opt agent dirs', () => {
+      const candidates = getLocalPilotDirCandidates({
+        homeDir: '/home/cli',
+        env: {
+          BLUEAI_OBS_PILOT_DIR: '/custom/pilot',
+          LOONGSUITE_PILOT_DATA_DIR: '/runtime/pilot',
+          BLUEAI_AGENT_HOME: '/agent/current',
+          HERMES_HOME: '/opt/hermes',
+          OPENCLAW_HOME: '/opt/openclaw',
+        },
+        listDirectory: () => ['hermes', 'openclaw', 'unrelated'],
+        pathExists: (path) => path !== join('/opt', 'unrelated', '.loongsuite-pilot'),
+      });
+
+      expect(candidates).toEqual(
+        expect.arrayContaining([
+          '/custom/pilot',
+          '/runtime/pilot',
+          join('/home/cli', '.loongsuite-pilot'),
+          join('/agent/current', '.loongsuite-pilot'),
+          join('/opt/hermes', '.loongsuite-pilot'),
+          join('/opt/openclaw', '.loongsuite-pilot'),
+        ])
+      );
+      expect(candidates).not.toContain(join('/opt/unrelated', '.loongsuite-pilot'));
+    });
+
+    it('prefers a complete Agent install over residual config in the CLI HOME', () => {
+      const cliHome = mkdtempSync(join(tmpdir(), 'cli-home-'));
+      const agentHome = mkdtempSync(join(tmpdir(), 'agent-home-'));
+      const cliPilotDir = join(cliHome, '.loongsuite-pilot');
+      mkdirSync(cliPilotDir);
+      writeFileSync(
+        join(cliPilotDir, 'config.json'),
+        JSON.stringify({ serviceNamePrefix: 'BSM-99999999-2222-3333-4444-555555555555' })
+      );
+      writePilotHome(agentHome, 'BSM-11111111-2222-3333-4444-555555555555');
+
+      const resolved = resolveLocalPilotStatus([cliPilotDir, join(agentHome, '.loongsuite-pilot')]);
+
+      expect(resolved.pilotDir).toBe(join(agentHome, '.loongsuite-pilot'));
+      expect(resolved.status).toEqual({
+        serviceName: 'BSM-11111111-2222-3333-4444-555555555555',
+        hasBinary: true,
+        isRunning: null,
+      });
+      rmSync(cliHome, { recursive: true, force: true });
+      rmSync(agentHome, { recursive: true, force: true });
+    });
   });
 
   describe('obs list 本机安装检测', () => {
+    it('detects an install from the Agent HOME when the CLI process HOME is empty', async () => {
+      const cliHome = useEmptyHome();
+      const agentHome = mkdtempSync(join(tmpdir(), 'agent-home-'));
+      const localServiceName = 'BSM-22222222-2222-3333-4444-555555555555';
+      writePilotHome(agentHome, localServiceName);
+      process.env.BLUEAI_AGENT_HOME = agentHome;
+      vi.mocked(marketProvider.listObservability).mockResolvedValue({
+        ok: true,
+        data: [
+          {
+            id: '33333333-4444-4555-4666-477777777777',
+            agentName: 'nas-01',
+            note: null,
+            serviceName: localServiceName,
+            createdAt: '2026-08-21T10:00:00Z',
+          },
+        ],
+      });
+
+      await runObs(['list']);
+
+      const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
+      expect(output).toContain('本机已安装');
+      expect(output).toContain('#33333333-4444-4555-4666-477777777777');
+      expect(output).not.toContain('本机未安装采集工具');
+      rmSync(cliHome, { recursive: true, force: true });
+      rmSync(agentHome, { recursive: true, force: true });
+    });
+
+    it('reports local install independently when serviceName differs from every record', async () => {
+      const home = useEmptyHome();
+      const localServiceName = 'dea161ca-3b3e-42ff-a98f-2219dfcc1a90';
+      writePilotHome(home, localServiceName);
+      vi.mocked(marketProvider.listObservability).mockResolvedValue({
+        ok: true,
+        data: [
+          {
+            id: '8aea30bc-4e36-47bc-aa0e-a6f4bacb4308',
+            agentName: '111',
+            note: null,
+            serviceName: 'BSM-8aea30bc-4e36-47bc-aa0e-a6f4bacb4308',
+            createdAt: '2026-08-21T10:00:00Z',
+          },
+        ],
+      });
+
+      await runObs(['list']);
+
+      const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
+      expect(output).toContain(`本机已安装采集工具 (${localServiceName})`);
+      expect(output).not.toContain('没有对应的设备安装记录');
+      expect(output).not.toContain('✓ 本机已安装');
+      rmSync(home, { recursive: true, force: true });
+    });
+
     it('marks the record whose serviceName matches local Pilot config', async () => {
       const home = mkdtempSync(join(tmpdir(), 'home-'));
       mockHome.current = home;
@@ -664,6 +788,27 @@ describe('obs', () => {
       expect(process.exitCode).toBe(1);
       rmSync(home, { recursive: true, force: true });
     });
+
+    it('runs uninstall with the detected Agent HOME instead of the CLI HOME', async () => {
+      const cliHome = useEmptyHome();
+      const agentHome = mkdtempSync(join(tmpdir(), 'agent-home-'));
+      writePilotHome(agentHome, 'BSM-11111111-2222-3333-4444-555555555555');
+      process.env.BLUEAI_AGENT_HOME = agentHome;
+      vi.mocked(p.confirm).mockResolvedValue(true);
+      const child = new EventEmitter();
+      vi.mocked(spawn).mockReturnValue(child as never);
+      setImmediate(() => child.emit('exit', 0));
+
+      await runObs(['uninstall']);
+
+      expect(spawn).toHaveBeenCalledWith('/bin/sh', ['-c', buildUninstallCommand(false).unix], {
+        stdio: 'inherit',
+        env: expect.objectContaining({ HOME: agentHome, USERPROFILE: agentHome }),
+      });
+      rmSync(cliHome, { recursive: true, force: true });
+      rmSync(agentHome, { recursive: true, force: true });
+    });
+
     it('still allows cleanup when only residual config remains (no program files)', async () => {
       const home = useEmptyHome();
       mkdirSync(join(home, '.loongsuite-pilot'));
@@ -716,6 +861,40 @@ describe('obs', () => {
       expect(logSpy.mock.calls.some((c: unknown[]) => String(c[0]).includes('serviceName'))).toBe(
         false
       );
+    });
+
+    it('uses the detected Agent HOME when repairing a local install', async () => {
+      const cliHome = useEmptyHome();
+      const agentHome = mkdtempSync(join(tmpdir(), 'agent-home-'));
+      mkdirSync(join(agentHome, '.loongsuite-pilot'), { recursive: true });
+      writeFileSync(
+        join(agentHome, '.loongsuite-pilot', 'config.json'),
+        JSON.stringify({ serviceNamePrefix: 'dea161ca-3b3e-42ff-a98f-2219dfcc1a90' })
+      );
+      process.env.BLUEAI_AGENT_HOME = agentHome;
+      vi.mocked(marketProvider.createObservability).mockResolvedValue({
+        ok: true,
+        data: {
+          id: '11111111-2222-4333-8444-555555555555',
+          agentName: 'some-host',
+          serviceName: 'BSM-11111111-2222-3333-4444-555555555555',
+          installCommand: CMD,
+          installScript: CMD,
+        },
+      });
+      const child = new EventEmitter();
+      vi.mocked(spawn).mockReturnValue(child as never);
+      setImmediate(() => child.emit('exit', 0));
+
+      const ok = await createRecordAndInstallPilot('sk-test');
+
+      expect(ok).toBe(true);
+      expect(spawn).toHaveBeenCalledWith('/bin/sh', ['-c', CMD.unix], {
+        stdio: 'inherit',
+        env: expect.objectContaining({ HOME: agentHome, USERPROFILE: agentHome }),
+      });
+      rmSync(cliHome, { recursive: true, force: true });
+      rmSync(agentHome, { recursive: true, force: true });
     });
 
     it('returns false and hints refresh when the install command fails', async () => {
